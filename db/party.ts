@@ -14,9 +14,12 @@ type EventRow = {
   code: string;
   title: string;
   status: string;
+  queue_mode: QueueMode;
   current_submission_id: string | null;
   host_pin: string;
 };
+
+export type QueueMode = "ordered" | "random" | "fair";
 
 type ParticipantRow = {
   id: string;
@@ -75,7 +78,7 @@ function randomCode() {
 
 async function getEvent(code: string) {
   await ensurePartySchema();
-  return getD1().prepare("SELECT id, code, title, status, current_submission_id, host_pin FROM events WHERE code = ?")
+  return getD1().prepare("SELECT id, code, title, status, queue_mode, current_submission_id, host_pin FROM events WHERE code = ?")
     .bind(cleanCode(code)).first<EventRow>();
 }
 
@@ -206,7 +209,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
     }),
     pendingCount: pending?.count ?? 0,
     queueCount: queue?.count ?? 0,
-    ...(queuedTracks ? { queuedTracks: queuedTracks.results.map((track) => ({
+    ...(queuedTracks ? { queueMode: event.queue_mode, queuedTracks: queuedTracks.results.map((track) => ({
       queueId: track.id,
       id: track.provider_track_id,
       title: track.title,
@@ -221,8 +224,25 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
 
 async function advanceCurrent(event: EventRow, finishedStatus: "skipped" | "played") {
   const d1 = getD1();
-  const next = await d1.prepare("SELECT id FROM submissions WHERE event_id = ? AND status = 'pending' ORDER BY submitted_at ASC LIMIT 1")
-    .bind(event.id).first<{ id: string }>();
+  const next = event.queue_mode === "random"
+    ? await d1.prepare("SELECT id FROM submissions WHERE event_id = ? AND status = 'pending' ORDER BY RANDOM() LIMIT 1")
+      .bind(event.id).first<{ id: string }>()
+    : event.queue_mode === "fair"
+      ? await d1.prepare(`SELECT s.id
+          FROM submissions s
+          JOIN (
+            SELECT participant_id,
+              SUM(CASE WHEN status IN ('playing', 'played', 'skipped') THEN 1 ELSE 0 END) AS served_count
+            FROM submissions
+            WHERE event_id = ?
+            GROUP BY participant_id
+          ) history ON history.participant_id = s.participant_id
+          WHERE s.event_id = ? AND s.status = 'pending'
+          ORDER BY history.served_count ASC, RANDOM()
+          LIMIT 1`)
+        .bind(event.id, event.id).first<{ id: string }>()
+      : await d1.prepare("SELECT id FROM submissions WHERE event_id = ? AND status = 'pending' ORDER BY submitted_at ASC LIMIT 1")
+        .bind(event.id).first<{ id: string }>();
   const statements = [];
   if (event.current_submission_id) {
     statements.push(d1.prepare("UPDATE submissions SET status = ? WHERE id = ?").bind(finishedStatus, event.current_submission_id));
@@ -235,6 +255,13 @@ async function advanceCurrent(event: EventRow, finishedStatus: "skipped" | "play
   }
   await d1.batch(statements);
   return Boolean(next);
+}
+
+export async function setQueueMode(code: string, hostKey: string, queueMode: QueueMode) {
+  const event = await getEvent(code);
+  if (!event || event.host_pin !== hostKey) throw new Error("This phone is not the host for that room.");
+  if (!(["ordered", "random", "fair"] as const).includes(queueMode)) throw new Error("Choose a valid queue mode.");
+  await getD1().prepare("UPDATE events SET queue_mode = ? WHERE id = ?").bind(queueMode, event.id).run();
 }
 
 export async function reactToCurrent(code: string, participantId: string, kind: "up" | "down") {

@@ -27,6 +27,7 @@ export async function ensurePartySchema() {
       code TEXT NOT NULL UNIQUE,
       title TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'live',
+      queue_mode TEXT NOT NULL DEFAULT 'ordered',
       current_submission_id TEXT,
       host_pin TEXT NOT NULL,
       created_at TEXT NOT NULL

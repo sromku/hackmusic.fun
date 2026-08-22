@@ -1,4 +1,4 @@
-import { createRoom, hostControl, joinParty, reactToCurrent, readParty, readRoomSummary, submitTrack } from "../../../db/party";
+import { createRoom, hostControl, joinParty, reactToCurrent, readParty, readRoomSummary, setQueueMode, submitTrack, type QueueMode } from "../../../db/party";
 import { resolveSpotifyTrack, type ResolvedSpotifyTrack } from "../../../lib/spotify-track";
 
 function messageFrom(error: unknown) {
@@ -22,11 +22,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json() as {
-      action?: "create" | "join" | "react" | "submit" | "skip" | "advance" | "end";
+      action?: "create" | "join" | "react" | "submit" | "skip" | "advance" | "end" | "queueMode";
       code?: string;
       participantId?: string;
       kind?: "up" | "down";
       pin?: string;
+      queueMode?: QueueMode;
       name?: string;
       title?: string;
       trackUrl?: string;
@@ -48,6 +49,8 @@ export async function POST(request: Request) {
       await submitTrack(code, participantId, submittedTrack);
     } else if ((body.action === "skip" || body.action === "advance" || body.action === "end") && body.pin) {
       await hostControl(code, body.pin, body.action);
+    } else if (body.action === "queueMode" && body.queueMode && body.pin) {
+      await setQueueMode(code, body.pin, body.queueMode);
     } else {
       return Response.json({ error: "Invalid party action." }, { status: 400 });
     }

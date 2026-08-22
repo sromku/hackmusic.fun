@@ -115,6 +115,10 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /LIVE SCOREBOARD/);
   assert.match(source, /WAITING IN THE QUEUE/);
   assert.match(source, /party\.queuedTracks\.map/);
+  assert.match(source, /Submitted order/);
+  assert.match(source, /Pure chaos/);
+  assert.match(source, /Fair-ish shuffle/);
+  assert.match(source, /action: "queueMode"/);
   assert.match(source, /End the party\?/);
   assert.match(source, /Nope, keep partying/);
   assert.match(source, /Yes, end it forever/);
@@ -131,6 +135,10 @@ test("renders a code-specific host control surface", async () => {
   assert.match(partySource, /const queuedTracks = isHost/);
   assert.match(partySource, /s\.status = 'pending'/);
   assert.match(partySource, /queuedTracks: queuedTracks\.results\.map/);
+  assert.match(partySource, /event\.queue_mode === "random"/);
+  assert.match(partySource, /event\.queue_mode === "fair"/);
+  assert.match(partySource, /history\.served_count ASC, RANDOM\(\)/);
+  assert.match(partySource, /export async function setQueueMode/);
   const spotifyLoginSource = await readFile(new URL("app/api/spotify/login/route.ts", projectRoot), "utf8");
   assert.match(spotifyLoginSource, /code_challenge_method: "S256"/);
   assert.match(spotifyLoginSource, /"streaming"/);

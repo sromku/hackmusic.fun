@@ -1,0 +1,1 @@
+ALTER TABLE `events` ADD `queue_mode` text DEFAULT 'ordered' NOT NULL;
