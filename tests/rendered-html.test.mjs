@@ -60,6 +60,9 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /YOUR FINAL SCORE/);
   assert.match(source, /Now playing:/);
   assert.match(source, /song-start/);
+  assert.match(source, /🔊 ROOM NOISE/);
+  assert.match(source, /reaction\.tone === "up" \? "🎉" : "👻"/);
+  assert.match(source, /🦗 It’s suspiciously quiet/);
   assert.match(source, /ended && <span className="person-score"/);
   const partySource = await readFile(new URL("db/party.ts", projectRoot), "utf8");
   assert.match(partySource, /name: "Someone"/);
@@ -94,6 +97,8 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /There is no undo/);
   assert.match(source, /className="toast host-toast"/);
   assert.doesNotMatch(source, /className="host-message"/);
+  assert.match(source, /🙌 CHEERS/);
+  assert.match(source, /👻 BOOS/);
   assert.match(source, /pin=\$\{encodeURIComponent\(hostKey\)\}/);
   assert.match(source, /\/sounds\/cheer\.wav/);
   assert.match(source, /\/sounds\/boo\.wav/);

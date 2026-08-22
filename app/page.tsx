@@ -58,33 +58,33 @@ export default function Home() {
       <div className="shape shape-three" aria-hidden="true" />
       <header className="topbar landing-topbar">
         <Link className="brand" href="/" aria-label="HackMusic home"><span className="brand-mark">HM</span><span>HackMusic</span></Link>
-        <span className="landing-tag">PRIVATE PARTIES · LOUD OPINIONS</span>
+        <span className="landing-tag">🎉 PRIVATE PARTIES · 🔊 LOUD OPINIONS</span>
       </header>
       <section className="landing-hero">
         <div className="landing-copy">
-          <p className="eyebrow">THE PLAYLIST IS NOW A PARTY GAME</p>
+          <p className="eyebrow">🎮 THE PLAYLIST IS NOW A PARTY GAME</p>
           <h1>Let the room<br />pick the vibe.</h1>
           <p className="landing-lede">Create a room, invite the humans, and hand everyone a tiny amount of power over the speaker.</p>
           <div className="landing-rules" aria-label="How HackMusic works">
-            <span><b>01</b> Add secret songs</span><span><b>02</b> Cheer or boo</span><span><b>03</b> Three boos skip</span>
+            <span><b>01</b> 🎵 Add secret songs</span><span><b>02</b> 🙌 Cheer or 👻 boo</span><span><b>03</b> ⏭️ Three boos skip</span>
           </div>
         </div>
         <div className="room-entry-stack">
           <form className="entry-card create-card" onSubmit={createRoom}>
-            <p className="eyebrow">START THE CHAOS</p><h2>Create a room</h2>
+            <p className="eyebrow">⚡ START THE CHAOS</p><h2>Create a room</h2>
             <label htmlFor="event-name">EVENT NAME</label><input id="event-name" value={eventName} onChange={(event) => setEventName(event.target.value)} maxLength={60} placeholder="Friday night hackathon" required />
             <label htmlFor="host-name">YOUR NAME</label><input id="host-name" value={hostName} onChange={(event) => setHostName(event.target.value)} maxLength={24} placeholder="The brave host" required />
-            <button type="submit" disabled={busy}>{busy ? "Making room…" : "Create my room →"}</button>
+            <button type="submit" disabled={busy}>{busy ? "🛠️ Making room…" : "🎉 Create my room →"}</button>
           </form>
           <form className="entry-card join-room-card" onSubmit={joinRoom}>
-            <div><p className="eyebrow">GOT A CODE?</p><h2>Join the room</h2></div>
+            <div><p className="eyebrow">🎟️ GOT A CODE?</p><h2>Join the room</h2></div>
             <label className="sr-only" htmlFor="room-code">Room code</label><input id="room-code" value={roomCode} onChange={(event) => setRoomCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} maxLength={6} placeholder="ABC123" required />
-            <button type="submit" disabled={busy}>Join →</button>
+            <button type="submit" disabled={busy}>🚪 Join →</button>
           </form>
           {message && <p className="landing-message" role="alert">{message}</p>}
         </div>
       </section>
-      <footer className="landing-footer"><span>30 points each</span><span>Names on cheers</span><span>Boos stay anonymous</span></footer>
+      <footer className="landing-footer"><span>⭐ 30 points each</span><span>🙌 Names on cheers</span><span>👻 Boos stay anonymous</span></footer>
     </main>
   );
 }

@@ -207,7 +207,7 @@ export default function HostRoom({ code }: { code: string }) {
             if (!active) return;
             setSpotifyDeviceId(device_id);
             setSpotifyStatus("ready");
-            setSpotifyMessage("Spotify Premium is connected. Start the speaker once, then HackMusic takes over.");
+            setSpotifyMessage("✅ Spotify Premium is connected. Start the speaker once, then HackMusic takes over.");
           });
           player.addListener("not_ready", () => {
             if (!active) return;
@@ -327,7 +327,7 @@ export default function HostRoom({ code }: { code: string }) {
     lastSpotifyTrackRef.current = trackId;
     advancingTrackRef.current = false;
     setSpeakerArmed(true);
-    setSpotifyMessage("Full track is playing here. HackMusic will start every next song automatically.");
+    setSpotifyMessage("🔊 Full track is playing here. HackMusic will start every next song automatically.");
   }, [getSpotifyToken, spotifyDeviceId]);
 
   useEffect(() => {
@@ -362,7 +362,7 @@ export default function HostRoom({ code }: { code: string }) {
   }
 
   async function copyInvite() {
-    try { await navigator.clipboard.writeText(shareUrl); setMessage("Invite URL copied."); }
+    try { await navigator.clipboard.writeText(shareUrl); setMessage("📋 Invite URL copied!"); }
     catch { setMessage("Copy the URL shown below."); }
   }
 
@@ -389,7 +389,7 @@ export default function HostRoom({ code }: { code: string }) {
     const callbackUrl = `${window.location.origin}/api/spotify/callback`;
     try {
       await navigator.clipboard.writeText(callbackUrl);
-      setSpotifyMessage("Spotify callback URL copied.");
+      setSpotifyMessage("📋 Spotify callback URL copied!");
     } catch {
       setSpotifyMessage("Copy the callback URL shown below exactly.");
     }
@@ -403,7 +403,7 @@ export default function HostRoom({ code }: { code: string }) {
     setSpeakerArmed(false);
     setSpotifyDeviceId("");
     setSpotifyStatus("disconnected");
-    setSpotifyMessage("Spotify disconnected from this browser.");
+    setSpotifyMessage("👋 Spotify disconnected from this browser.");
   }
 
   async function control(action: "skip" | "advance" | "end") {
@@ -413,7 +413,7 @@ export default function HostRoom({ code }: { code: string }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Host action failed.");
       setParty(data.party);
-      setMessage(action === "skip" ? "Skipped. Next secret song!" : action === "advance" ? "Song finished. Next one!" : "Party ended. Scores are final.");
+      setMessage(action === "skip" ? "⏭️ Skipped! Next secret song!" : action === "advance" ? "🎵 Song finished. Next one!" : "🏁 Party ended. Scores are final!");
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Host action failed."); }
     finally { setBusy(false); }
   }
@@ -425,17 +425,17 @@ export default function HostRoom({ code }: { code: string }) {
   const boos = party.reactions.filter((reaction) => reaction.tone === "down").length;
   const spotifyCallbackUrl = shareUrl ? new URL("/api/spotify/callback", shareUrl).toString() : "";
   return <main className="host-shell">
-    <header className="topbar"><Link className="brand" href="/"><span className="brand-mark">HM</span><span>HackMusic Host</span></Link><Link className="participant-link" href={`/e/${code}`}>Open participant page →</Link></header>
-    <div className="host-heading"><div><p className="eyebrow">HOST CONTROL · ROOM {party.code}</p><h1>{party.title}</h1></div><span className={`host-status ${party.status}`}>{party.status === "ended" ? "PARTY ENDED" : "LIVE"}</span></div>
+    <header className="topbar"><Link className="brand" href="/"><span className="brand-mark">HM</span><span>HackMusic Host</span></Link><Link className="participant-link" href={`/e/${code}`}>🎉 Open participant page →</Link></header>
+    <div className="host-heading"><div><p className="eyebrow">🎛️ HOST CONTROL · ROOM {party.code}</p><h1>{party.title}</h1></div><span className={`host-status ${party.status}`}>{party.status === "ended" ? "🏁 PARTY ENDED" : "⚡ LIVE"}</span></div>
 
-    <section className="share-room-card"><div className="share-code"><span>ROOM CODE</span><strong>{party.code}</strong><p>{shareUrl}</p><div><button type="button" onClick={() => void copyInvite()}>Copy invite</button><button type="button" onClick={() => void shareInvite()}>Share</button></div></div>{qrUrl && <Image unoptimized src={qrUrl} width={180} height={180} alt={`QR code to join room ${party.code}`} />}</section>
+    <section className="share-room-card"><div className="share-code"><span>📱 ROOM CODE</span><strong>{party.code}</strong><p>{shareUrl}</p><div><button type="button" onClick={() => void copyInvite()}>📋 Copy invite</button><button type="button" onClick={() => void shareInvite()}>🚀 Share</button></div></div>{qrUrl && <Image unoptimized src={qrUrl} width={180} height={180} alt={`QR code to join room ${party.code}`} />}</section>
 
     <section className={`spotify-connect-card spotify-${spotifyStatus}`}>
       <div className="spotify-connect-heading">
-        <div><p className="eyebrow">FULL-TRACK SPEAKER</p><h2>Spotify Premium</h2></div>
-        <span>{spotifyStatus === "ready" ? "CONNECTED" : spotifyStatus === "loading" || spotifyStatus === "checking" ? "CHECKING…" : "SETUP NEEDED"}</span>
+        <div><p className="eyebrow">🔊 FULL-TRACK SPEAKER</p><h2>Spotify Premium</h2></div>
+        <span>{spotifyStatus === "ready" ? "✅ CONNECTED" : spotifyStatus === "loading" || spotifyStatus === "checking" ? "🔎 CHECKING…" : "🛠️ SETUP NEEDED"}</span>
       </div>
-      {spotifyStatus === "ready" ? <div className="spotify-connected-row"><div><strong>This browser is ready to become the speaker.</strong><p>Connect the host phone to your real speaker, then start playback once below.</p></div><button type="button" onClick={() => void disconnectSpotify()}>Disconnect</button></div> : spotifyStatus === "checking" || spotifyStatus === "loading" ? <p className="spotify-loading">Opening the Spotify Web Playback SDK…</p> : <div className="spotify-setup-grid">
+      {spotifyStatus === "ready" ? <div className="spotify-connected-row"><div><strong>🎉 This browser is ready to become the speaker.</strong><p>📱 Connect the host phone to your real speaker, then start playback once below.</p></div><button type="button" onClick={() => void disconnectSpotify()}>👋 Disconnect</button></div> : spotifyStatus === "checking" || spotifyStatus === "loading" ? <p className="spotify-loading">🔎 Opening the Spotify Web Playback SDK…</p> : <div className="spotify-setup-grid">
         <ol>
           <li><span>1</span><p>Create an app in the <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noreferrer">Spotify Developer Dashboard ↗</a>. Select Web API and Web Playback SDK if asked.</p></li>
           <li><span>2</span><div><p>Add this exact redirect URI in the app settings:</p><code>{spotifyCallbackUrl}</code><button type="button" onClick={() => void copySpotifyCallback()}>Copy callback URL</button></div></li>
@@ -444,18 +444,18 @@ export default function HostRoom({ code }: { code: string }) {
         <form className="spotify-connect-form" onSubmit={connectSpotify}>
           <label htmlFor="spotify-client-id">SPOTIFY CLIENT ID</label>
           <input id="spotify-client-id" value={spotifyClientId} onChange={(event) => setSpotifyClientId(event.target.value)} placeholder="Paste the public Client ID" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
-          <button type="submit">Connect Spotify Premium →</button>
+          <button type="submit">🟢 Connect Spotify Premium →</button>
         </form>
       </div>}
       {spotifyMessage && <p className="spotify-message" role="status">{spotifyMessage}</p>}
     </section>
 
-    <div className="host-grid"><section className="host-now-card"><div className="section-kicker"><span>ON THE SPEAKER</span><span>{party.queueCount} WAITING</span></div>{party.currentTrack ? <><div className="host-track"><div className={`host-art ${party.currentTrack.color}`}>♪</div><div><h2>{party.currentTrack.title}</h2><p>{party.currentTrack.artist}{party.currentTrack.duration ? ` · ${party.currentTrack.duration}` : ""}</p></div></div>{currentSpotifyId ? <div className={`spotify-host-player spotify-${spotifyStatus}`}><div><strong>SPOTIFY PREMIUM SPEAKER</strong><span>{spotifyStatus === "ready" ? "Full song · no preview limit" : "Connect Spotify above first"}</span></div><button type="button" disabled={spotifyStatus !== "ready" || party.status === "ended"} onClick={() => { enableAudio(); void playSpotifyTrack(currentSpotifyId, true).catch((reason) => setSpotifyMessage(reason instanceof Error ? reason.message : "Could not start Spotify.")); }}>{speakerArmed ? "Play this track again →" : "Start speaker + funny sounds →"}</button><small>Tap once on this host device. Every next secret song will start automatically.</small></div> : <div className="unplayable-track"><strong>This older queue item has no Spotify track token.</strong><span>Skip this legacy item once. Every newly added song is now validated before it enters the queue.</span></div>}<div className="host-reaction-counts"><div className="host-cheers"><strong>{cheers}</strong><span>CHEERS</span></div><div className="host-boos"><strong>{boos}</strong><span>BOOS</span></div></div></> : <div className="host-empty"><strong>No song yet.</strong><p>Open the participant page and add the first one.</p></div>}</section>
-      <section className="host-controls-card"><div className="card-title-row"><h2>CONTROLS</h2><span>THIS PHONE ONLY</span></div><button className={`host-audio ${audioEnabled ? "armed" : ""}`} type="button" onClick={enableAudio}>{audioEnabled ? "✓ Funny sounds armed · tap to test" : "Enable & test funny sounds"}</button><button className="host-skip" type="button" disabled={busy || !party.currentTrack || party.status === "ended"} onClick={() => void control("skip")}>Skip to next song →</button><button className="host-end" type="button" disabled={busy || party.status === "ended"} onClick={() => setEndConfirmOpen(true)}>End party & freeze scores</button><p className="host-hint">Reaction sounds play only from this host device. Keep this page open and its volume up.</p></section>
+    <div className="host-grid"><section className="host-now-card"><div className="section-kicker"><span>🔊 ON THE SPEAKER</span><span>🤫 {party.queueCount} WAITING</span></div>{party.currentTrack ? <><div className="host-track"><div className={`host-art ${party.currentTrack.color}`}>🎵</div><div><h2>{party.currentTrack.title}</h2><p>{party.currentTrack.artist}{party.currentTrack.duration ? ` · ${party.currentTrack.duration}` : ""}</p></div></div>{currentSpotifyId ? <div className={`spotify-host-player spotify-${spotifyStatus}`}><div><strong>🟢 SPOTIFY PREMIUM SPEAKER</strong><span>{spotifyStatus === "ready" ? "🎶 Full song · no preview limit" : "👆 Connect Spotify above first"}</span></div><button type="button" disabled={spotifyStatus !== "ready" || party.status === "ended"} onClick={() => { enableAudio(); void playSpotifyTrack(currentSpotifyId, true).catch((reason) => setSpotifyMessage(reason instanceof Error ? reason.message : "Could not start Spotify.")); }}>{speakerArmed ? "🔁 Play this track again →" : "🔊 Start speaker + funny sounds →"}</button><small>👉 Tap once on this host device. Every next secret song will start automatically.</small></div> : <div className="unplayable-track"><strong>⚠️ This older queue item has no Spotify track token.</strong><span>Skip this legacy item once. Every newly added song is now validated before it enters the queue.</span></div>}<div className="host-reaction-counts"><div className="host-cheers"><strong>{cheers}</strong><span>🙌 CHEERS</span></div><div className="host-boos"><strong>{boos}</strong><span>👻 BOOS</span></div></div></> : <div className="host-empty"><strong>🦗 No song yet.</strong><p>🎵 Open the participant page and add the first one.</p></div>}</section>
+      <section className="host-controls-card"><div className="card-title-row"><h2>🎛️ CONTROLS</h2><span>📱 THIS PHONE ONLY</span></div><button className={`host-audio ${audioEnabled ? "armed" : ""}`} type="button" onClick={enableAudio}>{audioEnabled ? "✅ Funny sounds armed · tap to test" : "🔊 Enable & test funny sounds"}</button><button className="host-skip" type="button" disabled={busy || !party.currentTrack || party.status === "ended"} onClick={() => void control("skip")}>⏭️ Skip to next song →</button><button className="host-end" type="button" disabled={busy || party.status === "ended"} onClick={() => setEndConfirmOpen(true)}>🏁 End party & freeze scores</button><p className="host-hint">🔊 Reaction sounds play only from this host device. Keep this page open and its volume up.</p></section>
     </div>
-    <section className="leaderboard-card"><div className="card-title-row"><h2>{party.status === "ended" ? "FINAL SCOREBOARD" : "LIVE SCOREBOARD"}</h2><span>{party.people.length} PLAYERS</span></div><ol>{[...party.people].sort((a, b) => b.score - a.score).map((person, index) => <li key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><b>{index + 1}</b><strong>{person.name}</strong><span>{person.score} pts</span></li>)}</ol></section>
+    <section className="leaderboard-card"><div className="card-title-row"><h2>{party.status === "ended" ? "🏆 FINAL SCOREBOARD" : "⚡ LIVE SCOREBOARD"}</h2><span>🎉 {party.people.length} PLAYERS</span></div><ol>{[...party.people].sort((a, b) => b.score - a.score).map((person, index) => <li key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><b>{index === 0 ? "👑" : index + 1}</b><strong>{person.name}</strong><span>{person.score} pts</span></li>)}</ol></section>
 
     {message && <div className="toast host-toast" role="status">{message}</div>}
-    {endConfirmOpen && <div className="modal-backdrop end-confirm-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setEndConfirmOpen(false)}><section className="end-confirm-card" role="dialog" aria-modal="true" aria-labelledby="end-confirm-title" aria-describedby="end-confirm-description"><p className="eyebrow">POINT OF NO RETURN</p><h2 id="end-confirm-title">End the party?</h2><p id="end-confirm-description">This freezes every score and closes the room for new songs and votes. There is no undo.</p><div className="end-confirm-actions"><button ref={cancelEndRef} className="keep-partying" type="button" onClick={() => setEndConfirmOpen(false)}>Nope, keep partying</button><button className="really-end-party" type="button" disabled={busy} onClick={() => { setEndConfirmOpen(false); void control("end"); }}>{busy ? "Ending…" : "Yes, end it forever"}</button></div><small>Press Escape or tap outside to cancel.</small></section></div>}
+    {endConfirmOpen && <div className="modal-backdrop end-confirm-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setEndConfirmOpen(false)}><section className="end-confirm-card" role="dialog" aria-modal="true" aria-labelledby="end-confirm-title" aria-describedby="end-confirm-description"><p className="eyebrow">🚨 POINT OF NO RETURN</p><h2 id="end-confirm-title">End the party? 🥲</h2><p id="end-confirm-description">This freezes every score and closes the room for new songs and votes. There is no undo.</p><div className="end-confirm-actions"><button ref={cancelEndRef} className="keep-partying" type="button" onClick={() => setEndConfirmOpen(false)}>🎉 Nope, keep partying</button><button className="really-end-party" type="button" disabled={busy} onClick={() => { setEndConfirmOpen(false); void control("end"); }}>{busy ? "⏳ Ending…" : "🏁 Yes, end it forever"}</button></div><small>Press Escape or tap outside to cancel.</small></section></div>}
   </main>;
 }
