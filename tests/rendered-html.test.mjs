@@ -43,6 +43,10 @@ test("renders the create and join landing page", async () => {
   assert.match(html, /Let the room pick the vibe/);
   assert.match(html, /Create a room/);
   assert.match(html, /Join the room/);
+  assert.match(html, /THREE MOVES\. MAXIMUM DRAMA/);
+  assert.match(html, /Drop a secret song/);
+  assert.match(html, /React out loud/);
+  assert.match(html, /The crowd can skip/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/);
 });
 

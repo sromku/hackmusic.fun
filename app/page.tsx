@@ -65,13 +65,23 @@ export default function Home() {
           <p className="eyebrow">🎮 THE PLAYLIST IS NOW A PARTY GAME</p>
           <h1>Let the room<br />pick the vibe.</h1>
           <p className="landing-lede">Create a room, invite the humans, and hand everyone a tiny amount of power over the speaker.</p>
-          <div className="landing-rules" aria-label="How HackMusic works">
-            <span><b>01</b> 🎵 Add secret songs</span><span><b>02</b> 🙌 Cheer or 👻 boo</span><span><b>03</b> ⏭️ Three boos skip</span>
+          <div className="landing-energy" aria-label="Made for six to thirty people sharing one speaker">
+            <span className="energy-orb" aria-hidden="true">🪩</span>
+            <div><strong>6–30 HUMANS · ONE SPEAKER</strong><small>Zero playlist dictators.</small></div>
+            <span className="energy-bars" aria-hidden="true"><i /><i /><i /><i /><i /></span>
           </div>
+          <section className="landing-how" aria-labelledby="how-it-works-title">
+            <div className="landing-how-heading"><strong id="how-it-works-title">THREE MOVES. MAXIMUM DRAMA.</strong><span>⚡ instant party rules</span></div>
+            <div className="landing-rules">
+              <article className="landing-rule rule-song"><span className="rule-step">01</span><span className="rule-icon" aria-hidden="true">🎵</span><div><strong>Drop a secret song</strong><small>Paste a Spotify track. Nobody sees what’s next.</small></div></article>
+              <article className="landing-rule rule-react"><span className="rule-step">02</span><span className="rule-icon" aria-hidden="true">🙌</span><div><strong>React out loud</strong><small>Cheers give +3. Boos stay completely anonymous.</small></div></article>
+              <article className="landing-rule rule-skip"><span className="rule-step">03</span><span className="rule-icon" aria-hidden="true">⏭️</span><div><strong>The crowd can skip</strong><small>Three boos and the next secret song starts.</small></div></article>
+            </div>
+          </section>
         </div>
         <div className="room-entry-stack">
           <form className="entry-card create-card" onSubmit={createRoom}>
-            <p className="eyebrow">⚡ START THE CHAOS</p><h2>Create a room</h2>
+            <div className="entry-card-top"><p className="eyebrow">⚡ START THE CHAOS</p><span>NO APP NEEDED</span></div><h2>Create a room</h2>
             <label htmlFor="event-name">EVENT NAME</label><input id="event-name" value={eventName} onChange={(event) => setEventName(event.target.value)} maxLength={60} placeholder="Friday night hackathon" required />
             <label htmlFor="host-name">YOUR NAME</label><input id="host-name" value={hostName} onChange={(event) => setHostName(event.target.value)} maxLength={24} placeholder="The brave host" required />
             <button type="submit" disabled={busy}>{busy ? "🛠️ Making room…" : "🎉 Create my room →"}</button>
