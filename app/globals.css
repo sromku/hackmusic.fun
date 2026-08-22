@@ -57,7 +57,7 @@ body {
 .landing-rule:nth-child(3) { z-index: 1; }
 .landing-rule:hover { z-index: 4; transform: translateY(-5px) rotate(-1deg); box-shadow: 7px 7px 0 var(--ink); }
 .landing-rule:nth-child(2):hover { transform: translateY(-5px) rotate(1deg); }
-.landing-rule::after { content: "→"; position: absolute; z-index: 2; top: 50%; right: -15px; display: grid; width: 20px; height: 20px; place-items: center; border: 2px solid var(--ink); border-radius: 50%; background: var(--white); font-size: 12px; font-weight: 900; transform: translateY(-50%); }
+.landing-rule::after { content: "→"; position: absolute; z-index: 2; top: 50%; right: -19px; display: grid; width: 24px; height: 24px; place-items: center; border: 2px solid var(--ink); border-radius: 50%; background: var(--white); font-size: 13px; font-weight: 900; line-height: 1; transform: translateY(-50%); }
 .landing-rule:last-child::after { display: none; }
 .rule-song { background: var(--blue); }
 .rule-react { background: var(--sun); }
@@ -116,7 +116,7 @@ body {
   .landing-how-heading { align-items: flex-start; flex-direction: column; gap: 3px; }
   .landing-rules { grid-template-columns: 1fr; gap: 12px; }
   .landing-rule { grid-template-columns: 42px 1fr; grid-template-rows: 1fr; min-height: 94px; align-items: center; padding: 12px 14px; }
-  .landing-rule::after { content: "↓"; top: auto; right: 18px; bottom: -17px; transform: none; }
+  .landing-rule::after { content: "↓"; top: auto; right: 50%; bottom: -18px; transform: translateX(50%); }
   .landing-rule .rule-step { position: absolute; top: 9px; left: 10px; }
   .landing-rule .rule-icon { grid-column: 1; justify-self: start; font-size: 29px; }
   .landing-rule > div { grid-column: 2; align-self: center; }
