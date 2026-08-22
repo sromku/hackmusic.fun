@@ -371,6 +371,28 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 .share-code button:last-child { background: var(--blue); }
 .share-room-card img { border: 2px solid var(--ink); background: var(--white); padding: 7px; }
 .participant-link { color: var(--ink); font-size: 12px; font-weight: 900; }
+.spotify-connect-card { margin-top: 28px; border: 2px solid var(--ink); background: var(--white); box-shadow: 7px 7px 0 var(--ink); padding: 22px 24px; }
+.spotify-connect-card.spotify-ready { background: var(--mint); }
+.spotify-connect-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+.spotify-connect-heading h2 { margin: 3px 0 0; font-size: clamp(30px, 5vw, 46px); letter-spacing: -.05em; }
+.spotify-connect-heading > span { border: 2px solid var(--ink); background: var(--sun); padding: 8px 10px; font-size: 9px; font-weight: 950; letter-spacing: .11em; }
+.spotify-ready .spotify-connect-heading > span { background: var(--white); }
+.spotify-setup-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 26px; align-items: end; margin-top: 20px; padding-top: 20px; border-top: 2px solid var(--ink); }
+.spotify-setup-grid ol { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.spotify-setup-grid li { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: start; }
+.spotify-setup-grid li > span { display: grid; width: 28px; height: 28px; place-items: center; border: 2px solid var(--ink); background: var(--sun); font-size: 11px; font-weight: 950; }
+.spotify-setup-grid li p { margin: 2px 0 0; font-size: 12px; font-weight: 720; line-height: 1.45; }
+.spotify-setup-grid a { color: var(--ink); font-weight: 950; }
+.spotify-setup-grid code { display: block; margin: 7px 0; overflow-wrap: anywhere; border: 2px solid var(--ink); background: var(--paper); padding: 8px; font: 700 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.spotify-setup-grid li button, .spotify-connected-row button { border: 2px solid var(--ink); background: var(--white); padding: 7px 10px; cursor: pointer; font-size: 10px; font-weight: 900; }
+.spotify-connect-form { display: grid; gap: 8px; border: 2px solid var(--ink); background: var(--paper); padding: 16px; }
+.spotify-connect-form label { font-size: 9px; font-weight: 950; letter-spacing: .12em; }
+.spotify-connect-form input { min-width: 0; min-height: 46px; border: 2px solid var(--ink); background: var(--white); padding: 0 11px; font: 700 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.spotify-connect-form button { min-height: 48px; border: 2px solid var(--ink); background: var(--mint); box-shadow: 4px 4px 0 var(--ink); cursor: pointer; font-weight: 950; }
+.spotify-connected-row { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-top: 18px; padding-top: 18px; border-top: 2px solid var(--ink); }
+.spotify-connected-row strong { font-size: 15px; }
+.spotify-connected-row p, .spotify-loading { margin: 5px 0 0; font-size: 12px; font-weight: 720; }
+.spotify-message { margin: 16px 0 0; border-top: 1px solid var(--ink); padding-top: 12px; font-size: 11px; font-weight: 800; }
 .host-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 24px; margin-top: 32px; }
 .host-now-card, .host-controls-card, .leaderboard-card { border: 2px solid var(--ink); background: var(--white); box-shadow: 7px 7px 0 var(--ink); }
 .host-track { display: grid; grid-template-columns: 120px 1fr; gap: 22px; align-items: center; padding: 24px; }
@@ -384,7 +406,9 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 .spotify-host-player > div { display: flex; justify-content: space-between; gap: 14px; align-items: baseline; }
 .spotify-host-player strong { font-size: 10px; letter-spacing: .1em; }
 .spotify-host-player span { font-size: 11px; font-weight: 750; text-align: right; }
-.spotify-host-player iframe { display: block; border: 0; border-radius: 12px; background: #191414; }
+.spotify-host-player button { min-height: 50px; border: 2px solid var(--ink); background: var(--sun); box-shadow: 4px 4px 0 var(--ink); cursor: pointer; font-weight: 950; }
+.spotify-host-player button:disabled { box-shadow: none; cursor: not-allowed; opacity: .58; }
+.spotify-host-player small { font-size: 10px; font-weight: 750; }
 .unplayable-track { display: grid; gap: 4px; border-top: 2px solid var(--ink); background: var(--coral); padding: 16px 20px; }
 .unplayable-track strong { font-size: 12px; }
 .unplayable-track span { font-size: 11px; font-weight: 700; }
@@ -424,6 +448,7 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
   .host-shell { width: min(100% - 24px, 600px); padding-top: 16px; }
   .host-shell .topbar { margin-bottom: 42px; }
   .host-grid { grid-template-columns: 1fr; }
+  .spotify-setup-grid { grid-template-columns: 1fr; }
   .host-heading { align-items: flex-start; flex-direction: column; }
   .share-room-card { align-items: flex-start; }
   .share-room-card img { width: 132px; height: 132px; }
@@ -435,4 +460,8 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 @media (max-width: 480px) {
   .share-room-card { flex-direction: column; }
   .share-room-card img { align-self: center; width: 180px; height: 180px; }
+  .spotify-connect-card { padding: 18px 16px; }
+  .spotify-connect-heading, .spotify-connected-row { align-items: flex-start; flex-direction: column; }
+  .spotify-host-player > div { align-items: flex-start; flex-direction: column; }
+  .spotify-host-player span { text-align: left; }
 }

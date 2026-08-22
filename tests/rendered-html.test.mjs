@@ -55,17 +55,45 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /HOST CONTROL/);
   assert.match(source, /ROOM CODE/);
   assert.match(source, /QRCode/);
-  assert.match(source, /THIS BROWSER IS THE SPEAKER/);
-  assert.match(source, /open\.spotify\.com\/embed\/track/);
+  assert.match(source, /SPOTIFY PREMIUM SPEAKER/);
+  assert.match(source, /https:\/\/sdk\.scdn\.co\/spotify-player\.js/);
+  assert.match(source, /Connect Spotify Premium/);
+  assert.match(source, /\/api\/spotify\/callback/);
+  assert.match(source, /activateElement/);
+  assert.doesNotMatch(source, /open\.spotify\.com\/embed\/track/);
   assert.match(source, /Skip to next song/);
   assert.match(source, /LIVE SCOREBOARD/);
   assert.match(source, /End the party\?/);
   assert.match(source, /Nope, keep partying/);
   assert.match(source, /Yes, end it forever/);
   assert.match(source, /There is no undo/);
+  const spotifyLoginSource = await readFile(new URL("app/api/spotify/login/route.ts", projectRoot), "utf8");
+  assert.match(spotifyLoginSource, /code_challenge_method: "S256"/);
+  assert.match(spotifyLoginSource, /"streaming"/);
+  const spotifyCallbackSource = await readFile(new URL("app/api/spotify/callback/route.ts", projectRoot), "utf8");
+  assert.match(spotifyCallbackSource, /grant_type: "authorization_code"/);
+  assert.match(spotifyCallbackSource, /SPOTIFY_SESSION_COOKIE/);
   const participantSource = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
   assert.match(participantSource, /Checking Spotify/);
   assert.match(participantSource, /Add to the secret queue/);
+});
+
+test("starts Spotify PKCE without exposing a client secret", async () => {
+  const clientId = "1234567890abcdef1234567890abcdef";
+  const response = await render(`/api/spotify/login?clientId=${clientId}&roomCode=ABC123`);
+  assert.equal(response.status, 302);
+  const location = new URL(response.headers.get("location"));
+  assert.equal(location.origin, "https://accounts.spotify.com");
+  assert.equal(location.pathname, "/authorize");
+  assert.equal(location.searchParams.get("client_id"), clientId);
+  assert.equal(location.searchParams.get("code_challenge_method"), "S256");
+  assert.match(location.searchParams.get("scope"), /streaming/);
+  assert.equal(location.searchParams.get("redirect_uri"), "http://localhost/api/spotify/callback");
+  assert.match(response.headers.get("set-cookie"), /hackmusic_spotify_oauth=/);
+  assert.doesNotMatch(location.toString(), /client_secret/);
+
+  const tokenResponse = await render("/api/spotify/token");
+  assert.equal(tokenResponse.status, 401);
 });
 
 test("ships product metadata and removes starter artifacts", async () => {

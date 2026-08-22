@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json() as {
-      action?: "create" | "join" | "react" | "submit" | "skip" | "end";
+      action?: "create" | "join" | "react" | "submit" | "skip" | "advance" | "end";
       code?: string;
       participantId?: string;
       kind?: "up" | "down";
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       ({ skipped } = await reactToCurrent(code, participantId, body.kind));
     } else if (body.action === "submit" && body.track) {
       await submitTrack(code, participantId, body.track);
-    } else if ((body.action === "skip" || body.action === "end") && body.pin) {
+    } else if ((body.action === "skip" || body.action === "advance" || body.action === "end") && body.pin) {
       await hostControl(code, body.pin, body.action);
     } else {
       return Response.json({ error: "Invalid party action." }, { status: 400 });

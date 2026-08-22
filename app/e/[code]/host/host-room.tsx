@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import QRCode from "qrcode";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type HostParty = {
   code: string;
@@ -14,6 +14,40 @@ type HostParty = {
   reactions: Array<{ id: string; tone: "up" | "down" }>;
   queueCount: number;
 };
+
+type SpotifyPlaybackState = {
+  paused: boolean;
+  position: number;
+  duration: number;
+  track_window: { current_track: { uri: string } };
+};
+
+type SpotifyPlayer = {
+  connect: () => Promise<boolean>;
+  disconnect: () => void;
+  activateElement: () => Promise<void>;
+  pause: () => Promise<void>;
+  addListener: {
+    (event: "ready" | "not_ready", callback: (payload: { device_id: string }) => void): boolean;
+    (event: "player_state_changed", callback: (state: SpotifyPlaybackState | null) => void): boolean;
+    (event: "autoplay_failed", callback: () => void): boolean;
+    (event: "initialization_error" | "authentication_error" | "account_error" | "playback_error", callback: (payload: { message: string }) => void): boolean;
+  };
+};
+
+type SpotifyConstructor = new (options: {
+  name: string;
+  getOAuthToken: (callback: (token: string) => void) => void;
+  volume?: number;
+  enableMediaSession?: boolean;
+}) => SpotifyPlayer;
+
+declare global {
+  interface Window {
+    Spotify?: { Player: SpotifyConstructor };
+    onSpotifyWebPlaybackSDKReady?: () => void;
+  }
+}
 
 function spotifyTrackId(value: string) {
   const uriMatch = value.match(/^spotify:track:([A-Za-z0-9]{22})$/);
@@ -33,9 +67,20 @@ export default function HostRoom({ code }: { code: string }) {
   const [busy, setBusy] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
+  const [spotifyClientId, setSpotifyClientId] = useState("");
+  const [spotifyStatus, setSpotifyStatus] = useState<"checking" | "disconnected" | "loading" | "ready" | "error">("checking");
+  const [spotifyDeviceId, setSpotifyDeviceId] = useState("");
+  const [speakerArmed, setSpeakerArmed] = useState(false);
+  const [spotifyMessage, setSpotifyMessage] = useState("");
   const audioEnabledRef = useRef(false);
   const knownReactions = useRef<Set<string> | null>(null);
   const cancelEndRef = useRef<HTMLButtonElement | null>(null);
+  const spotifyPlayerRef = useRef<SpotifyPlayer | null>(null);
+  const lastSpotifyTrackRef = useRef("");
+  const lastPlaybackStateRef = useRef<SpotifyPlaybackState | null>(null);
+  const spotifyEndTimerRef = useRef<number | null>(null);
+  const advancingTrackRef = useRef(false);
+  const currentSpotifyId = party?.currentTrack ? spotifyTrackId(party.currentTrack.id) : "";
 
   function sayReaction(kind: "up" | "down") {
     if (!audioEnabledRef.current || !("speechSynthesis" in window)) return;
@@ -49,11 +94,13 @@ export default function HostRoom({ code }: { code: string }) {
   useEffect(() => {
     const participant = window.localStorage.getItem(`hackmusic:${code}:participant`) ?? "";
     const key = window.localStorage.getItem(`hackmusic:${code}:host`) ?? "";
+    const savedSpotifyClientId = window.localStorage.getItem("hackmusic:spotify:clientId") ?? "";
     const url = `${window.location.origin}/e/${code}`;
     queueMicrotask(() => {
       setParticipantId(participant);
       setHostKey(key);
       setShareUrl(url);
+      setSpotifyClientId(savedSpotifyClientId);
       if (!participant || !key) setError("This browser did not create that room, so its host controls are locked.");
     });
     QRCode.toDataURL(url, { width: 220, margin: 1, color: { dark: "#151515", light: "#fffef9" } }).then(setQrUrl).catch(() => undefined);
@@ -93,6 +140,190 @@ export default function HostRoom({ code }: { code: string }) {
     };
   }, [endConfirmOpen]);
 
+  const getSpotifyToken = useCallback(async () => {
+    const response = await fetch("/api/spotify/token", { cache: "no-store" });
+    const data = await response.json();
+    if (!response.ok || !data.accessToken) throw new Error(data.error ?? "Spotify is not connected.");
+    return data.accessToken as string;
+  }, []);
+
+  useEffect(() => {
+    if (!participantId || !hostKey) return;
+    let active = true;
+
+    async function advanceFinishedTrack() {
+      const response = await fetch("/api/party", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "advance", code, participantId, pin: hostKey }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Could not advance the playlist.");
+      if (active) setParty(data.party);
+    }
+
+    async function initializeSpotify() {
+      try {
+        await getSpotifyToken();
+        if (!active) return;
+        setSpotifyStatus("loading");
+
+        const startPlayer = async () => {
+          if (!active || !window.Spotify || spotifyPlayerRef.current) return;
+          const player = new window.Spotify.Player({
+            name: "HackMusic Speaker",
+            getOAuthToken: (callback) => {
+              void getSpotifyToken().then(callback).catch((reason) => {
+                if (!active) return;
+                setSpotifyStatus("error");
+                setSpotifyMessage(reason instanceof Error ? reason.message : "Spotify login expired.");
+              });
+            },
+            volume: 0.8,
+            enableMediaSession: true,
+          });
+
+          player.addListener("ready", ({ device_id }) => {
+            if (!active) return;
+            setSpotifyDeviceId(device_id);
+            setSpotifyStatus("ready");
+            setSpotifyMessage("Spotify Premium is connected. Start the speaker once, then HackMusic takes over.");
+          });
+          player.addListener("not_ready", () => {
+            if (!active) return;
+            setSpotifyDeviceId("");
+            setSpotifyStatus("error");
+            setSpotifyMessage("This Spotify speaker went offline. Reload this host page to reconnect it.");
+          });
+          player.addListener("autoplay_failed", () => {
+            if (active) setSpotifyMessage("Your browser blocked autoplay. Tap Start the speaker again.");
+          });
+          player.addListener("initialization_error", ({ message: detail }) => {
+            if (active) { setSpotifyStatus("error"); setSpotifyMessage(detail); }
+          });
+          player.addListener("authentication_error", ({ message: detail }) => {
+            if (active) { setSpotifyStatus("error"); setSpotifyMessage(`${detail} Connect Spotify again.`); }
+          });
+          player.addListener("account_error", ({ message: detail }) => {
+            if (active) { setSpotifyStatus("error"); setSpotifyMessage(`${detail} Spotify Premium is required.`); }
+          });
+          player.addListener("playback_error", ({ message: detail }) => {
+            if (active) setSpotifyMessage(detail);
+          });
+          player.addListener("player_state_changed", (state) => {
+            if (!active) return;
+            const previous = lastPlaybackStateRef.current;
+            lastPlaybackStateRef.current = state;
+            if (state && spotifyEndTimerRef.current) {
+              window.clearTimeout(spotifyEndTimerRef.current);
+              spotifyEndTimerRef.current = null;
+            }
+            const naturallyFinished = Boolean(
+              state && previous &&
+              previous.track_window.current_track.uri === state.track_window.current_track.uri &&
+              !previous.paused && state.paused && state.position === 0 &&
+              previous.duration > 0
+            );
+            const moveToNext = () => {
+              if (!active || advancingTrackRef.current) return;
+              advancingTrackRef.current = true;
+              lastSpotifyTrackRef.current = "";
+              void advanceFinishedTrack().catch((reason) => {
+                advancingTrackRef.current = false;
+                if (active) setSpotifyMessage(reason instanceof Error ? reason.message : "Could not play the next song.");
+              });
+            };
+            if (naturallyFinished) {
+              moveToNext();
+            } else if (state && !state.paused && state.duration > state.position) {
+              spotifyEndTimerRef.current = window.setTimeout(moveToNext, state.duration - state.position + 1_250);
+            }
+          });
+
+          spotifyPlayerRef.current = player;
+          const connected = await player.connect();
+          if (!connected && active) {
+            setSpotifyStatus("error");
+            setSpotifyMessage("Spotify could not create this browser speaker. Reload and try again.");
+          }
+        };
+
+        if (window.Spotify) {
+          await startPlayer();
+        } else {
+          window.onSpotifyWebPlaybackSDKReady = () => { void startPlayer(); };
+          if (!document.querySelector('script[src="https://sdk.scdn.co/spotify-player.js"]')) {
+            const script = document.createElement("script");
+            script.src = "https://sdk.scdn.co/spotify-player.js";
+            script.async = true;
+            script.onerror = () => {
+              if (active) { setSpotifyStatus("error"); setSpotifyMessage("Could not load Spotify's player. Check your connection and reload."); }
+            };
+            document.body.appendChild(script);
+          }
+        }
+      } catch (reason) {
+        if (!active) return;
+        const detail = reason instanceof Error ? reason.message : "Spotify is not connected.";
+        setSpotifyStatus(detail.includes("not connected") ? "disconnected" : "error");
+        setSpotifyMessage(detail.includes("not connected") ? "Connect one Spotify Premium account to make this phone the speaker." : detail);
+      }
+    }
+
+    void initializeSpotify();
+    return () => {
+      active = false;
+      spotifyPlayerRef.current?.disconnect();
+      spotifyPlayerRef.current = null;
+      if (spotifyEndTimerRef.current) window.clearTimeout(spotifyEndTimerRef.current);
+      window.onSpotifyWebPlaybackSDKReady = undefined;
+    };
+  }, [code, getSpotifyToken, hostKey, participantId]);
+
+  const playSpotifyTrack = useCallback(async (trackId: string, activate = false) => {
+    const player = spotifyPlayerRef.current;
+    if (!player || !spotifyDeviceId) throw new Error("Spotify speaker is still getting ready.");
+    if (activate) await player.activateElement();
+    const accessToken = await getSpotifyToken();
+    const play = () => fetch(`https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`, {
+      method: "PUT",
+      headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ uris: [`spotify:track:${trackId}`] }),
+    });
+    let response = await play();
+    if (response.status === 404) {
+      await fetch("https://api.spotify.com/v1/me/player", {
+        method: "PUT",
+        headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ device_ids: [spotifyDeviceId], play: false }),
+      });
+      await new Promise((resolve) => window.setTimeout(resolve, 350));
+      response = await play();
+    }
+    if (!response.ok) {
+      const data = await response.json().catch(() => null) as { error?: { message?: string } } | null;
+      throw new Error(data?.error?.message ?? `Spotify could not start playback (${response.status}).`);
+    }
+    lastSpotifyTrackRef.current = trackId;
+    advancingTrackRef.current = false;
+    setSpeakerArmed(true);
+    setSpotifyMessage("Full track is playing here. HackMusic will start every next song automatically.");
+  }, [getSpotifyToken, spotifyDeviceId]);
+
+  useEffect(() => {
+    if (!speakerArmed || !spotifyPlayerRef.current) return;
+    if (party?.status === "ended" || !currentSpotifyId) {
+      lastSpotifyTrackRef.current = "";
+      void spotifyPlayerRef.current.pause();
+      return;
+    }
+    if (spotifyStatus === "ready" && spotifyDeviceId && lastSpotifyTrackRef.current !== currentSpotifyId) {
+      void playSpotifyTrack(currentSpotifyId).catch((reason) => {
+        setSpotifyMessage(reason instanceof Error ? reason.message : "Could not play this song.");
+      });
+    }
+  }, [currentSpotifyId, party?.status, playSpotifyTrack, speakerArmed, spotifyDeviceId, spotifyStatus]);
+
   function enableAudio() {
     audioEnabledRef.current = true;
     setAudioEnabled(true);
@@ -117,14 +348,46 @@ export default function HostRoom({ code }: { code: string }) {
     }
   }
 
-  async function control(action: "skip" | "end") {
+  function connectSpotify(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const clientId = spotifyClientId.trim();
+    if (!/^[A-Za-z0-9]{20,64}$/.test(clientId)) {
+      setSpotifyMessage("Paste the public Client ID from your Spotify developer app.");
+      return;
+    }
+    window.localStorage.setItem("hackmusic:spotify:clientId", clientId);
+    window.location.assign(`/api/spotify/login?clientId=${encodeURIComponent(clientId)}&roomCode=${encodeURIComponent(code)}`);
+  }
+
+  async function copySpotifyCallback() {
+    const callbackUrl = `${window.location.origin}/api/spotify/callback`;
+    try {
+      await navigator.clipboard.writeText(callbackUrl);
+      setSpotifyMessage("Spotify callback URL copied.");
+    } catch {
+      setSpotifyMessage("Copy the callback URL shown below exactly.");
+    }
+  }
+
+  async function disconnectSpotify() {
+    spotifyPlayerRef.current?.disconnect();
+    spotifyPlayerRef.current = null;
+    await fetch("/api/spotify/disconnect", { method: "POST" });
+    lastSpotifyTrackRef.current = "";
+    setSpeakerArmed(false);
+    setSpotifyDeviceId("");
+    setSpotifyStatus("disconnected");
+    setSpotifyMessage("Spotify disconnected from this browser.");
+  }
+
+  async function control(action: "skip" | "advance" | "end") {
     setBusy(true);
     try {
       const response = await fetch("/api/party", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, code, participantId, pin: hostKey }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Host action failed.");
       setParty(data.party);
-      setMessage(action === "skip" ? "Skipped. The room will recover." : "Party ended. Scores are final.");
+      setMessage(action === "skip" ? "Skipped. Next secret song!" : action === "advance" ? "Song finished. Next one!" : "Party ended. Scores are final.");
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Host action failed."); }
     finally { setBusy(false); }
   }
@@ -134,14 +397,34 @@ export default function HostRoom({ code }: { code: string }) {
 
   const cheers = party.reactions.filter((reaction) => reaction.tone === "up").length;
   const boos = party.reactions.filter((reaction) => reaction.tone === "down").length;
-  const spotifyId = party.currentTrack ? spotifyTrackId(party.currentTrack.id) : "";
+  const spotifyCallbackUrl = shareUrl ? new URL("/api/spotify/callback", shareUrl).toString() : "";
   return <main className="host-shell">
     <header className="topbar"><Link className="brand" href="/"><span className="brand-mark">HM</span><span>HackMusic Host</span></Link><Link className="participant-link" href={`/e/${code}`}>Open participant page →</Link></header>
     <div className="host-heading"><div><p className="eyebrow">HOST CONTROL · ROOM {party.code}</p><h1>{party.title}</h1></div><span className={`host-status ${party.status}`}>{party.status === "ended" ? "PARTY ENDED" : "LIVE"}</span></div>
 
     <section className="share-room-card"><div className="share-code"><span>ROOM CODE</span><strong>{party.code}</strong><p>{shareUrl}</p><div><button type="button" onClick={() => void copyInvite()}>Copy invite</button><button type="button" onClick={() => void shareInvite()}>Share</button></div></div>{qrUrl && <Image unoptimized src={qrUrl} width={180} height={180} alt={`QR code to join room ${party.code}`} />}</section>
 
-    <div className="host-grid"><section className="host-now-card"><div className="section-kicker"><span>ON THE SPEAKER</span><span>{party.queueCount} WAITING</span></div>{party.currentTrack ? <><div className="host-track"><div className={`host-art ${party.currentTrack.color}`}>♪</div><div><h2>{party.currentTrack.title}</h2><p>{party.currentTrack.artist}{party.currentTrack.duration ? ` · ${party.currentTrack.duration}` : ""}</p></div></div>{spotifyId ? <div className="spotify-host-player"><div><strong>THIS BROWSER IS THE SPEAKER</strong><span>Tap Play in Spotify once. Keep this host page open.</span></div><iframe key={spotifyId} title={`Spotify player for ${party.currentTrack.title}`} src={`https://open.spotify.com/embed/track/${spotifyId}?utm_source=hackmusic`} width="100%" height="152" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="eager" /></div> : <div className="unplayable-track"><strong>This item has no playable Spotify link.</strong><span>Skip it and add a real Spotify track URL.</span></div>}<div className="host-reaction-counts"><div className="host-cheers"><strong>{cheers}</strong><span>CHEERS</span></div><div className="host-boos"><strong>{boos}</strong><span>BOOS</span></div></div></> : <div className="host-empty"><strong>No song yet.</strong><p>Open the participant page and add the first one.</p></div>}</section>
+    <section className={`spotify-connect-card spotify-${spotifyStatus}`}>
+      <div className="spotify-connect-heading">
+        <div><p className="eyebrow">FULL-TRACK SPEAKER</p><h2>Spotify Premium</h2></div>
+        <span>{spotifyStatus === "ready" ? "CONNECTED" : spotifyStatus === "loading" || spotifyStatus === "checking" ? "CHECKING…" : "SETUP NEEDED"}</span>
+      </div>
+      {spotifyStatus === "ready" ? <div className="spotify-connected-row"><div><strong>This browser is ready to become the speaker.</strong><p>Connect the host phone to your real speaker, then start playback once below.</p></div><button type="button" onClick={() => void disconnectSpotify()}>Disconnect</button></div> : spotifyStatus === "checking" || spotifyStatus === "loading" ? <p className="spotify-loading">Opening the Spotify Web Playback SDK…</p> : <div className="spotify-setup-grid">
+        <ol>
+          <li><span>1</span><p>Create an app in the <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noreferrer">Spotify Developer Dashboard ↗</a>. Select Web API and Web Playback SDK if asked.</p></li>
+          <li><span>2</span><div><p>Add this exact redirect URI in the app settings:</p><code>{spotifyCallbackUrl}</code><button type="button" onClick={() => void copySpotifyCallback()}>Copy callback URL</button></div></li>
+          <li><span>3</span><p>Paste the app&apos;s public <strong>Client ID</strong> here. Do not paste its client secret.</p></li>
+        </ol>
+        <form className="spotify-connect-form" onSubmit={connectSpotify}>
+          <label htmlFor="spotify-client-id">SPOTIFY CLIENT ID</label>
+          <input id="spotify-client-id" value={spotifyClientId} onChange={(event) => setSpotifyClientId(event.target.value)} placeholder="Paste the public Client ID" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+          <button type="submit">Connect Spotify Premium →</button>
+        </form>
+      </div>}
+      {spotifyMessage && <p className="spotify-message" role="status">{spotifyMessage}</p>}
+    </section>
+
+    <div className="host-grid"><section className="host-now-card"><div className="section-kicker"><span>ON THE SPEAKER</span><span>{party.queueCount} WAITING</span></div>{party.currentTrack ? <><div className="host-track"><div className={`host-art ${party.currentTrack.color}`}>♪</div><div><h2>{party.currentTrack.title}</h2><p>{party.currentTrack.artist}{party.currentTrack.duration ? ` · ${party.currentTrack.duration}` : ""}</p></div></div>{currentSpotifyId ? <div className={`spotify-host-player spotify-${spotifyStatus}`}><div><strong>SPOTIFY PREMIUM SPEAKER</strong><span>{spotifyStatus === "ready" ? "Full song · no preview limit" : "Connect Spotify above first"}</span></div><button type="button" disabled={spotifyStatus !== "ready" || party.status === "ended"} onClick={() => void playSpotifyTrack(currentSpotifyId, true).catch((reason) => setSpotifyMessage(reason instanceof Error ? reason.message : "Could not start Spotify."))}>{speakerArmed ? "Play this track again →" : "Start the speaker →"}</button><small>Tap once on this host device. Every next secret song will start automatically.</small></div> : <div className="unplayable-track"><strong>This item has no playable Spotify link.</strong><span>Skip it and add a real Spotify track URL.</span></div>}<div className="host-reaction-counts"><div className="host-cheers"><strong>{cheers}</strong><span>CHEERS</span></div><div className="host-boos"><strong>{boos}</strong><span>BOOS</span></div></div></> : <div className="host-empty"><strong>No song yet.</strong><p>Open the participant page and add the first one.</p></div>}</section>
       <section className="host-controls-card"><div className="card-title-row"><h2>CONTROLS</h2><span>THIS PHONE ONLY</span></div><button className={`host-audio ${audioEnabled ? "armed" : ""}`} type="button" onClick={enableAudio}>{audioEnabled ? "✓ Reaction sounds armed" : "Enable reaction sounds"}</button><button className="host-skip" type="button" disabled={busy || !party.currentTrack || party.status === "ended"} onClick={() => void control("skip")}>Skip to next song →</button><button className="host-end" type="button" disabled={busy || party.status === "ended"} onClick={() => setEndConfirmOpen(true)}>End party & freeze scores</button>{message && <p className="host-message" role="status">{message}</p>}<p className="host-hint">The secret host key stays on the phone that created this room.</p></section>
     </div>
     <section className="leaderboard-card"><div className="card-title-row"><h2>{party.status === "ended" ? "FINAL SCOREBOARD" : "LIVE SCOREBOARD"}</h2><span>{party.people.length} PLAYERS</span></div><ol>{[...party.people].sort((a, b) => b.score - a.score).map((person, index) => <li key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><b>{index + 1}</b><strong>{person.name}</strong><span>{person.score} pts</span></li>)}</ol></section>

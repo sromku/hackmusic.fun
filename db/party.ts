@@ -273,7 +273,7 @@ export async function joinParty(code: string, participantId: string, displayName
     .bind(participantId, event.id, name, profile.initials, profile.color, new Date().toISOString()).run();
 }
 
-export async function hostControl(code: string, hostKey: string, action: "skip" | "end") {
+export async function hostControl(code: string, hostKey: string, action: "skip" | "advance" | "end") {
   const event = await getEvent(code);
   if (!event || event.host_pin !== hostKey) throw new Error("This phone is not the host for that room.");
   if (action === "end") {
@@ -281,5 +281,5 @@ export async function hostControl(code: string, hostKey: string, action: "skip" 
     return;
   }
   if (!event.current_submission_id) throw new Error("Nothing is playing yet.");
-  await advanceCurrent(event, "skipped");
+  await advanceCurrent(event, action === "advance" ? "played" : "skipped");
 }
