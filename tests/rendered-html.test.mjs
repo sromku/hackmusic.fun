@@ -57,6 +57,10 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /QRCode/);
   assert.match(source, /Skip to next song/);
   assert.match(source, /LIVE SCOREBOARD/);
+  assert.match(source, /End the party\?/);
+  assert.match(source, /Nope, keep partying/);
+  assert.match(source, /Yes, end it forever/);
+  assert.match(source, /There is no undo/);
 });
 
 test("ships product metadata and removes starter artifacts", async () => {

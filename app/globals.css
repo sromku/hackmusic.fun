@@ -337,6 +337,7 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
   .activity-row p { max-width: 52%; }
   .modal-backdrop { align-items: end; padding: 0; }
   .song-modal { width: 100%; max-height: 90dvh; border-width: 2px 0 0; box-shadow: none; padding: 20px 16px 28px; }
+  .end-confirm-card { width: 100%; border-width: 2px 0 0; box-shadow: none; padding: 24px 18px 28px; }
   .modal-topline h2 { font-size: 32px; }
   .toast { bottom: 82px; }
   .shape-two { display: none; }
@@ -384,6 +385,15 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 .host-audio.armed { background: var(--mint); }
 .host-skip { background: var(--blue); box-shadow: 4px 4px 0 var(--ink); }
 .host-end { margin-top: 12px; background: var(--white); }
+.end-confirm-backdrop { z-index: 50; }
+.end-confirm-card { width: min(500px, 100%); border: 2px solid var(--ink); background: var(--coral); box-shadow: 10px 10px 0 var(--ink); padding: 30px; }
+.end-confirm-card h2 { margin: 4px 0 12px; font-size: clamp(38px, 7vw, 58px); line-height: .92; letter-spacing: -.06em; }
+.end-confirm-card > p:not(.eyebrow) { max-width: 420px; margin: 0; font-weight: 750; line-height: 1.45; }
+.end-confirm-actions { display: grid; gap: 10px; margin-top: 28px; }
+.end-confirm-actions button { min-height: 54px; border: 2px solid var(--ink); cursor: pointer; font-weight: 950; }
+.keep-partying { background: var(--sun); box-shadow: 4px 4px 0 var(--ink); }
+.really-end-party { background: var(--ink); color: var(--white); }
+.end-confirm-card small { display: block; margin-top: 18px; font-size: 10px; font-weight: 800; text-align: center; }
 .host-message { border: 2px solid var(--ink); background: var(--mint); padding: 10px; font-size: 12px; font-weight: 800; }
 .host-hint { margin: 14px 0 0; color: #6b675f; font-size: 11px; }
 .leaderboard-card { margin-top: 24px; padding: 20px; }
