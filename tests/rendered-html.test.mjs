@@ -16,27 +16,45 @@ async function render(pathname = "/") {
   );
 }
 
-test("renders the interactive participant party surface", async () => {
+test("renders the create and join landing page", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /HackMusic/);
-  assert.match(html, /Hackathon Afterdark/);
-  assert.match(html, /CHEER/);
-  assert.match(html, /BOO/);
-  assert.match(html, /Add a song/);
-  assert.match(html, /Someone/);
+  assert.match(html, /Let the room pick the vibe/);
+  assert.match(html, /Create a room/);
+  assert.match(html, /Join the room/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/);
 });
 
-test("renders the host control surface", async () => {
-  const response = await render("/host");
+test("renders a code-specific participant room", async () => {
+  const response = await render("/e/ABC123");
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /Warming up the room/);
-  const source = await readFile(new URL("app/host/page.tsx", projectRoot), "utf8");
+  assert.match(html, /Finding room[\s\S]*ABC123/);
+  assert.match(html, /Join HackMusic room ABC123/);
+  assert.doesNotMatch(html, /og\.png/);
+  const source = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
+  assert.match(source, /CHEER/);
+  assert.match(source, /BOO/);
+  assert.match(source, /Add a song/);
+  const partySource = await readFile(new URL("db/party.ts", projectRoot), "utf8");
+  assert.match(partySource, /name: "Someone"/);
+});
+
+test("renders a code-specific host control surface", async () => {
+  const response = await render("/e/ABC123/host");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Warming up room[\s\S]*ABC123/);
+  assert.match(html, /Host HackMusic room ABC123/);
+  assert.match(html, /noindex/);
+  assert.doesNotMatch(html, /og\.png/);
+  const source = await readFile(new URL("app/e/[code]/host/host-room.tsx", projectRoot), "utf8");
   assert.match(source, /HackMusic Host/);
   assert.match(source, /HOST CONTROL/);
+  assert.match(source, /ROOM CODE/);
+  assert.match(source, /QRCode/);
   assert.match(source, /Skip to next song/);
   assert.match(source, /LIVE SCOREBOARD/);
 });
