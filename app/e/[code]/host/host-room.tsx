@@ -56,33 +56,6 @@ function spotifyTrackId(value: string) {
   return legacyMatch?.[1] ?? "";
 }
 
-function synthTone(context: AudioContext, frequency: number, endFrequency: number, start: number, duration: number, type: OscillatorType, volume: number) {
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(frequency, start);
-  oscillator.frequency.exponentialRampToValueAtTime(endFrequency, start + duration);
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(volume, start + 0.018);
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  oscillator.connect(gain).connect(context.destination);
-  oscillator.start(start);
-  oscillator.stop(start + duration + 0.02);
-}
-
-function playSynthReaction(context: AudioContext, kind: "up" | "down") {
-  const now = context.currentTime + 0.02;
-  if (kind === "up") {
-    synthTone(context, 440, 620, now, 0.16, "square", 0.32);
-    synthTone(context, 554, 760, now + 0.12, 0.17, "square", 0.3);
-    synthTone(context, 659, 990, now + 0.24, 0.28, "triangle", 0.38);
-  } else {
-    synthTone(context, 190, 72, now, 0.72, "sawtooth", 0.42);
-    synthTone(context, 142, 58, now + 0.05, 0.82, "triangle", 0.36);
-    synthTone(context, 96, 52, now + 0.12, 0.76, "sine", 0.4);
-  }
-}
-
 export default function HostRoom({ code }: { code: string }) {
   const [party, setParty] = useState<HostParty | null>(null);
   const [participantId, setParticipantId] = useState("");
@@ -100,7 +73,8 @@ export default function HostRoom({ code }: { code: string }) {
   const [speakerArmed, setSpeakerArmed] = useState(false);
   const [spotifyMessage, setSpotifyMessage] = useState("");
   const audioEnabledRef = useRef(false);
-  const reactionAudioContextRef = useRef<AudioContext | null>(null);
+  const cheerAudioRef = useRef<HTMLAudioElement | null>(null);
+  const booAudioRef = useRef<HTMLAudioElement | null>(null);
   const knownReactions = useRef<Set<string> | null>(null);
   const cancelEndRef = useRef<HTMLButtonElement | null>(null);
   const spotifyPlayerRef = useRef<SpotifyPlayer | null>(null);
@@ -110,30 +84,15 @@ export default function HostRoom({ code }: { code: string }) {
   const advancingTrackRef = useRef(false);
   const currentSpotifyId = party?.currentTrack ? spotifyTrackId(party.currentTrack.id) : "";
 
-  const getReactionAudioContext = useCallback(() => {
-    if (reactionAudioContextRef.current) return reactionAudioContextRef.current;
-    const AudioContextConstructor = window.AudioContext ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextConstructor) return null;
-    reactionAudioContextRef.current = new AudioContextConstructor();
-    return reactionAudioContextRef.current;
-  }, []);
-
-  const sayReaction = useCallback((kind: "up" | "down") => {
+  const playReactionSound = useCallback((kind: "up" | "down") => {
     if (!audioEnabledRef.current) return;
-    const context = getReactionAudioContext();
-    if (context) {
-      const play = () => playSynthReaction(context, kind);
-      if (context.state === "suspended") void context.resume().then(play).catch(() => undefined);
-      else play();
-    }
-    if ("speechSynthesis" in window) {
-      const voice = new SpeechSynthesisUtterance(kind === "up" ? "Yeah!" : "Boooo!");
-      voice.rate = kind === "up" ? 1.35 : 0.62;
-      voice.pitch = kind === "up" ? 1.65 : 0.45;
-      voice.volume = 1;
-      window.speechSynthesis.speak(voice);
-    }
-  }, [getReactionAudioContext]);
+    const sound = kind === "up" ? cheerAudioRef.current : booAudioRef.current;
+    if (!sound) return;
+    sound.pause();
+    sound.currentTime = 0;
+    sound.volume = 1;
+    void sound.play().catch(() => setMessage("The phone blocked reaction audio. Tap Enable & test funny sounds again."));
+  }, []);
 
   useEffect(() => {
     const participant = window.localStorage.getItem(`hackmusic:${code}:participant`) ?? "";
@@ -151,6 +110,23 @@ export default function HostRoom({ code }: { code: string }) {
   }, [code]);
 
   useEffect(() => {
+    const cheerSound = new Audio("/sounds/cheer.wav");
+    const booSound = new Audio("/sounds/boo.wav");
+    cheerSound.preload = "auto";
+    booSound.preload = "auto";
+    cheerSound.load();
+    booSound.load();
+    cheerAudioRef.current = cheerSound;
+    booAudioRef.current = booSound;
+    return () => {
+      cheerSound.pause();
+      booSound.pause();
+      cheerAudioRef.current = null;
+      booAudioRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!participantId || !hostKey) return;
     let active = true;
     const refresh = () => fetch(`/api/party?code=${encodeURIComponent(code)}&participantId=${encodeURIComponent(participantId)}`)
@@ -160,7 +136,7 @@ export default function HostRoom({ code }: { code: string }) {
         if (!active) return;
         const nextIds = new Set<string>(data.party.reactions.map((reaction: { id: string }) => reaction.id));
         if (knownReactions.current) {
-          data.party.reactions.filter((reaction: { id: string }) => !knownReactions.current?.has(reaction.id)).reverse().forEach((reaction: { tone: "up" | "down" }) => sayReaction(reaction.tone));
+          data.party.reactions.filter((reaction: { id: string }) => !knownReactions.current?.has(reaction.id)).reverse().forEach((reaction: { tone: "up" | "down" }) => playReactionSound(reaction.tone));
         }
         knownReactions.current = nextIds;
         setParty(data.party);
@@ -169,7 +145,7 @@ export default function HostRoom({ code }: { code: string }) {
     void refresh();
     const timer = window.setInterval(refresh, 2000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [code, hostKey, participantId, sayReaction]);
+  }, [code, hostKey, participantId, playReactionSound]);
 
   useEffect(() => {
     if (!endConfirmOpen) return;
@@ -369,13 +345,20 @@ export default function HostRoom({ code }: { code: string }) {
   }, [currentSpotifyId, party?.status, playSpotifyTrack, speakerArmed, spotifyDeviceId, spotifyStatus]);
 
   function enableAudio() {
-    const context = getReactionAudioContext();
-    if (context) void context.resume().catch(() => undefined);
     audioEnabledRef.current = true;
     setAudioEnabled(true);
     setMessage("Funny sounds are armed. You should hear a quick cheer and boo test now.");
-    sayReaction("up");
-    window.setTimeout(() => sayReaction("down"), 650);
+    const booSound = booAudioRef.current;
+    if (booSound) {
+      booSound.volume = 0;
+      void booSound.play().then(() => {
+        booSound.pause();
+        booSound.currentTime = 0;
+        booSound.volume = 1;
+      }).catch(() => undefined);
+    }
+    playReactionSound("up");
+    window.setTimeout(() => playReactionSound("down"), 650);
   }
 
   async function copyInvite() {

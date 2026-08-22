@@ -67,6 +67,9 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /Nope, keep partying/);
   assert.match(source, /Yes, end it forever/);
   assert.match(source, /There is no undo/);
+  assert.match(source, /\/sounds\/cheer\.wav/);
+  assert.match(source, /\/sounds\/boo\.wav/);
+  assert.doesNotMatch(source, /speechSynthesis|SpeechSynthesisUtterance/);
   const spotifyLoginSource = await readFile(new URL("app/api/spotify/login/route.ts", projectRoot), "utf8");
   assert.match(spotifyLoginSource, /code_challenge_method: "S256"/);
   assert.match(spotifyLoginSource, /"streaming"/);
@@ -107,6 +110,8 @@ test("ships product metadata and removes starter artifacts", async () => {
   await access(new URL("public/favicon.png", projectRoot));
   await access(new URL("public/favicon-32.png", projectRoot));
   await access(new URL("public/apple-touch-icon.png", projectRoot));
+  await access(new URL("public/sounds/cheer.wav", projectRoot));
+  await access(new URL("public/sounds/boo.wav", projectRoot));
   await assert.rejects(access(new URL("app/_sites-preview/SkeletonPreview.tsx", projectRoot)));
   const packageJson = await readFile(new URL("package.json", projectRoot), "utf8");
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
