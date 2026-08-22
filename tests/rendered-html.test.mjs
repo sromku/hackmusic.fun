@@ -135,6 +135,10 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /pin=\$\{encodeURIComponent\(hostKey\)\}/);
   assert.match(source, /\/sounds\/cheer\.wav/);
   assert.match(source, /\/sounds\/boo\.wav/);
+  assert.match(source, /wakeLock\.request\("screen"\)/);
+  assert.match(source, /visibilitychange/);
+  assert.match(source, /Keep this screen awake/);
+  assert.match(source, /Android auto-lock is blocked/);
   assert.doesNotMatch(source, /speechSynthesis|SpeechSynthesisUtterance/);
   const partySource = await readFile(new URL("db/party.ts", projectRoot), "utf8");
   assert.match(partySource, /const queuedTracks = isHost/);
