@@ -1,4 +1,5 @@
 import { ensurePartySchema, getD1 } from ".";
+import { MAX_PENDING_TRACKS_PER_PERSON } from "../lib/party-rules";
 import { parseSpotifyTrackReference, resolveSpotifyTrack } from "../lib/spotify-track";
 
 export type TrackInput = {
@@ -311,7 +312,7 @@ export async function submitTrack(code: string, participantId: string, track: Tr
   if (!member) throw new Error("Join this room first.");
   const pending = await d1.prepare("SELECT COUNT(*) AS count FROM submissions WHERE event_id = ? AND participant_id = ? AND status = 'pending'")
     .bind(event.id, participantId).first<{ count: number }>();
-  if ((pending?.count ?? 0) >= 3) throw new Error("You already have three secret picks waiting.");
+  if ((pending?.count ?? 0) >= MAX_PENDING_TRACKS_PER_PERSON) throw new Error(`You already have ${MAX_PENDING_TRACKS_PER_PERSON} secret picks waiting.`);
   if (!track.title || !track.artist) throw new Error("Choose a valid song.");
 
   const submissionId = crypto.randomUUID();

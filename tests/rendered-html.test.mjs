@@ -80,6 +80,8 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /Vote changed to Cheer/);
   assert.match(source, /your-vote-badge/);
   assert.match(source, /Add to my Spotify/);
+  assert.match(source, /MAX_PENDING_TRACKS_PER_PERSON - party\.pendingCount/);
+  assert.match(source, /Played and skipped songs free their slots/);
   assert.match(source, /art-variant-/);
   assert.doesNotMatch(source, /Playback lives on the host speaker/);
   assert.match(source, /ended && <span className="person-score"/);
@@ -90,6 +92,9 @@ test("renders a code-specific participant room", async () => {
   assert.match(partySource, /UPDATE reactions SET kind/);
   assert.match(partySource, /newEffect - oldEffect/);
   assert.match(partySource, /current\.artist === "Spotify"/);
+  assert.match(partySource, /pending\?\.count \?\? 0\) >= MAX_PENDING_TRACKS_PER_PERSON/);
+  const partyRulesSource = await readFile(new URL("lib/party-rules.ts", projectRoot), "utf8");
+  assert.match(partyRulesSource, /MAX_PENDING_TRACKS_PER_PERSON = 100/);
 });
 
 test("renders a code-specific host control surface", async () => {
