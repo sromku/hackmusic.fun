@@ -36,6 +36,12 @@ type SubmissionRow = {
   color: string;
 };
 
+type QueuedSubmissionRow = SubmissionRow & {
+  display_name: string;
+  initials: string;
+  submitted_at: string;
+};
+
 type ReactionRow = {
   id: string;
   participant_id: string;
@@ -113,7 +119,8 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
   const event = await getEvent(codeInput);
   if (!event) throw new Error("Room not found.");
   const d1 = getD1();
-  const revealScores = event.status === "ended" || Boolean(hostKey && hostKey === event.host_pin);
+  const isHost = Boolean(hostKey && hostKey === event.host_pin);
+  const revealScores = event.status === "ended" || isHost;
   const current = event.current_submission_id
     ? await d1.prepare("SELECT id, participant_id, provider_track_id, title, artist, duration, color FROM submissions WHERE id = ?")
       .bind(event.current_submission_id).first<SubmissionRow>()
@@ -146,6 +153,14 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
     .bind(event.id, viewerId).first<{ count: number }>();
   const queue = await d1.prepare("SELECT COUNT(*) AS count FROM submissions WHERE event_id = ? AND status = 'pending'")
     .bind(event.id).first<{ count: number }>();
+  const queuedTracks = isHost
+    ? await d1.prepare(`SELECT s.id, s.participant_id, s.provider_track_id, s.title, s.artist, s.duration, s.color, s.submitted_at,
+        p.display_name, p.initials
+        FROM submissions s JOIN participants p ON p.id = s.participant_id
+        WHERE s.event_id = ? AND s.status = 'pending'
+        ORDER BY s.submitted_at ASC`)
+      .bind(event.id).all<QueuedSubmissionRow>()
+    : null;
 
   const people = peopleResult.results.map((person) => ({
     id: person.id,
@@ -191,6 +206,16 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
     }),
     pendingCount: pending?.count ?? 0,
     queueCount: queue?.count ?? 0,
+    ...(queuedTracks ? { queuedTracks: queuedTracks.results.map((track) => ({
+      queueId: track.id,
+      id: track.provider_track_id,
+      title: track.title,
+      artist: track.artist,
+      duration: track.duration,
+      color: track.color,
+      submittedBy: track.participant_id === viewerId ? "You" : track.display_name,
+      submitterInitials: track.initials,
+    })) } : {}),
   };
 }
 

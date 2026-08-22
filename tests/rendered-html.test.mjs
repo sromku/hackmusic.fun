@@ -113,6 +113,8 @@ test("renders a code-specific host control surface", async () => {
   assert.doesNotMatch(source, /open\.spotify\.com\/embed\/track/);
   assert.match(source, /Skip to next song/);
   assert.match(source, /LIVE SCOREBOARD/);
+  assert.match(source, /WAITING IN THE QUEUE/);
+  assert.match(source, /party\.queuedTracks\.map/);
   assert.match(source, /End the party\?/);
   assert.match(source, /Nope, keep partying/);
   assert.match(source, /Yes, end it forever/);
@@ -125,6 +127,10 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /\/sounds\/cheer\.wav/);
   assert.match(source, /\/sounds\/boo\.wav/);
   assert.doesNotMatch(source, /speechSynthesis|SpeechSynthesisUtterance/);
+  const partySource = await readFile(new URL("db/party.ts", projectRoot), "utf8");
+  assert.match(partySource, /const queuedTracks = isHost/);
+  assert.match(partySource, /s\.status = 'pending'/);
+  assert.match(partySource, /queuedTracks: queuedTracks\.results\.map/);
   const spotifyLoginSource = await readFile(new URL("app/api/spotify/login/route.ts", projectRoot), "utf8");
   assert.match(spotifyLoginSource, /code_challenge_method: "S256"/);
   assert.match(spotifyLoginSource, /"streaming"/);
