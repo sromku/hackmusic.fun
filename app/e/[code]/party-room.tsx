@@ -7,7 +7,8 @@ import { MAX_PENDING_TRACKS_PER_PERSON } from "../../../lib/party-rules";
 type Color = "coral" | "sun" | "blue" | "mint";
 type Person = { id: string; initials: string; name: string; score: number | null; color: Color };
 type Reaction = { id: string; participantId: string; avatar: string; name: string; message: string; icon: "▲" | "▼"; tone: "up" | "down"; createdAt?: string };
-type PartyState = { code: string; title: string; viewer: Person; people: Person[]; currentTrack: Track | null; reactions: Reaction[]; pendingCount: number; queueCount: number; status: "live" | "ended" };
+type Activity = { id: string; participantId?: string; avatar: string; name: string; message: string; icon: string; tone: "up" | "down" | "song"; trackTitle: string; createdAt: string };
+type PartyState = { code: string; title: string; viewer: Person; people: Person[]; currentTrack: Track | null; reactions: Reaction[]; activity?: Activity[]; pendingCount: number; queueCount: number; status: "live" | "ended" };
 type Track = { id: string; title: string; artist: string; duration: string; color: Color };
 type RoomSummary = { code: string; title: string; status: "live" | "ended" };
 
@@ -18,6 +19,11 @@ function artworkVariant(seed: string) {
 function spotifyTrackUrl(value: string) {
   const trackId = value.match(/spotify:track:([A-Za-z0-9]{22})/)?.[1];
   return trackId ? `https://open.spotify.com/track/${trackId}` : "";
+}
+
+function activityTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
 }
 
 function Artwork({ tone, seed }: { tone: Color; seed: string }) {
@@ -55,11 +61,23 @@ export default function PartyRoom({ code }: { code: string }) {
   useEffect(() => {
     if (!participantId) return;
     let active = true;
-    const refresh = () => fetch(`/api/party?code=${encodeURIComponent(code)}&participantId=${encodeURIComponent(participantId)}`)
+    let activityHistory: Activity[] = [];
+    let activityCursor = "";
+    const refresh = () => fetch(`/api/party?code=${encodeURIComponent(code)}&participantId=${encodeURIComponent(participantId)}&activityAfter=${encodeURIComponent(activityCursor)}`)
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error ?? "Could not load the room.");
-        if (active) { setParty(data.party); setRoom({ code: data.party.code, title: data.party.title, status: data.party.status }); }
+        if (active) {
+          const incoming = (data.party.activity ?? []) as Activity[];
+          if (incoming.length) {
+            const known = new Set(activityHistory.map((item) => item.id));
+            activityHistory = [...activityHistory, ...incoming.filter((item) => !known.has(item.id))];
+            const last = incoming[incoming.length - 1];
+            activityCursor = `${last.createdAt}|${last.id}`;
+          }
+          setParty({ ...data.party, activity: [...activityHistory] });
+          setRoom({ code: data.party.code, title: data.party.title, status: data.party.status });
+        }
       })
       .catch((reason) => { if (active && String(reason).includes("Join this room")) setParticipantId(""); });
     void refresh();
@@ -92,7 +110,7 @@ export default function PartyRoom({ code }: { code: string }) {
       if (!response.ok) throw new Error(data.error ?? "Could not join.");
       window.localStorage.setItem(`hackmusic:${code}:participant`, id);
       setParticipantId(id);
-      setParty(data.party);
+      setParty((current) => ({ ...data.party, activity: current?.activity ?? [] }));
       setNotice(`🥳 You’re in, ${joinName.trim()}!`);
     } catch (reason) { setNotice(reason instanceof Error ? reason.message : "Could not join."); }
     finally { setBusy(false); }
@@ -104,7 +122,7 @@ export default function PartyRoom({ code }: { code: string }) {
     setBusy(true);
     try {
       const data = await postAction({ action: "react", kind });
-      setParty(data.party);
+      setParty((current) => ({ ...data.party, activity: current?.activity ?? [] }));
       setNotice(data.skipped ? "⏭️ Three boos! Next song!" : previousReaction ? kind === "up" ? "🔁 Vote changed to Cheer!" : "🔁 Vote changed to Boo!" : kind === "up" ? "🙌 Cheer sent! +3 to the picker." : "👻 Anonymous boo delivered.");
     } catch (reason) { setNotice(reason instanceof Error ? reason.message : "Reaction failed."); }
     finally { setBusy(false); }
@@ -118,7 +136,7 @@ export default function PartyRoom({ code }: { code: string }) {
     try {
       const data = await postAction({ action: "submit", trackUrl: value });
       if (!data.submittedTrack) throw new Error("Spotify did not confirm that track.");
-      setParty(data.party);
+      setParty((current) => ({ ...data.party, activity: current?.activity ?? [] }));
       setAddOpen(false);
       setNotice(`🤫🎵 ${data.submittedTrack.title} is secretly in the mix.`);
     } catch (reason) {
@@ -163,7 +181,7 @@ export default function PartyRoom({ code }: { code: string }) {
         </aside>
       </div>}
 
-      {party && <section className="activity-card"><div className="card-title-row"><h2>🔊 ROOM NOISE</h2><span>⚡ LIVE REACTIONS</span></div><div className="activity-list" aria-live="polite">{party.reactions.map((reaction) => <div className={`activity-row ${reaction.tone}`} key={reaction.id}><span className="activity-avatar">{reaction.avatar}</span><p><span className="activity-emoji" aria-hidden="true">{reaction.tone === "up" ? "🎉" : "👻"}</span> <strong>{reaction.name}</strong> {reaction.message}</p><span className="activity-icon" aria-hidden="true">{reaction.tone === "up" ? "🙌" : "👎"}</span><time>now</time></div>)}{party.currentTrack ? <div className="activity-row song-start" key={`song-${party.currentTrack.id}`}><span className="activity-avatar">🎵</span><p><strong>🎶 Now playing:</strong> {party.currentTrack.title}</p><span className="activity-icon" aria-hidden="true">▶️</span><time>now</time></div> : !party.reactions.length && <p className="quiet-feed">🦗 It’s suspiciously quiet in here…</p>}</div></section>}
+      {party && <section className="activity-card"><div className="card-title-row"><h2>🔊 ROOM NOISE</h2><span>📜 FULL PARTY HISTORY</span></div><div className="activity-list" role="log" aria-live="polite" aria-label="Scrollable history of songs and reactions since the party began">{[...(party.activity ?? [])].reverse().map((item) => <div className={`activity-row ${item.tone}${item.tone === "song" ? " song-start" : ""}`} key={item.id}><span className="activity-avatar">{item.avatar}</span>{item.tone === "song" ? <p><strong>🎶 Now playing:</strong> <span dir="auto">{item.trackTitle}</span></p> : <p><span className="activity-emoji" aria-hidden="true">{item.tone === "up" ? "🎉" : "👻"}</span> <strong>{item.name}</strong> {item.message} <b dir="auto">“{item.trackTitle}”</b></p>}<span className="activity-icon" aria-hidden="true">{item.icon}</span><time dateTime={item.createdAt}>{activityTime(item.createdAt)}</time></div>)}{!(party.activity ?? []).length && <p className="quiet-feed">🦗 It’s suspiciously quiet in here… The full story will appear here.</p>}</div><p className="activity-scroll-hint">↕️ Scroll inside Room Noise to travel all the way back to the party’s first song.</p></section>}
 
       {addOpen && party && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setAddOpen(false)}><section className="song-modal spotify-song-modal" role="dialog" aria-modal="true" aria-labelledby="add-song-title"><div className="modal-topline"><div><p className="eyebrow">🤫 SECRET WEAPON</p><h2 id="add-song-title">🎵 Add a Spotify song</h2></div><button className="close-button" type="button" onClick={() => setAddOpen(false)} aria-label="Close">×</button></div><div className="spotify-add-guide"><strong>🟢 Spotify → Share → Copy song link</strong><span>Paste the track below. Its title is checked before it joins the secret queue.</span></div><form className="link-form spotify-link-form" onSubmit={(event) => void submitLink(event)}><label htmlFor="song-link">SPOTIFY TRACK LINK</label><input id="song-link" name="song-link" type="url" inputMode="url" autoComplete="off" placeholder="https://open.spotify.com/track/..." required /><button type="submit" disabled={busy || party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON}>{busy ? "🔎 Checking Spotify…" : party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON ? "🚧 Your waiting queue is full" : "🤫 Add to the secret queue →"}</button></form><p className="queue-note">🕵️ The queue stays secret. You have {Math.max(0, MAX_PENDING_TRACKS_PER_PERSON - party.pendingCount)} of {MAX_PENDING_TRACKS_PER_PERSON} waiting slots left. Played and skipped songs free their slots.</p></section></div>}
 

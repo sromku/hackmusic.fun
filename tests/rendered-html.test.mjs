@@ -74,7 +74,11 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /Now playing:/);
   assert.match(source, /song-start/);
   assert.match(source, /🔊 ROOM NOISE/);
-  assert.match(source, /reaction\.tone === "up" \? "🎉" : "👻"/);
+  assert.match(source, /FULL PARTY HISTORY/);
+  assert.match(source, /activityAfter=/);
+  assert.match(source, /Scrollable history of songs and reactions since the party began/);
+  assert.match(source, /Scroll inside Room Noise/);
+  assert.match(source, /item\.tone === "up" \? "🎉" : "👻"/);
   assert.match(source, /🦗 It’s suspiciously quiet/);
   assert.match(source, /Changed your mind\? Tap the other reaction/);
   assert.match(source, /Vote changed to Cheer/);
@@ -148,6 +152,12 @@ test("renders a code-specific host control surface", async () => {
   assert.match(partySource, /event\.queue_mode === "fair"/);
   assert.match(partySource, /history\.served_count ASC, RANDOM\(\)/);
   assert.match(partySource, /export async function setQueueMode/);
+  assert.match(partySource, /INSERT INTO activity_events/);
+  assert.match(partySource, /activityAfter !== undefined/);
+  assert.match(partySource, /tone: "song"/);
+  const historyMigration = await readFile(new URL("drizzle/0002_eager_mole_man.sql", projectRoot), "utf8");
+  assert.match(historyMigration, /CREATE TABLE `activity_events`/);
+  assert.match(historyMigration, /legacy-reaction-/);
   const spotifyLoginSource = await readFile(new URL("app/api/spotify/login/route.ts", projectRoot), "utf8");
   assert.match(spotifyLoginSource, /code_challenge_method: "S256"/);
   assert.match(spotifyLoginSource, /"streaming"/);

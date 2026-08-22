@@ -55,6 +55,16 @@ type ReactionRow = {
   initials: string;
 };
 
+type ActivityRow = {
+  id: string;
+  participant_id: string | null;
+  kind: string;
+  created_at: string;
+  display_name: string | null;
+  initials: string | null;
+  title: string;
+};
+
 const roomAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const colors = ["sun", "coral", "blue", "mint"];
 
@@ -119,7 +129,7 @@ export async function readRoomSummary(codeInput: string) {
   return { code: event.code, title: event.title, status: event.status };
 }
 
-export async function readParty(codeInput: string, viewerId: string, hostKey = "") {
+export async function readParty(codeInput: string, viewerId: string, hostKey = "", activityAfter?: string) {
   const event = await getEvent(codeInput);
   if (!event) throw new Error("Room not found.");
   const d1 = getD1();
@@ -165,6 +175,26 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
         ORDER BY s.submitted_at ASC`)
       .bind(event.id).all<QueuedSubmissionRow>()
     : null;
+  let activityResult: { results: ActivityRow[] } | null = null;
+  if (activityAfter !== undefined) {
+    const separator = activityAfter.lastIndexOf("|");
+    const cursorAt = separator > 0 ? activityAfter.slice(0, separator) : "";
+    activityResult = cursorAt
+      ? await d1.prepare(`SELECT a.id, a.participant_id, a.kind, a.created_at, p.display_name, p.initials, s.title
+          FROM activity_events a
+          LEFT JOIN participants p ON p.id = a.participant_id
+          JOIN submissions s ON s.id = a.submission_id
+          WHERE a.event_id = ? AND a.created_at >= ?
+          ORDER BY a.created_at ASC, a.id ASC`)
+        .bind(event.id, cursorAt).all<ActivityRow>()
+      : await d1.prepare(`SELECT a.id, a.participant_id, a.kind, a.created_at, p.display_name, p.initials, s.title
+          FROM activity_events a
+          LEFT JOIN participants p ON p.id = a.participant_id
+          JOIN submissions s ON s.id = a.submission_id
+          WHERE a.event_id = ?
+          ORDER BY a.created_at ASC, a.id ASC`)
+        .bind(event.id).all<ActivityRow>();
+  }
 
   const people = peopleResult.results.map((person) => ({
     id: person.id,
@@ -210,6 +240,36 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
     }),
     pendingCount: pending?.count ?? 0,
     queueCount: queue?.count ?? 0,
+    ...(activityResult ? { activity: activityResult.results.map((item) => item.kind === "song_start" ? {
+      id: item.id,
+      tone: "song",
+      avatar: "🎵",
+      name: "",
+      message: "Now playing",
+      icon: "▶️",
+      trackTitle: item.title,
+      createdAt: item.created_at,
+    } : item.kind === "down" ? {
+      id: item.id,
+      participantId: item.participant_id,
+      tone: "down",
+      avatar: "?",
+      name: "Someone",
+      message: "booed",
+      icon: "👎",
+      trackTitle: item.title,
+      createdAt: item.created_at,
+    } : {
+      id: item.id,
+      participantId: item.participant_id,
+      tone: "up",
+      avatar: item.initials ?? "!",
+      name: item.participant_id === viewerId ? "You" : item.display_name ?? "Someone",
+      message: "cheered",
+      icon: "🙌",
+      trackTitle: item.title,
+      createdAt: item.created_at,
+    }) } : {}),
     ...(queuedTracks ? { queueMode: event.queue_mode, queuedTracks: queuedTracks.results.map((track) => ({
       queueId: track.id,
       id: track.provider_track_id,
@@ -251,6 +311,8 @@ async function advanceCurrent(event: EventRow, finishedStatus: "skipped" | "play
   if (next) {
     statements.push(d1.prepare("UPDATE submissions SET status = 'playing' WHERE id = ?").bind(next.id));
     statements.push(d1.prepare("UPDATE events SET current_submission_id = ? WHERE id = ?").bind(next.id, event.id));
+    statements.push(d1.prepare("INSERT INTO activity_events (id, event_id, submission_id, participant_id, kind, created_at) VALUES (?, ?, ?, NULL, 'song_start', ?)")
+      .bind(`activity-${crypto.randomUUID()}`, event.id, next.id, new Date().toISOString()));
   } else {
     statements.push(d1.prepare("UPDATE events SET current_submission_id = NULL WHERE id = ?").bind(event.id));
   }
@@ -287,12 +349,16 @@ export async function reactToCurrent(code: string, participantId: string, kind: 
     await d1.batch([
       d1.prepare("UPDATE reactions SET kind = ?, created_at = ? WHERE id = ?").bind(kind, now, existing.id),
       d1.prepare("UPDATE participants SET score = score + ? WHERE id = ?").bind(newEffect - oldEffect, current.participant_id),
+      d1.prepare("INSERT INTO activity_events (id, event_id, submission_id, participant_id, kind, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .bind(`activity-${crypto.randomUUID()}`, event.id, current.id, participantId, kind, now),
     ]);
   } else {
     await d1.batch([
       d1.prepare("INSERT INTO reactions (id, event_id, submission_id, participant_id, kind, created_at) VALUES (?, ?, ?, ?, ?, ?)")
         .bind(crypto.randomUUID(), event.id, current.id, participantId, kind, now),
       d1.prepare("UPDATE participants SET score = score + ? WHERE id = ?").bind(newEffect, current.participant_id),
+      d1.prepare("INSERT INTO activity_events (id, event_id, submission_id, participant_id, kind, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .bind(`activity-${crypto.randomUUID()}`, event.id, current.id, participantId, kind, now),
     ]);
   }
   const booCount = await d1.prepare("SELECT COUNT(*) AS count FROM reactions WHERE submission_id = ? AND kind = 'down'")
@@ -317,13 +383,16 @@ export async function submitTrack(code: string, participantId: string, track: Tr
 
   const submissionId = crypto.randomUUID();
   const status = event.current_submission_id ? "pending" : "playing";
+  const now = new Date().toISOString();
   try {
     const statements = [
       d1.prepare("INSERT INTO submissions (id, event_id, participant_id, provider_track_id, title, artist, duration, color, status, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(submissionId, event.id, participantId, normalizedTrack.uri, track.title.slice(0, 160), track.artist.slice(0, 160), track.duration.slice(0, 12), track.color, status, new Date().toISOString()),
+        .bind(submissionId, event.id, participantId, normalizedTrack.uri, track.title.slice(0, 160), track.artist.slice(0, 160), track.duration.slice(0, 12), track.color, status, now),
     ];
     if (!event.current_submission_id) {
       statements.push(d1.prepare("UPDATE events SET current_submission_id = ? WHERE id = ?").bind(submissionId, event.id));
+      statements.push(d1.prepare("INSERT INTO activity_events (id, event_id, submission_id, participant_id, kind, created_at) VALUES (?, ?, ?, NULL, 'song_start', ?)")
+        .bind(`activity-${crypto.randomUUID()}`, event.id, submissionId, now));
     }
     await d1.batch(statements);
   } catch (error) {

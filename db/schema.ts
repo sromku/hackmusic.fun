@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const events = sqliteTable("events", {
   id: text("id").primaryKey(),
@@ -45,4 +45,15 @@ export const reactions = sqliteTable("reactions", {
   createdAt: text("created_at").notNull(),
 }, (table) => [
   uniqueIndex("reactions_submission_participant_unique").on(table.submissionId, table.participantId),
+]);
+
+export const activityEvents = sqliteTable("activity_events", {
+  id: text("id").primaryKey(),
+  eventId: text("event_id").notNull(),
+  submissionId: text("submission_id").notNull(),
+  participantId: text("participant_id"),
+  kind: text("kind").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  index("activity_events_event_created_idx").on(table.eventId, table.createdAt, table.id),
 ]);

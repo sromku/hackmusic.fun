@@ -61,7 +61,16 @@ export async function ensurePartySchema() {
       kind TEXT NOT NULL,
       created_at TEXT NOT NULL
     )`),
+    d1.prepare(`CREATE TABLE IF NOT EXISTS activity_events (
+      id TEXT PRIMARY KEY,
+      event_id TEXT NOT NULL,
+      submission_id TEXT NOT NULL,
+      participant_id TEXT,
+      kind TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`),
     d1.prepare("CREATE UNIQUE INDEX IF NOT EXISTS submissions_event_track_unique ON submissions(event_id, provider_track_id)"),
     d1.prepare("CREATE UNIQUE INDEX IF NOT EXISTS reactions_submission_participant_unique ON reactions(submission_id, participant_id)"),
+    d1.prepare("CREATE INDEX IF NOT EXISTS activity_events_event_created_idx ON activity_events(event_id, created_at, id)"),
   ]);
 }

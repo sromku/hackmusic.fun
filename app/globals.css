@@ -306,20 +306,27 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 .text-button { padding: 6px 0 0; border: 0; background: transparent; cursor: pointer; font-size: 12px; font-weight: 900; }
 
 .activity-card { margin-top: 24px; padding: 20px; }
-.activity-list { padding-top: 8px; }
+.activity-list { max-height: min(560px, 68dvh); overflow-y: auto; overscroll-behavior: contain; padding: 8px 8px 0 0; scrollbar-color: var(--ink) var(--paper); scrollbar-width: auto; }
+.activity-list:focus-visible { outline: 4px solid var(--blue); outline-offset: 4px; }
+.activity-list::-webkit-scrollbar { width: 12px; }
+.activity-list::-webkit-scrollbar-track { border-left: 2px solid var(--ink); background: var(--paper); }
+.activity-list::-webkit-scrollbar-thumb { border: 2px solid var(--ink); background: var(--blue); }
 .activity-row { position: relative; gap: 12px; min-height: 57px; border-bottom: 1px solid #c9c3b6; }
 .activity-row:last-child { border-bottom: 0; }
 .activity-row p { margin: 0; font-size: 13px; }
+.activity-row p b { font-weight: 900; }
 .activity-row time { margin-left: 8px; color: #777168; font-size: 10px; }
 .activity-avatar { display: grid; width: 31px; height: 31px; place-items: center; border: 2px solid var(--ink); border-radius: 50%; background: var(--blue); font-size: 9px; font-weight: 900; }
 .activity-row.down .activity-avatar { background: #ddd8cc; }
 .activity-icon { display: grid; width: 28px; height: 28px; margin-left: auto; place-items: center; border: 2px solid var(--ink); font-size: 12px; font-weight: 900; }
 .activity-row.up .activity-icon { background: var(--sun); }
 .activity-row.down .activity-icon { background: var(--coral); }
-.activity-row.song-start { margin-top: 8px; border: 2px solid var(--ink); background: var(--mint); padding: 8px 10px; animation: noise-pop .52s cubic-bezier(.2, .8, .25, 1.25) both; }
+.activity-row.song-start { margin: 8px 0; border: 2px solid var(--ink); background: var(--mint); padding: 8px 10px; }
+.activity-row:first-child.song-start { animation: noise-pop .52s cubic-bezier(.2, .8, .25, 1.25) both; }
 .activity-row.song-start .activity-avatar { border-radius: 0; background: var(--blue); font-size: 15px; }
 .activity-row.song-start .activity-icon { background: var(--sun); }
 .quiet-feed { margin: 14px 0 4px; color: #6d675e; font-size: 12px; font-weight: 700; }
+.activity-scroll-hint { margin: 12px 0 0; color: #676158; font-size: 10px; font-weight: 800; }
 .empty-player-copy { display: grid; min-height: 410px; place-items: center; align-content: center; padding: 36px; text-align: center; }
 .empty-player-copy > span { font-size: 70px; line-height: 1; }
 .empty-player-copy h2 { max-width: 520px; margin: 18px 0 8px; font-size: clamp(34px, 5vw, 58px); line-height: .95; letter-spacing: -.06em; }

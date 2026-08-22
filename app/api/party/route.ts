@@ -11,9 +11,10 @@ export async function GET(request: Request) {
     const code = url.searchParams.get("code") ?? "";
     const participantId = url.searchParams.get("participantId");
     const pin = url.searchParams.get("pin") ?? "";
+    const activityAfter = url.searchParams.has("activityAfter") ? url.searchParams.get("activityAfter") ?? "" : undefined;
     if (!code) return Response.json({ error: "Room code is required." }, { status: 400 });
     if (!participantId) return Response.json({ room: await readRoomSummary(code) });
-    return Response.json({ party: await readParty(code, participantId, pin) });
+    return Response.json({ party: await readParty(code, participantId, pin, activityAfter) });
   } catch (error) {
     return Response.json({ error: messageFrom(error) }, { status: 500 });
   }
