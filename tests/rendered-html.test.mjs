@@ -67,11 +67,16 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /🔊 ROOM NOISE/);
   assert.match(source, /reaction\.tone === "up" \? "🎉" : "👻"/);
   assert.match(source, /🦗 It’s suspiciously quiet/);
+  assert.match(source, /Changed your mind\? Tap the other reaction/);
+  assert.match(source, /Vote changed to Cheer/);
+  assert.match(source, /your-vote-badge/);
   assert.match(source, /ended && <span className="person-score"/);
   const partySource = await readFile(new URL("db/party.ts", projectRoot), "utf8");
   assert.match(partySource, /name: "Someone"/);
   assert.match(partySource, /revealScores = event\.status === "ended"/);
   assert.match(partySource, /score: revealScores \? person\.score : null/);
+  assert.match(partySource, /UPDATE reactions SET kind/);
+  assert.match(partySource, /newEffect - oldEffect/);
 });
 
 test("renders a code-specific host control surface", async () => {

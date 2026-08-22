@@ -90,11 +90,12 @@ export default function PartyRoom({ code }: { code: string }) {
 
   async function react(kind: "up" | "down") {
     if (busy || myReaction === kind || !party?.currentTrack) return;
+    const previousReaction = myReaction;
     setBusy(true);
     try {
       const data = await postAction({ action: "react", kind });
       setParty(data.party);
-      setNotice(data.skipped ? "⏭️ Three boos! Next song!" : kind === "up" ? "🙌 Cheer sent! +3 to the picker." : "👻 Anonymous boo delivered.");
+      setNotice(data.skipped ? "⏭️ Three boos! Next song!" : previousReaction ? kind === "up" ? "🔁 Vote changed to Cheer!" : "🔁 Vote changed to Boo!" : kind === "up" ? "🙌 Cheer sent! +3 to the picker." : "👻 Anonymous boo delivered.");
     } catch (reason) { setNotice(reason instanceof Error ? reason.message : "Reaction failed."); }
     finally { setBusy(false); }
   }
@@ -140,9 +141,9 @@ export default function PartyRoom({ code }: { code: string }) {
           {party.currentTrack ? <>
             <div className="track-card"><Artwork tone={party.currentTrack.color} /><div className="track-copy"><p className="track-label">⚡ CURRENT CHAOS</p><h2 id="playing-title">{party.currentTrack.title}</h2><p className="artist">{party.currentTrack.artist}</p><p className="host-playback-note">🔊 Playback lives on the host speaker</p><p className="submitted">🕵️ Submitted by a mystery human</p></div></div>
             {!ended && <div className="reaction-panel"><div className="reaction-actions">
-              <button className={`reaction-button cheer ${myReaction === "up" ? "selected" : ""}`} type="button" onClick={() => void react("up")} disabled={busy} aria-pressed={myReaction === "up"}><span className="reaction-icon" aria-hidden="true">🙌</span><span><strong>CHEER</strong><small>{myReaction === "up" ? "🎉 you cheered" : "🔊 make some noise"}</small></span></button>
-              <button className={`reaction-button boo ${myReaction === "down" ? "selected" : ""}`} type="button" onClick={() => void react("down")} disabled={busy} aria-pressed={myReaction === "down"}><span className="reaction-icon" aria-hidden="true">👻</span><span><strong>BOO</strong><small>{myReaction === "down" ? "🤫 your secret is safe" : "⏭️ 3 boos skip it"}</small></span></button>
-            </div><div className="boo-meter"><span className="boo-count">{boos}</span><div><strong>{boos === 0 ? "👻 NO BOOS YET" : boos === 1 ? "👻 ONE BOO IN" : "😬 ONE BOO TO GO"}</strong><small>{Math.max(0, 3 - boos)} more and it’s gone.</small></div><div className="meter-pips" aria-label={`${boos} of three boos`}>{[0, 1, 2].map((index) => <i className={index < boos ? "filled" : ""} key={index} />)}</div></div></div>}
+              <button className={`reaction-button cheer ${myReaction === "up" ? "selected" : ""}`} type="button" onClick={() => void react("up")} disabled={busy} aria-pressed={myReaction === "up"}><span className="reaction-icon" aria-hidden="true">🙌</span><span><strong>CHEER</strong><small>{myReaction === "up" ? "you picked this" : myReaction === "down" ? "tap to switch" : "make some noise"}</small></span>{myReaction === "up" && <b className="your-vote-badge">✓ YOUR VOTE</b>}</button>
+              <button className={`reaction-button boo ${myReaction === "down" ? "selected" : ""}`} type="button" onClick={() => void react("down")} disabled={busy} aria-pressed={myReaction === "down"}><span className="reaction-icon" aria-hidden="true">👻</span><span><strong>BOO</strong><small>{myReaction === "down" ? "your secret is safe" : myReaction === "up" ? "tap to switch" : "3 boos skip it"}</small></span>{myReaction === "down" && <b className="your-vote-badge">✓ YOUR VOTE</b>}</button>
+            </div>{myReaction && <div className="reaction-choice-note" role="status"><strong>{myReaction === "up" ? "🙌 You cheered" : "👻 You booed anonymously"}</strong><span>Changed your mind? Tap the other reaction.</span></div>}<div className="boo-meter"><span className="boo-count">{boos}</span><div><strong>{boos === 0 ? "👻 NO BOOS YET" : boos === 1 ? "👻 ONE BOO IN" : "😬 ONE BOO TO GO"}</strong><small>{Math.max(0, 3 - boos)} more and it’s gone.</small></div><div className="meter-pips" aria-label={`${boos} of three boos`}>{[0, 1, 2].map((index) => <i className={index < boos ? "filled" : ""} key={index} />)}</div></div></div>}
           </> : <div className="empty-player-copy"><span>🦗</span><h2 id="playing-title">Silence has entered the chat.</h2><p>🎵 Add the first song and the room starts immediately.</p>{!ended && <button type="button" onClick={() => setAddOpen(true)}>🎶 Add the first song →</button>}</div>}
         </section>
 

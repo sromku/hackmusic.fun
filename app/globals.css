@@ -229,17 +229,22 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 
 .reaction-panel { border-top: 2px solid var(--ink); }
 .reaction-actions { display: grid; grid-template-columns: 1fr 1fr; }
-.reaction-button { display: flex; align-items: center; justify-content: center; gap: 18px; min-height: 105px; border: 0; cursor: pointer; }
+.reaction-button { position: relative; display: flex; align-items: center; justify-content: center; gap: 18px; min-height: 105px; border: 0; cursor: pointer; }
 .reaction-button:first-child { border-right: 2px solid var(--ink); }
 .reaction-button.cheer { background: var(--sun); }
 .reaction-button.boo { background: var(--coral); }
 .reaction-button:hover .reaction-icon { transform: scale(1.14) rotate(-6deg); }
 .reaction-button:disabled { cursor: wait; }
-.reaction-button.selected { box-shadow: inset 0 0 0 5px var(--ink); }
+.reaction-button.selected { z-index: 1; box-shadow: inset 0 -7px 0 rgba(255, 254, 249, .72); }
+.reaction-button.selected .reaction-icon { transform: scale(1.1) rotate(-5deg); }
+.your-vote-badge { position: absolute; top: 8px; right: 8px; border: 2px solid var(--ink); background: var(--white); box-shadow: 2px 2px 0 var(--ink); padding: 4px 6px; font-size: 8px; letter-spacing: .08em; transform: rotate(1.5deg); }
 .reaction-icon { font-size: 44px; transition: transform .16s ease; }
 .reaction-button strong, .reaction-button small { display: block; text-align: left; }
 .reaction-button strong { font-size: 22px; letter-spacing: -.04em; }
 .reaction-button small { margin-top: 3px; font-size: 11px; font-weight: 700; }
+.reaction-choice-note { display: flex; justify-content: space-between; gap: 14px; align-items: center; border-top: 2px solid var(--ink); background: var(--blue); padding: 9px 14px; }
+.reaction-choice-note strong { font-size: 10px; letter-spacing: .06em; }
+.reaction-choice-note span { font-size: 10px; font-weight: 800; text-align: right; }
 
 .boo-meter { gap: 12px; padding: 13px 18px; border-top: 2px solid var(--ink); background: var(--paper); }
 .boo-count { display: grid; width: 34px; height: 34px; place-items: center; border: 2px solid var(--ink); border-radius: 50%; background: var(--coral); font-weight: 900; }
@@ -459,6 +464,9 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
   .reaction-button { gap: 9px; min-height: 84px; padding: 0 8px; }
   .reaction-icon { font-size: 32px; }
   .reaction-button strong { font-size: 18px; }
+  .your-vote-badge { top: 5px; right: 5px; padding: 3px 4px; font-size: 6px; }
+  .reaction-choice-note { align-items: flex-start; flex-direction: column; gap: 3px; padding: 8px 11px; }
+  .reaction-choice-note span { text-align: left; }
   .party-sidebar { grid-template-columns: 1fr; }
   .sidebar-card, .activity-card { padding: 15px; }
   .activity-card { margin-top: 16px; }
