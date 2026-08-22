@@ -1,23 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 type Color = "coral" | "sun" | "blue" | "mint";
 type Person = { id: string; initials: string; name: string; score: number; color: Color };
 type Reaction = { id: string; participantId: string; avatar: string; name: string; message: string; icon: "▲" | "▼"; tone: "up" | "down"; createdAt?: string };
-type Track = { id: string; title: string; artist: string; duration: string; color: Color };
 type PartyState = { code: string; title: string; viewer: Person; people: Person[]; currentTrack: Track | null; reactions: Reaction[]; pendingCount: number; queueCount: number; status: "live" | "ended" };
+type Track = { id: string; title: string; artist: string; duration: string; color: Color };
 type RoomSummary = { code: string; title: string; status: "live" | "ended" };
-
-const catalog: Track[] = [
-  { id: "spotify-1", title: "Midnight City", artist: "M83", duration: "4:03", color: "blue" },
-  { id: "spotify-2", title: "Electric Feel", artist: "MGMT", duration: "3:49", color: "sun" },
-  { id: "spotify-3", title: "Dog Days Are Over", artist: "Florence + The Machine", duration: "4:12", color: "coral" },
-  { id: "spotify-4", title: "Lisztomania", artist: "Phoenix", duration: "4:02", color: "mint" },
-  { id: "spotify-5", title: "1901", artist: "Phoenix", duration: "3:13", color: "blue" },
-  { id: "spotify-6", title: "D.A.N.C.E.", artist: "Justice", duration: "4:02", color: "sun" },
-];
 
 function Artwork({ tone, compact = false }: { tone: Color; compact?: boolean }) {
   return <div className={`album-art ${tone} ${compact ? "compact" : ""}`} role="img" aria-label="Colorful geometric album artwork"><span className="album-circle" /><span className="album-stair" /><span className="album-star">✦</span></div>;
@@ -29,7 +20,6 @@ export default function PartyRoom({ code }: { code: string }) {
   const [participantId, setParticipantId] = useState("");
   const [joinName, setJoinName] = useState("");
   const [addOpen, setAddOpen] = useState(false);
-  const [search, setSearch] = useState("");
   const [showEveryone, setShowEveryone] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -38,11 +28,6 @@ export default function PartyRoom({ code }: { code: string }) {
   const myReaction = party?.reactions.find((reaction) => reaction.participantId === participantId)?.tone;
   const boos = party?.reactions.filter((reaction) => reaction.tone === "down").length ?? 0;
   const visiblePeople = party ? (showEveryone ? party.people : party.people.slice(0, 4)) : [];
-  const results = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return catalog.slice(0, 4);
-    return catalog.filter((track) => `${track.title} ${track.artist}`.toLowerCase().includes(query));
-  }, [search]);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(`hackmusic:${code}:participant`) ?? "";
@@ -113,24 +98,24 @@ export default function PartyRoom({ code }: { code: string }) {
     finally { setBusy(false); }
   }
 
-  async function addTrack(track: Track) {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const data = await postAction({ action: "submit", track });
-      setParty(data.party);
-      setAddOpen(false);
-      setSearch("");
-      setNotice(`${track.title} is secretly in the mix.`);
-    } catch (reason) { setNotice(reason instanceof Error ? reason.message : "Song could not be added."); }
-    finally { setBusy(false); }
-  }
-
-  function submitLink(event: FormEvent<HTMLFormElement>) {
+  async function submitLink(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = String(new FormData(event.currentTarget).get("song-link") ?? "").trim();
-    if (!value) return;
-    void addTrack({ id: `link-${value}`, title: "Song from your link", artist: "Spotify", duration: "—", color: "mint" });
+    if (!value || busy) return;
+    setBusy(true);
+    try {
+      const spotifyResponse = await fetch(`/api/spotify?url=${encodeURIComponent(value)}`);
+      const spotifyData = await spotifyResponse.json();
+      if (!spotifyResponse.ok) throw new Error(spotifyData.error ?? "Spotify could not read that link.");
+      const data = await postAction({ action: "submit", track: spotifyData.track });
+      setParty(data.party);
+      setAddOpen(false);
+      setNotice(`${spotifyData.track.title} is secretly in the mix.`);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Song could not be added.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (error) return <main className="missing-room"><span className="brand-mark">HM</span><p className="eyebrow">ROOM LOST</p><h1>{error}</h1><Link href="/">Try another code →</Link></main>;
@@ -155,7 +140,7 @@ export default function PartyRoom({ code }: { code: string }) {
         <section className={`now-playing ${!party.currentTrack ? "empty-player" : ""}`} aria-labelledby="playing-title">
           <div className="section-kicker"><span>{party.currentTrack ? "NOW PLAYING" : "THE SPEAKER IS WAITING"}</span><span>{party.queueCount} SECRETLY QUEUED</span></div>
           {party.currentTrack ? <>
-            <div className="track-card"><Artwork tone={party.currentTrack.color} /><div className="track-copy"><p className="track-label">CURRENT CHAOS</p><h2 id="playing-title">{party.currentTrack.title}</h2><p className="artist">{party.currentTrack.artist}</p><div className="progress-track" aria-label="Song progress"><span /></div><p className="submitted">Submitted by a mystery human</p></div></div>
+            <div className="track-card"><Artwork tone={party.currentTrack.color} /><div className="track-copy"><p className="track-label">CURRENT CHAOS</p><h2 id="playing-title">{party.currentTrack.title}</h2><p className="artist">{party.currentTrack.artist}</p><p className="host-playback-note">♫ Playback lives on the host speaker</p><p className="submitted">Submitted by a mystery human</p></div></div>
             {!ended && <div className="reaction-panel"><div className="reaction-actions">
               <button className={`reaction-button cheer ${myReaction === "up" ? "selected" : ""}`} type="button" onClick={() => void react("up")} disabled={busy} aria-pressed={myReaction === "up"}><span className="reaction-icon">▲</span><span><strong>CHEER</strong><small>{myReaction === "up" ? "you cheered" : "make some noise"}</small></span></button>
               <button className={`reaction-button boo ${myReaction === "down" ? "selected" : ""}`} type="button" onClick={() => void react("down")} disabled={busy} aria-pressed={myReaction === "down"}><span className="reaction-icon">▼</span><span><strong>BOO</strong><small>{myReaction === "down" ? "your secret is safe" : "3 boos skip it"}</small></span></button>
@@ -170,7 +155,7 @@ export default function PartyRoom({ code }: { code: string }) {
 
       {party && <section className="activity-card"><div className="card-title-row"><h2>ROOM NOISE</h2><span>LIVE REACTIONS</span></div><div className="activity-list" aria-live="polite">{party.reactions.length ? party.reactions.map((reaction) => <div className={`activity-row ${reaction.tone}`} key={reaction.id}><span className="activity-avatar">{reaction.avatar}</span><p><strong>{reaction.name}</strong> {reaction.message}</p><span className="activity-icon">{reaction.icon}</span><time>now</time></div>) : <p className="quiet-feed">It’s suspiciously quiet in here.</p>}</div></section>}
 
-      {addOpen && party && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setAddOpen(false)}><section className="song-modal" role="dialog" aria-modal="true" aria-labelledby="add-song-title"><div className="modal-topline"><div><p className="eyebrow">SECRET WEAPON</p><h2 id="add-song-title">Add a song</h2></div><button className="close-button" type="button" onClick={() => setAddOpen(false)} aria-label="Close">×</button></div><label className="search-field"><span>SEARCH THE MUSIC</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Song or artist..." /></label><div className="song-results">{results.map((track) => <button className="song-result" type="button" onClick={() => void addTrack(track)} key={track.id} disabled={busy}><Artwork tone={track.color} compact /><span><strong>{track.title}</strong><small>{track.artist} · {track.duration}</small></span><b>＋</b></button>)}</div><form className="link-form" onSubmit={submitLink}><label htmlFor="song-link">OR PASTE A SPOTIFY LINK</label><div><input id="song-link" name="song-link" type="url" placeholder="https://open.spotify.com/track/..." /><button type="submit">Add</button></div></form><p className="queue-note">The queue stays secret. You have {Math.max(0, 3 - party.pendingCount)} submission slots left.</p></section></div>}
+      {addOpen && party && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setAddOpen(false)}><section className="song-modal spotify-song-modal" role="dialog" aria-modal="true" aria-labelledby="add-song-title"><div className="modal-topline"><div><p className="eyebrow">SECRET WEAPON</p><h2 id="add-song-title">Add a Spotify song</h2></div><button className="close-button" type="button" onClick={() => setAddOpen(false)} aria-label="Close">×</button></div><div className="spotify-add-guide"><strong>Spotify → Share → Copy song link</strong><span>Paste the track below. Its title is checked before it joins the secret queue.</span></div><form className="link-form spotify-link-form" onSubmit={(event) => void submitLink(event)}><label htmlFor="song-link">SPOTIFY TRACK LINK</label><input id="song-link" name="song-link" type="url" inputMode="url" autoComplete="off" placeholder="https://open.spotify.com/track/..." required /><button type="submit" disabled={busy}>{busy ? "Checking Spotify…" : "Add to the secret queue →"}</button></form><p className="queue-note">The queue stays secret. You have {Math.max(0, 3 - party.pendingCount)} submission slots left.</p></section></div>}
 
       {!participantId && !ended && <div className="modal-backdrop join-backdrop"><form className="join-card" onSubmit={join}><span className="join-mark">HM</span><p className="eyebrow">ROOM {room.code}</p><h2>Who just walked in?</h2><p>You’re joining <strong>{room.title}</strong>. Pick a name and collect your 30 points.</p><label htmlFor="join-name">YOUR PARTY NAME</label><input id="join-name" value={joinName} onChange={(event) => setJoinName(event.target.value)} maxLength={24} placeholder="e.g. Dance Floor Dave" /><button type="submit" disabled={busy}>{busy ? "Joining…" : "Enter the party →"}</button><small>No account. This phone remembers you for this room.</small></form></div>}
       {notice && <div className="toast" role="status">{notice}</div>}

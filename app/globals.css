@@ -278,6 +278,15 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 .link-form > div { display: grid; grid-template-columns: 1fr 74px; margin-top: 8px; }
 .link-form button { border: 2px solid var(--ink); border-left: 0; background: var(--mint); cursor: pointer; font-weight: 900; }
 .queue-note { margin: 14px 0 0; font-size: 11px; font-weight: 700; color: #5a574f; }
+.host-playback-note { margin: 20px 0 12px; border: 2px solid var(--ink); background: var(--mint); padding: 9px 11px; font-size: 11px; font-weight: 850; }
+.spotify-song-modal { max-width: 560px; }
+.spotify-add-guide { display: grid; gap: 6px; margin-top: 24px; border: 2px solid var(--ink); background: var(--sun); padding: 16px; }
+.spotify-add-guide strong { font-size: 14px; }
+.spotify-add-guide span { font-size: 12px; font-weight: 700; line-height: 1.4; }
+.spotify-link-form { display: grid; gap: 9px; }
+.spotify-link-form input { min-height: 52px; border: 2px solid var(--ink); background: var(--white); padding: 0 13px; font-size: 15px; }
+.spotify-link-form button { min-height: 52px; border: 2px solid var(--ink); background: var(--blue); box-shadow: 4px 4px 0 var(--ink); cursor: pointer; font-weight: 900; }
+.spotify-link-form button:disabled { cursor: wait; opacity: .65; }
 
 .join-backdrop { background: rgba(21, 21, 21, .72); }
 .join-card { width: min(460px, 100%); border: 2px solid var(--ink); background: var(--sun); box-shadow: 9px 9px 0 var(--ink); padding: 30px; }
@@ -371,6 +380,14 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 .host-empty { display: grid; min-height: 168px; place-content: center; padding: 28px; text-align: center; }
 .host-empty strong { font-size: 30px; letter-spacing: -.04em; }
 .host-empty p { margin: 8px 0 0; font-size: 12px; font-weight: 700; }
+.spotify-host-player { display: grid; gap: 12px; border-top: 2px solid var(--ink); background: var(--mint); padding: 16px; }
+.spotify-host-player > div { display: flex; justify-content: space-between; gap: 14px; align-items: baseline; }
+.spotify-host-player strong { font-size: 10px; letter-spacing: .1em; }
+.spotify-host-player span { font-size: 11px; font-weight: 750; text-align: right; }
+.spotify-host-player iframe { display: block; border: 0; border-radius: 12px; background: #191414; }
+.unplayable-track { display: grid; gap: 4px; border-top: 2px solid var(--ink); background: var(--coral); padding: 16px 20px; }
+.unplayable-track strong { font-size: 12px; }
+.unplayable-track span { font-size: 11px; font-weight: 700; }
 .host-reaction-counts { display: grid; grid-template-columns: 1fr 1fr; border-top: 2px solid var(--ink); }
 .host-reaction-counts > div { display: flex; align-items: baseline; justify-content: space-between; padding: 18px 22px; }
 .host-reaction-counts > div:first-child { border-right: 2px solid var(--ink); }

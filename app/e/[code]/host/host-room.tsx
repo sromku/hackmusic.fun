@@ -9,11 +9,18 @@ type HostParty = {
   code: string;
   title: string;
   status: "live" | "ended";
-  currentTrack: { title: string; artist: string; duration: string; color: string } | null;
+  currentTrack: { id: string; title: string; artist: string; duration: string; color: string } | null;
   people: Array<{ id: string; name: string; score: number; initials: string; color: string }>;
   reactions: Array<{ id: string; tone: "up" | "down" }>;
   queueCount: number;
 };
+
+function spotifyTrackId(value: string) {
+  const uriMatch = value.match(/^spotify:track:([A-Za-z0-9]{22})$/);
+  if (uriMatch) return uriMatch[1];
+  const legacyMatch = value.match(/open\.spotify\.com\/track\/([A-Za-z0-9]{22})/);
+  return legacyMatch?.[1] ?? "";
+}
 
 export default function HostRoom({ code }: { code: string }) {
   const [party, setParty] = useState<HostParty | null>(null);
@@ -127,13 +134,14 @@ export default function HostRoom({ code }: { code: string }) {
 
   const cheers = party.reactions.filter((reaction) => reaction.tone === "up").length;
   const boos = party.reactions.filter((reaction) => reaction.tone === "down").length;
+  const spotifyId = party.currentTrack ? spotifyTrackId(party.currentTrack.id) : "";
   return <main className="host-shell">
     <header className="topbar"><Link className="brand" href="/"><span className="brand-mark">HM</span><span>HackMusic Host</span></Link><Link className="participant-link" href={`/e/${code}`}>Open participant page →</Link></header>
     <div className="host-heading"><div><p className="eyebrow">HOST CONTROL · ROOM {party.code}</p><h1>{party.title}</h1></div><span className={`host-status ${party.status}`}>{party.status === "ended" ? "PARTY ENDED" : "LIVE"}</span></div>
 
     <section className="share-room-card"><div className="share-code"><span>ROOM CODE</span><strong>{party.code}</strong><p>{shareUrl}</p><div><button type="button" onClick={() => void copyInvite()}>Copy invite</button><button type="button" onClick={() => void shareInvite()}>Share</button></div></div>{qrUrl && <Image unoptimized src={qrUrl} width={180} height={180} alt={`QR code to join room ${party.code}`} />}</section>
 
-    <div className="host-grid"><section className="host-now-card"><div className="section-kicker"><span>ON THE SPEAKER</span><span>{party.queueCount} WAITING</span></div>{party.currentTrack ? <><div className="host-track"><div className={`host-art ${party.currentTrack.color}`}>♪</div><div><h2>{party.currentTrack.title}</h2><p>{party.currentTrack.artist} · {party.currentTrack.duration}</p></div></div><div className="host-reaction-counts"><div className="host-cheers"><strong>{cheers}</strong><span>CHEERS</span></div><div className="host-boos"><strong>{boos}</strong><span>BOOS</span></div></div></> : <div className="host-empty"><strong>No song yet.</strong><p>Open the participant page and add the first one.</p></div>}</section>
+    <div className="host-grid"><section className="host-now-card"><div className="section-kicker"><span>ON THE SPEAKER</span><span>{party.queueCount} WAITING</span></div>{party.currentTrack ? <><div className="host-track"><div className={`host-art ${party.currentTrack.color}`}>♪</div><div><h2>{party.currentTrack.title}</h2><p>{party.currentTrack.artist}{party.currentTrack.duration ? ` · ${party.currentTrack.duration}` : ""}</p></div></div>{spotifyId ? <div className="spotify-host-player"><div><strong>THIS BROWSER IS THE SPEAKER</strong><span>Tap Play in Spotify once. Keep this host page open.</span></div><iframe key={spotifyId} title={`Spotify player for ${party.currentTrack.title}`} src={`https://open.spotify.com/embed/track/${spotifyId}?utm_source=hackmusic`} width="100%" height="152" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="eager" /></div> : <div className="unplayable-track"><strong>This item has no playable Spotify link.</strong><span>Skip it and add a real Spotify track URL.</span></div>}<div className="host-reaction-counts"><div className="host-cheers"><strong>{cheers}</strong><span>CHEERS</span></div><div className="host-boos"><strong>{boos}</strong><span>BOOS</span></div></div></> : <div className="host-empty"><strong>No song yet.</strong><p>Open the participant page and add the first one.</p></div>}</section>
       <section className="host-controls-card"><div className="card-title-row"><h2>CONTROLS</h2><span>THIS PHONE ONLY</span></div><button className={`host-audio ${audioEnabled ? "armed" : ""}`} type="button" onClick={enableAudio}>{audioEnabled ? "✓ Reaction sounds armed" : "Enable reaction sounds"}</button><button className="host-skip" type="button" disabled={busy || !party.currentTrack || party.status === "ended"} onClick={() => void control("skip")}>Skip to next song →</button><button className="host-end" type="button" disabled={busy || party.status === "ended"} onClick={() => setEndConfirmOpen(true)}>End party & freeze scores</button>{message && <p className="host-message" role="status">{message}</p>}<p className="host-hint">The secret host key stays on the phone that created this room.</p></section>
     </div>
     <section className="leaderboard-card"><div className="card-title-row"><h2>{party.status === "ended" ? "FINAL SCOREBOARD" : "LIVE SCOREBOARD"}</h2><span>{party.people.length} PLAYERS</span></div><ol>{[...party.people].sort((a, b) => b.score - a.score).map((person, index) => <li key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><b>{index + 1}</b><strong>{person.name}</strong><span>{person.score} pts</span></li>)}</ol></section>

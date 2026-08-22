@@ -55,12 +55,17 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /HOST CONTROL/);
   assert.match(source, /ROOM CODE/);
   assert.match(source, /QRCode/);
+  assert.match(source, /THIS BROWSER IS THE SPEAKER/);
+  assert.match(source, /open\.spotify\.com\/embed\/track/);
   assert.match(source, /Skip to next song/);
   assert.match(source, /LIVE SCOREBOARD/);
   assert.match(source, /End the party\?/);
   assert.match(source, /Nope, keep partying/);
   assert.match(source, /Yes, end it forever/);
   assert.match(source, /There is no undo/);
+  const participantSource = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
+  assert.match(participantSource, /Checking Spotify/);
+  assert.match(participantSource, /Add to the secret queue/);
 });
 
 test("ships product metadata and removes starter artifacts", async () => {
