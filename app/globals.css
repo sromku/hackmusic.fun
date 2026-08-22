@@ -522,7 +522,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 }
 
 .host-shell { position: relative; padding: 26px 0 80px; }
-.host-shell .topbar { margin-bottom: 70px; }
+.host-shell .topbar { margin-bottom: 36px; }
 .host-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
 .host-status { border: 2px solid var(--ink); padding: 10px 13px; font-size: 10px; font-weight: 900; letter-spacing: .1em; }
 .host-status.live { background: var(--mint); }
