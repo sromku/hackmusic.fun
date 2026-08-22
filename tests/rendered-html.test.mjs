@@ -68,7 +68,12 @@ test("ships product metadata and removes starter artifacts", async () => {
   const html = await response.text();
   assert.match(html, /HackMusic — Let the room pick the vibe/);
   assert.match(html, /http:\/\/localhost\/og\.png/);
+  assert.match(html, /favicon-32\.png/);
+  assert.match(html, /apple-touch-icon\.png/);
   await access(new URL("public/og.png", projectRoot));
+  await access(new URL("public/favicon.png", projectRoot));
+  await access(new URL("public/favicon-32.png", projectRoot));
+  await access(new URL("public/apple-touch-icon.png", projectRoot));
   await assert.rejects(access(new URL("app/_sites-preview/SkeletonPreview.tsx", projectRoot)));
   const packageJson = await readFile(new URL("package.json", projectRoot), "utf8");
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);

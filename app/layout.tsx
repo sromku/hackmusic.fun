@@ -26,7 +26,14 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: baseUrl,
     title,
     description,
-    icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
+    icons: {
+      icon: [
+        { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+        { url: "/favicon.png", sizes: "64x64", type: "image/png" },
+      ],
+      shortcut: "/favicon.png",
+      apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    },
     openGraph: { title, description, images: [{ url: image, width: 1200, height: 630, alt: "HackMusic — Let the room pick the vibe" }] },
     twitter: { card: "summary_large_image", title, description, images: [image] },
   };
