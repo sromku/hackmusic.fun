@@ -94,7 +94,7 @@ export default function Home() {
           {message && <p className="landing-message" role="alert">{message}</p>}
         </div>
       </section>
-      <footer className="landing-footer"><span>⭐ 30 points each</span><span>🙌 Names on cheers</span><span>👻 Boos stay anonymous</span></footer>
+      <footer className="landing-footer"><span>Chaos-ed by <a href="https://sromku.com" target="_blank" rel="noreferrer">@sromku ↗</a> and an AI Codex agent.</span><span>SOTA unlocked. Common sense still in beta.</span></footer>
     </main>
   );
 }

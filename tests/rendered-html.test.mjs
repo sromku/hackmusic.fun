@@ -53,6 +53,9 @@ test("renders the create and join landing page", async () => {
   assert.match(html, /Drop a secret song/);
   assert.match(html, /React out loud/);
   assert.match(html, /The crowd can skip/);
+  assert.match(html, /Chaos-ed by/);
+  assert.match(html, /https:\/\/sromku\.com/);
+  assert.match(html, /Common sense still in beta/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/);
 });
 
