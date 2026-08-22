@@ -1,4 +1,5 @@
 import { ensurePartySchema, getD1 } from ".";
+import { parseSpotifyTrackReference } from "../lib/spotify-track";
 
 export type TrackInput = {
   id: string;
@@ -233,6 +234,7 @@ export async function reactToCurrent(code: string, participantId: string, kind: 
 }
 
 export async function submitTrack(code: string, participantId: string, track: TrackInput) {
+  const normalizedTrack = parseSpotifyTrackReference(track.id);
   const event = await getEvent(code);
   if (!event) throw new Error("Room not found.");
   if (event.status === "ended") throw new Error("This party has ended.");
@@ -242,14 +244,14 @@ export async function submitTrack(code: string, participantId: string, track: Tr
   const pending = await d1.prepare("SELECT COUNT(*) AS count FROM submissions WHERE event_id = ? AND participant_id = ? AND status = 'pending'")
     .bind(event.id, participantId).first<{ count: number }>();
   if ((pending?.count ?? 0) >= 3) throw new Error("You already have three secret picks waiting.");
-  if (!track.id || !track.title || !track.artist) throw new Error("Choose a valid song.");
+  if (!track.title || !track.artist) throw new Error("Choose a valid song.");
 
   const submissionId = crypto.randomUUID();
   const status = event.current_submission_id ? "pending" : "playing";
   try {
     const statements = [
       d1.prepare("INSERT INTO submissions (id, event_id, participant_id, provider_track_id, title, artist, duration, color, status, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(submissionId, event.id, participantId, track.id, track.title.slice(0, 160), track.artist.slice(0, 160), track.duration.slice(0, 12), track.color, status, new Date().toISOString()),
+        .bind(submissionId, event.id, participantId, normalizedTrack.uri, track.title.slice(0, 160), track.artist.slice(0, 160), track.duration.slice(0, 12), track.color, status, new Date().toISOString()),
     ];
     if (!event.current_submission_id) {
       statements.push(d1.prepare("UPDATE events SET current_submission_id = ? WHERE id = ?").bind(submissionId, event.id));

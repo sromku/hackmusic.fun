@@ -1,4 +1,5 @@
 import { createRoom, hostControl, joinParty, reactToCurrent, readParty, readRoomSummary, submitTrack } from "../../../db/party";
+import { resolveSpotifyTrack, type ResolvedSpotifyTrack } from "../../../lib/spotify-track";
 
 function messageFrom(error: unknown) {
   return error instanceof Error ? error.message : "Unexpected party error.";
@@ -27,11 +28,13 @@ export async function POST(request: Request) {
       pin?: string;
       name?: string;
       title?: string;
+      trackUrl?: string;
       track?: { id: string; title: string; artist: string; duration: string; color: string };
     };
     const code = body.code ?? "";
     const participantId = body.participantId ?? "";
     let skipped = false;
+    let submittedTrack: ResolvedSpotifyTrack | undefined;
 
     if (body.action === "create" && body.title && body.name) {
       return Response.json({ room: await createRoom(body.title, body.name) }, { status: 201 });
@@ -39,18 +42,19 @@ export async function POST(request: Request) {
       await joinParty(code, participantId, body.name);
     } else if (body.action === "react" && body.kind) {
       ({ skipped } = await reactToCurrent(code, participantId, body.kind));
-    } else if (body.action === "submit" && body.track) {
-      await submitTrack(code, participantId, body.track);
+    } else if (body.action === "submit" && (body.trackUrl || body.track?.id)) {
+      submittedTrack = await resolveSpotifyTrack(body.trackUrl ?? body.track?.id ?? "");
+      await submitTrack(code, participantId, submittedTrack);
     } else if ((body.action === "skip" || body.action === "advance" || body.action === "end") && body.pin) {
       await hostControl(code, body.pin, body.action);
     } else {
       return Response.json({ error: "Invalid party action." }, { status: 400 });
     }
 
-    return Response.json({ party: await readParty(code, participantId), skipped });
+    return Response.json({ party: await readParty(code, participantId), skipped, submittedTrack });
   } catch (error) {
     const message = messageFrom(error);
-    const status = message.includes("not the host") ? 403 : message.includes("not found") ? 404 : message.includes("cannot") || message.includes("already") || message.includes("valid") || message.includes("Use a") || message.includes("ended") ? 400 : 500;
+    const status = message.includes("not the host") ? 403 : message.includes("Room not found") ? 404 : message.includes("cannot") || message.includes("already") || message.includes("valid") || message.includes("Use a") || message.includes("Spotify") || message.includes("track link") || message.includes("ended") ? 400 : 500;
     return Response.json({ error: message }, { status });
   }
 }

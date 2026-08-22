@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
+import ts from "typescript";
 
 const projectRoot = new URL("../", import.meta.url);
 
@@ -15,6 +16,24 @@ async function render(pathname = "/") {
     { waitUntil() {}, passThroughOnException() {} },
   );
 }
+
+async function loadTypeScriptModule(pathname) {
+  const source = await readFile(new URL(pathname, projectRoot), "utf8");
+  const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+  return import(`data:text/javascript;base64,${Buffer.from(output).toString("base64")}`);
+}
+
+test("normalizes Spotify share links to their actual track token", async () => {
+  const spotify = await loadTypeScriptModule("lib/spotify-track.ts");
+  const sharedUrl = "https://open.spotify.com/track/5lf9LK4eETye6DsPUJpHDB?si=_RP727UlSjaJQ9Br-CjVng&utm_source=copy-link&rowId=96b58bf6ac48b9f48565&context=spotify%3Aplaylist%3A37i9dQZF1F5p3rmiWPIYgZ";
+  assert.deepEqual(spotify.parseSpotifyTrackReference(sharedUrl), {
+    trackId: "5lf9LK4eETye6DsPUJpHDB",
+    uri: "spotify:track:5lf9LK4eETye6DsPUJpHDB",
+    canonicalUrl: "https://open.spotify.com/track/5lf9LK4eETye6DsPUJpHDB",
+  });
+  assert.equal(spotify.extractSpotifyTrackId(`link-${sharedUrl}`), "5lf9LK4eETye6DsPUJpHDB");
+  assert.throws(() => spotify.parseSpotifyTrackReference("https://open.spotify.com/playlist/37i9dQZF1F5p3rmiWPIYgZ"), /track token/);
+});
 
 test("renders the create and join landing page", async () => {
   const response = await render();

@@ -67,7 +67,7 @@ export default function PartyRoom({ code }: { code: string }) {
     const response = await fetch("/api/party", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code, participantId, ...payload }) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error ?? "That did not work.");
-    return data as { party: PartyState; skipped?: boolean };
+    return data as { party: PartyState; skipped?: boolean; submittedTrack?: Track };
   }
 
   async function join(event: FormEvent<HTMLFormElement>) {
@@ -104,13 +104,11 @@ export default function PartyRoom({ code }: { code: string }) {
     if (!value || busy) return;
     setBusy(true);
     try {
-      const spotifyResponse = await fetch(`/api/spotify?url=${encodeURIComponent(value)}`);
-      const spotifyData = await spotifyResponse.json();
-      if (!spotifyResponse.ok) throw new Error(spotifyData.error ?? "Spotify could not read that link.");
-      const data = await postAction({ action: "submit", track: spotifyData.track });
+      const data = await postAction({ action: "submit", trackUrl: value });
+      if (!data.submittedTrack) throw new Error("Spotify did not confirm that track.");
       setParty(data.party);
       setAddOpen(false);
-      setNotice(`${spotifyData.track.title} is secretly in the mix.`);
+      setNotice(`${data.submittedTrack.title} is secretly in the mix.`);
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : "Song could not be added.");
     } finally {

@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { extractSpotifyTrackId } from "../../../../lib/spotify-track";
 
 type HostParty = {
   code: string;
@@ -49,13 +50,6 @@ declare global {
   }
 }
 
-function spotifyTrackId(value: string) {
-  const uriMatch = value.match(/^spotify:track:([A-Za-z0-9]{22})$/);
-  if (uriMatch) return uriMatch[1];
-  const legacyMatch = value.match(/open\.spotify\.com\/track\/([A-Za-z0-9]{22})/);
-  return legacyMatch?.[1] ?? "";
-}
-
 export default function HostRoom({ code }: { code: string }) {
   const [party, setParty] = useState<HostParty | null>(null);
   const [participantId, setParticipantId] = useState("");
@@ -82,7 +76,7 @@ export default function HostRoom({ code }: { code: string }) {
   const lastPlaybackStateRef = useRef<SpotifyPlaybackState | null>(null);
   const spotifyEndTimerRef = useRef<number | null>(null);
   const advancingTrackRef = useRef(false);
-  const currentSpotifyId = party?.currentTrack ? spotifyTrackId(party.currentTrack.id) : "";
+  const currentSpotifyId = party?.currentTrack ? extractSpotifyTrackId(party.currentTrack.id) : "";
 
   const playReactionSound = useCallback((kind: "up" | "down") => {
     if (!audioEnabledRef.current) return;
@@ -450,7 +444,7 @@ export default function HostRoom({ code }: { code: string }) {
       {spotifyMessage && <p className="spotify-message" role="status">{spotifyMessage}</p>}
     </section>
 
-    <div className="host-grid"><section className="host-now-card"><div className="section-kicker"><span>ON THE SPEAKER</span><span>{party.queueCount} WAITING</span></div>{party.currentTrack ? <><div className="host-track"><div className={`host-art ${party.currentTrack.color}`}>♪</div><div><h2>{party.currentTrack.title}</h2><p>{party.currentTrack.artist}{party.currentTrack.duration ? ` · ${party.currentTrack.duration}` : ""}</p></div></div>{currentSpotifyId ? <div className={`spotify-host-player spotify-${spotifyStatus}`}><div><strong>SPOTIFY PREMIUM SPEAKER</strong><span>{spotifyStatus === "ready" ? "Full song · no preview limit" : "Connect Spotify above first"}</span></div><button type="button" disabled={spotifyStatus !== "ready" || party.status === "ended"} onClick={() => { enableAudio(); void playSpotifyTrack(currentSpotifyId, true).catch((reason) => setSpotifyMessage(reason instanceof Error ? reason.message : "Could not start Spotify.")); }}>{speakerArmed ? "Play this track again →" : "Start speaker + funny sounds →"}</button><small>Tap once on this host device. Every next secret song will start automatically.</small></div> : <div className="unplayable-track"><strong>This item has no playable Spotify link.</strong><span>Skip it and add a real Spotify track URL.</span></div>}<div className="host-reaction-counts"><div className="host-cheers"><strong>{cheers}</strong><span>CHEERS</span></div><div className="host-boos"><strong>{boos}</strong><span>BOOS</span></div></div></> : <div className="host-empty"><strong>No song yet.</strong><p>Open the participant page and add the first one.</p></div>}</section>
+    <div className="host-grid"><section className="host-now-card"><div className="section-kicker"><span>ON THE SPEAKER</span><span>{party.queueCount} WAITING</span></div>{party.currentTrack ? <><div className="host-track"><div className={`host-art ${party.currentTrack.color}`}>♪</div><div><h2>{party.currentTrack.title}</h2><p>{party.currentTrack.artist}{party.currentTrack.duration ? ` · ${party.currentTrack.duration}` : ""}</p></div></div>{currentSpotifyId ? <div className={`spotify-host-player spotify-${spotifyStatus}`}><div><strong>SPOTIFY PREMIUM SPEAKER</strong><span>{spotifyStatus === "ready" ? "Full song · no preview limit" : "Connect Spotify above first"}</span></div><button type="button" disabled={spotifyStatus !== "ready" || party.status === "ended"} onClick={() => { enableAudio(); void playSpotifyTrack(currentSpotifyId, true).catch((reason) => setSpotifyMessage(reason instanceof Error ? reason.message : "Could not start Spotify.")); }}>{speakerArmed ? "Play this track again →" : "Start speaker + funny sounds →"}</button><small>Tap once on this host device. Every next secret song will start automatically.</small></div> : <div className="unplayable-track"><strong>This older queue item has no Spotify track token.</strong><span>Skip this legacy item once. Every newly added song is now validated before it enters the queue.</span></div>}<div className="host-reaction-counts"><div className="host-cheers"><strong>{cheers}</strong><span>CHEERS</span></div><div className="host-boos"><strong>{boos}</strong><span>BOOS</span></div></div></> : <div className="host-empty"><strong>No song yet.</strong><p>Open the participant page and add the first one.</p></div>}</section>
       <section className="host-controls-card"><div className="card-title-row"><h2>CONTROLS</h2><span>THIS PHONE ONLY</span></div><button className={`host-audio ${audioEnabled ? "armed" : ""}`} type="button" onClick={enableAudio}>{audioEnabled ? "✓ Funny sounds armed · tap to test" : "Enable & test funny sounds"}</button><button className="host-skip" type="button" disabled={busy || !party.currentTrack || party.status === "ended"} onClick={() => void control("skip")}>Skip to next song →</button><button className="host-end" type="button" disabled={busy || party.status === "ended"} onClick={() => setEndConfirmOpen(true)}>End party & freeze scores</button>{message && <p className="host-message" role="status">{message}</p>}<p className="host-hint">Reaction sounds play only from this host device. Keep this page open and its volume up.</p></section>
     </div>
     <section className="leaderboard-card"><div className="card-title-row"><h2>{party.status === "ended" ? "FINAL SCOREBOARD" : "LIVE SCOREBOARD"}</h2><span>{party.people.length} PLAYERS</span></div><ol>{[...party.people].sort((a, b) => b.score - a.score).map((person, index) => <li key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><b>{index + 1}</b><strong>{person.name}</strong><span>{person.score} pts</span></li>)}</ol></section>
