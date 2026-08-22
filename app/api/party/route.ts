@@ -10,9 +10,10 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const code = url.searchParams.get("code") ?? "";
     const participantId = url.searchParams.get("participantId");
+    const pin = url.searchParams.get("pin") ?? "";
     if (!code) return Response.json({ error: "Room code is required." }, { status: 400 });
     if (!participantId) return Response.json({ room: await readRoomSummary(code) });
-    return Response.json({ party: await readParty(code, participantId) });
+    return Response.json({ party: await readParty(code, participantId, pin) });
   } catch (error) {
     return Response.json({ error: messageFrom(error) }, { status: 500 });
   }
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Invalid party action." }, { status: 400 });
     }
 
-    return Response.json({ party: await readParty(code, participantId), skipped, submittedTrack });
+    return Response.json({ party: await readParty(code, participantId, body.pin), skipped, submittedTrack });
   } catch (error) {
     const message = messageFrom(error);
     const status = message.includes("not the host") ? 403 : message.includes("Room not found") ? 404 : message.includes("cannot") || message.includes("already") || message.includes("valid") || message.includes("Use a") || message.includes("Spotify") || message.includes("track link") || message.includes("ended") ? 400 : 500;

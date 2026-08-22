@@ -193,6 +193,7 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 .meter-pips i.filled { background: var(--coral); }
 
 .party-sidebar { display: grid; gap: 24px; }
+.party-sidebar > :only-child { grid-column: 1 / -1; }
 .sidebar-card { padding: 20px; }
 .score-card { background: var(--mint); }
 .score-topline, .card-title-row { justify-content: space-between; }
@@ -222,6 +223,9 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 .activity-icon { display: grid; width: 28px; height: 28px; margin-left: auto; place-items: center; border: 2px solid var(--ink); font-size: 12px; font-weight: 900; }
 .activity-row.up .activity-icon { background: var(--sun); }
 .activity-row.down .activity-icon { background: var(--coral); }
+.activity-row.song-start { margin-top: 8px; border: 2px solid var(--ink); background: var(--mint); padding: 8px 10px; }
+.activity-row.song-start .activity-avatar { border-radius: 0; background: var(--blue); font-size: 15px; }
+.activity-row.song-start .activity-icon { background: var(--sun); }
 .quiet-feed { margin: 14px 0 4px; color: #6d675e; font-size: 12px; font-weight: 700; }
 .empty-player-copy { display: grid; min-height: 410px; place-items: center; align-content: center; padding: 36px; text-align: center; }
 .empty-player-copy > span { font-size: 70px; line-height: 1; }

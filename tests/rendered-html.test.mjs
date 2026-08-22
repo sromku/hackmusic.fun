@@ -57,8 +57,14 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /CHEER/);
   assert.match(source, /BOO/);
   assert.match(source, /Add a song/);
+  assert.match(source, /YOUR FINAL SCORE/);
+  assert.match(source, /Now playing:/);
+  assert.match(source, /song-start/);
+  assert.match(source, /ended && <span className="person-score"/);
   const partySource = await readFile(new URL("db/party.ts", projectRoot), "utf8");
   assert.match(partySource, /name: "Someone"/);
+  assert.match(partySource, /revealScores = event\.status === "ended"/);
+  assert.match(partySource, /score: revealScores \? person\.score : null/);
 });
 
 test("renders a code-specific host control surface", async () => {
@@ -86,6 +92,7 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /Nope, keep partying/);
   assert.match(source, /Yes, end it forever/);
   assert.match(source, /There is no undo/);
+  assert.match(source, /pin=\$\{encodeURIComponent\(hostKey\)\}/);
   assert.match(source, /\/sounds\/cheer\.wav/);
   assert.match(source, /\/sounds\/boo\.wav/);
   assert.doesNotMatch(source, /speechSynthesis|SpeechSynthesisUtterance/);

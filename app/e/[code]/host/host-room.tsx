@@ -123,7 +123,7 @@ export default function HostRoom({ code }: { code: string }) {
   useEffect(() => {
     if (!participantId || !hostKey) return;
     let active = true;
-    const refresh = () => fetch(`/api/party?code=${encodeURIComponent(code)}&participantId=${encodeURIComponent(participantId)}`)
+    const refresh = () => fetch(`/api/party?code=${encodeURIComponent(code)}&participantId=${encodeURIComponent(participantId)}&pin=${encodeURIComponent(hostKey)}`)
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error ?? "Could not load the room.");

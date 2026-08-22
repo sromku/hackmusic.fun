@@ -109,16 +109,19 @@ export async function readRoomSummary(codeInput: string) {
   return { code: event.code, title: event.title, status: event.status };
 }
 
-export async function readParty(codeInput: string, viewerId: string) {
+export async function readParty(codeInput: string, viewerId: string, hostKey = "") {
   const event = await getEvent(codeInput);
   if (!event) throw new Error("Room not found.");
   const d1 = getD1();
+  const revealScores = event.status === "ended" || Boolean(hostKey && hostKey === event.host_pin);
   const current = event.current_submission_id
     ? await d1.prepare("SELECT id, participant_id, provider_track_id, title, artist, duration, color FROM submissions WHERE id = ?")
       .bind(event.current_submission_id).first<SubmissionRow>()
     : null;
 
-  const peopleResult = await d1.prepare("SELECT id, display_name, initials, color, score FROM participants WHERE event_id = ? ORDER BY score DESC, created_at ASC")
+  const peopleResult = await d1.prepare(revealScores
+    ? "SELECT id, display_name, initials, color, score FROM participants WHERE event_id = ? ORDER BY score DESC, created_at ASC"
+    : "SELECT id, display_name, initials, color, score FROM participants WHERE event_id = ? ORDER BY created_at ASC")
     .bind(event.id).all<ParticipantRow>();
   const reactionResult = current
     ? await d1.prepare(`SELECT r.id, r.participant_id, r.kind, r.created_at, p.display_name, p.initials
@@ -135,7 +138,7 @@ export async function readParty(codeInput: string, viewerId: string) {
     id: person.id,
     initials: person.initials,
     name: person.id === viewerId ? "You" : person.display_name,
-    score: person.score,
+    score: revealScores ? person.score : null,
     color: person.color,
   }));
   const viewer = people.find((person) => person.id === viewerId);
