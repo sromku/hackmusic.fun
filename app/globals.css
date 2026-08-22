@@ -589,7 +589,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .host-pin span { font-size: 10px; font-weight: 900; letter-spacing: .1em; }
 .host-pin input { min-height: 48px; border: 2px solid var(--ink); background: var(--paper); padding: 0 12px; font-size: 18px; }
 .host-skip, .host-end, .host-audio { width: 100%; min-height: 50px; border: 2px solid var(--ink); cursor: pointer; font-weight: 900; }
-.host-audio { margin-bottom: 12px; background: var(--sun); }
+.host-audio { margin: 18px 0 12px; background: var(--sun); }
 .host-audio.armed { background: var(--mint); }
 .host-skip { background: var(--blue); box-shadow: 4px 4px 0 var(--ink); }
 .host-end { margin-top: 12px; background: var(--white); }
