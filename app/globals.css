@@ -52,7 +52,10 @@ body {
 .landing-how-heading span { color: #5f5a52; letter-spacing: 0; }
 .landing-rules { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .landing-rule { position: relative; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto 1fr; column-gap: 8px; min-height: 128px; border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); padding: 11px; transition: transform .22s cubic-bezier(.2, .8, .25, 1.15), box-shadow .22s ease; }
-.landing-rule:hover { z-index: 1; transform: translateY(-5px) rotate(-1deg); box-shadow: 7px 7px 0 var(--ink); }
+.landing-rule:nth-child(1) { z-index: 3; }
+.landing-rule:nth-child(2) { z-index: 2; }
+.landing-rule:nth-child(3) { z-index: 1; }
+.landing-rule:hover { z-index: 4; transform: translateY(-5px) rotate(-1deg); box-shadow: 7px 7px 0 var(--ink); }
 .landing-rule:nth-child(2):hover { transform: translateY(-5px) rotate(1deg); }
 .landing-rule::after { content: "→"; position: absolute; z-index: 2; top: 50%; right: -15px; display: grid; width: 20px; height: 20px; place-items: center; border: 2px solid var(--ink); border-radius: 50%; background: var(--white); font-size: 12px; font-weight: 900; transform: translateY(-50%); }
 .landing-rule:last-child::after { display: none; }
