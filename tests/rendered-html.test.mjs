@@ -92,6 +92,8 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /Nope, keep partying/);
   assert.match(source, /Yes, end it forever/);
   assert.match(source, /There is no undo/);
+  assert.match(source, /className="toast host-toast"/);
+  assert.doesNotMatch(source, /className="host-message"/);
   assert.match(source, /pin=\$\{encodeURIComponent\(hostKey\)\}/);
   assert.match(source, /\/sounds\/cheer\.wav/);
   assert.match(source, /\/sounds\/boo\.wav/);
