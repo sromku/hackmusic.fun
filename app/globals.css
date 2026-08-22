@@ -638,5 +638,5 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 }
 
 @media (max-width: 840px) {
-  :root { --page-gutter: 12px; }
+  :root { --page-gutter: 18px; }
 }
