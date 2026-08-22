@@ -14,6 +14,14 @@ type SpotifyOEmbed = {
   iframe_url?: string;
 };
 
+type SpotifyEmbedEntity = {
+  id?: string;
+  title?: string;
+  name?: string;
+  duration?: number;
+  artists?: Array<{ name?: string }>;
+};
+
 const trackIdPattern = /^[A-Za-z0-9]{22}$/;
 
 export function parseSpotifyTrackReference(value: string) {
@@ -53,23 +61,52 @@ export function extractSpotifyTrackId(value: string) {
   }
 }
 
+export function parseSpotifyEmbedMetadata(html: string, expectedTrackId: string) {
+  const match = html.match(/<script[^>]+id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
+  if (!match) return null;
+  try {
+    const data = JSON.parse(match[1]) as { props?: { pageProps?: { state?: { data?: { entity?: SpotifyEmbedEntity } } } } };
+    const entity = data.props?.pageProps?.state?.data?.entity;
+    if (!entity || entity.id !== expectedTrackId) return null;
+    const artists = entity.artists?.map((artist) => artist.name?.trim()).filter((name): name is string => Boolean(name)) ?? [];
+    return {
+      title: (entity.title ?? entity.name ?? "").trim(),
+      artists,
+      durationMs: typeof entity.duration === "number" ? entity.duration : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function formatDuration(durationMs: number) {
+  if (!durationMs) return "";
+  const seconds = Math.round(durationMs / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 export async function resolveSpotifyTrack(value: string): Promise<ResolvedSpotifyTrack> {
   const { trackId, uri, canonicalUrl } = parseSpotifyTrackReference(value);
-  const response = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(canonicalUrl)}`);
+  const [response, embedResponse] = await Promise.all([
+    fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(canonicalUrl)}`),
+    fetch(`https://open.spotify.com/embed/track/${trackId}`),
+  ]);
   if (!response.ok) throw new Error("Spotify could not find or play that track.");
   const data = await response.json() as SpotifyOEmbed;
   if (!data.title) throw new Error("Spotify did not return details for that track.");
 
   const embeddedTrackId = data.iframe_url ? extractSpotifyTrackId(data.iframe_url) : trackId;
   if (embeddedTrackId && embeddedTrackId !== trackId) throw new Error("Spotify returned a different track token. Copy the song link again.");
+  const embedMetadata = embedResponse.ok ? parseSpotifyEmbedMetadata(await embedResponse.text(), trackId) : null;
+  const artist = embedMetadata?.artists.join(", ") || (data.author_name && data.author_name !== "Spotify" ? data.author_name.trim() : "Artist unavailable");
 
   return {
     id: uri,
     trackId,
     canonicalUrl,
-    title: data.title.trim().slice(0, 160),
-    artist: data.author_name?.trim().slice(0, 160) || "Spotify",
-    duration: "",
+    title: (embedMetadata?.title || data.title).trim().slice(0, 160),
+    artist: artist.slice(0, 160),
+    duration: formatDuration(embedMetadata?.durationMs ?? 0),
     color: "mint",
   };
 }

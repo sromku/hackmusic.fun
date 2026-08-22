@@ -10,8 +10,17 @@ type PartyState = { code: string; title: string; viewer: Person; people: Person[
 type Track = { id: string; title: string; artist: string; duration: string; color: Color };
 type RoomSummary = { code: string; title: string; status: "live" | "ended" };
 
-function Artwork({ tone, compact = false }: { tone: Color; compact?: boolean }) {
-  return <div className={`album-art ${tone} ${compact ? "compact" : ""}`} role="img" aria-label="Colorful geometric album artwork"><span className="album-circle" /><span className="album-stair" /><span className="album-star">✦</span></div>;
+function artworkVariant(seed: string) {
+  return [...seed].reduce((value, character) => ((value * 31) + character.charCodeAt(0)) >>> 0, 7) % 5;
+}
+
+function spotifyTrackUrl(value: string) {
+  const trackId = value.match(/spotify:track:([A-Za-z0-9]{22})/)?.[1];
+  return trackId ? `https://open.spotify.com/track/${trackId}` : "";
+}
+
+function Artwork({ tone, seed }: { tone: Color; seed: string }) {
+  return <div className={`album-art ${tone} art-variant-${artworkVariant(seed)}`} role="img" aria-label="Animated geometric artwork generated for this song"><span className="album-circle" /><span className="album-stair" /><span className="album-star">✦</span><span className="album-chaos-dot" /><span className="album-chaos-pill" /><span className="album-chaos-ring" /></div>;
 }
 
 export default function PartyRoom({ code }: { code: string }) {
@@ -120,6 +129,7 @@ export default function PartyRoom({ code }: { code: string }) {
 
   if (error) return <main className="missing-room"><span className="brand-mark">HM</span><p className="eyebrow">ROOM LOST</p><h1>{error}</h1><Link href="/">Try another code →</Link></main>;
   if (!room) return <main className="loading-room"><span className="brand-mark">HM</span><p>Finding room {code}…</p></main>;
+  const currentSpotifyUrl = party?.currentTrack ? spotifyTrackUrl(party.currentTrack.id) : "";
 
   return (
     <main className="party-shell">
@@ -139,7 +149,7 @@ export default function PartyRoom({ code }: { code: string }) {
         <section className={`now-playing ${!party.currentTrack ? "empty-player" : ""}`} aria-labelledby="playing-title">
           <div className="section-kicker"><span>{party.currentTrack ? "🎵 NOW PLAYING" : "🔇 THE SPEAKER IS WAITING"}</span><span>🤫 {party.queueCount} SECRETLY QUEUED</span></div>
           {party.currentTrack ? <>
-            <div className="track-card"><Artwork tone={party.currentTrack.color} /><div className="track-copy"><p className="track-label">⚡ CURRENT CHAOS</p><h2 id="playing-title">{party.currentTrack.title}</h2><p className="artist">{party.currentTrack.artist}</p><p className="host-playback-note">🔊 Playback lives on the host speaker</p><p className="submitted">🕵️ Submitted by a mystery human</p></div></div>
+            <div className="track-card"><Artwork tone={party.currentTrack.color} seed={party.currentTrack.id} /><div className="track-copy"><p className="track-label">⚡ CURRENT CHAOS</p><h2 id="playing-title">{party.currentTrack.title}</h2><div className="track-meta-row"><p className="artist">🎤 {party.currentTrack.artist}</p>{currentSpotifyUrl && <a className="spotify-save-link" href={currentSpotifyUrl} target="_blank" rel="noreferrer" aria-label={`Open ${party.currentTrack.title} by ${party.currentTrack.artist} in Spotify`}>＋ Add to my Spotify ↗</a>}</div><p className="submitted">🕵️ Submitted by a mystery human</p></div></div>
             {!ended && <div className="reaction-panel"><div className="reaction-actions">
               <button className={`reaction-button cheer ${myReaction === "up" ? "selected" : ""}`} type="button" onClick={() => void react("up")} disabled={busy} aria-pressed={myReaction === "up"}><span className="reaction-icon" aria-hidden="true">🙌</span><span><strong>CHEER</strong><small>{myReaction === "up" ? "you picked this" : myReaction === "down" ? "tap to switch" : "make some noise"}</small></span>{myReaction === "up" && <b className="your-vote-badge">✓ YOUR VOTE</b>}</button>
               <button className={`reaction-button boo ${myReaction === "down" ? "selected" : ""}`} type="button" onClick={() => void react("down")} disabled={busy} aria-pressed={myReaction === "down"}><span className="reaction-icon" aria-hidden="true">👻</span><span><strong>BOO</strong><small>{myReaction === "down" ? "your secret is safe" : myReaction === "up" ? "tap to switch" : "3 boos skip it"}</small></span>{myReaction === "down" && <b className="your-vote-badge">✓ YOUR VOTE</b>}</button>

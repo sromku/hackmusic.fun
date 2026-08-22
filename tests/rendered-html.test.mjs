@@ -33,6 +33,12 @@ test("normalizes Spotify share links to their actual track token", async () => {
   });
   assert.equal(spotify.extractSpotifyTrackId(`link-${sharedUrl}`), "5lf9LK4eETye6DsPUJpHDB");
   assert.throws(() => spotify.parseSpotifyTrackReference("https://open.spotify.com/playlist/37i9dQZF1F5p3rmiWPIYgZ"), /track token/);
+  const embedState = { props: { pageProps: { state: { data: { entity: { id: "5lf9LK4eETye6DsPUJpHDB", title: "Zombie - Afro House", duration: 483903, artists: [{ name: "Afrynthe Vora" }] } } } } } };
+  assert.deepEqual(spotify.parseSpotifyEmbedMetadata(`<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(embedState)}</script>`, "5lf9LK4eETye6DsPUJpHDB"), {
+    title: "Zombie - Afro House",
+    artists: ["Afrynthe Vora"],
+    durationMs: 483903,
+  });
 });
 
 test("renders the create and join landing page", async () => {
@@ -70,6 +76,9 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /Changed your mind\? Tap the other reaction/);
   assert.match(source, /Vote changed to Cheer/);
   assert.match(source, /your-vote-badge/);
+  assert.match(source, /Add to my Spotify/);
+  assert.match(source, /art-variant-/);
+  assert.doesNotMatch(source, /Playback lives on the host speaker/);
   assert.match(source, /ended && <span className="person-score"/);
   const partySource = await readFile(new URL("db/party.ts", projectRoot), "utf8");
   assert.match(partySource, /name: "Someone"/);
@@ -77,6 +86,7 @@ test("renders a code-specific participant room", async () => {
   assert.match(partySource, /score: revealScores \? person\.score : null/);
   assert.match(partySource, /UPDATE reactions SET kind/);
   assert.match(partySource, /newEffect - oldEffect/);
+  assert.match(partySource, /current\.artist === "Spotify"/);
 });
 
 test("renders a code-specific host control surface", async () => {

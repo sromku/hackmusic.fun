@@ -1,5 +1,5 @@
 import { ensurePartySchema, getD1 } from ".";
-import { parseSpotifyTrackReference } from "../lib/spotify-track";
+import { parseSpotifyTrackReference, resolveSpotifyTrack } from "../lib/spotify-track";
 
 export type TrackInput = {
   id: string;
@@ -118,6 +118,19 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
     ? await d1.prepare("SELECT id, participant_id, provider_track_id, title, artist, duration, color FROM submissions WHERE id = ?")
       .bind(event.current_submission_id).first<SubmissionRow>()
     : null;
+
+  if (current && (current.artist === "Spotify" || current.artist === "Artist unavailable")) {
+    try {
+      const enriched = await resolveSpotifyTrack(current.provider_track_id);
+      current.title = enriched.title;
+      current.artist = enriched.artist;
+      current.duration = enriched.duration;
+      await d1.prepare("UPDATE submissions SET title = ?, artist = ?, duration = ? WHERE id = ?")
+        .bind(enriched.title, enriched.artist, enriched.duration, current.id).run();
+    } catch {
+      // Keep the stored metadata if Spotify is temporarily unavailable.
+    }
+  }
 
   const peopleResult = await d1.prepare(revealScores
     ? "SELECT id, display_name, initials, color, score FROM participants WHERE event_id = ? ORDER BY score DESC, created_at ASC"

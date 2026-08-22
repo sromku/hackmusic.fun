@@ -217,12 +217,37 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 .album-art { position: relative; aspect-ratio: 1; overflow: hidden; border: 2px solid var(--ink); background: var(--coral); }
 .album-art::before { content: ""; position: absolute; inset: 0 50% 50% 0; background: var(--sun); border-right: 2px solid var(--ink); border-bottom: 2px solid var(--ink); }
 .album-art::after { content: ""; position: absolute; inset: 50% 0 0 50%; background: var(--blue); border-top: 2px solid var(--ink); border-left: 2px solid var(--ink); }
-.album-circle { position: absolute; z-index: 1; width: 42%; aspect-ratio: 1; right: 9%; top: 8%; border: 2px solid var(--ink); border-radius: 50%; background: var(--mint); }
-.album-stair { position: absolute; z-index: 2; width: 44%; height: 44%; bottom: 7%; left: 7%; border: 2px solid var(--ink); background: repeating-linear-gradient(0deg, var(--white) 0 13%, var(--ink) 13% 16%); transform: rotate(-8deg); }
-.album-star { position: absolute; z-index: 3; right: 16%; bottom: 11%; font-size: clamp(42px, 6vw, 78px); transform: rotate(12deg); }
+.album-circle { position: absolute; z-index: 1; width: 42%; aspect-ratio: 1; right: 9%; top: 8%; border: 2px solid var(--ink); border-radius: 50%; background: var(--mint); animation: album-circle-drift 4.8s ease-in-out infinite; }
+.album-stair { position: absolute; z-index: 2; width: 44%; height: 44%; bottom: 7%; left: 7%; border: 2px solid var(--ink); background: repeating-linear-gradient(0deg, var(--white) 0 13%, var(--ink) 13% 16%); transform: rotate(-8deg); animation: album-stair-wobble 3.9s ease-in-out infinite; }
+.album-star { position: absolute; z-index: 3; right: 16%; bottom: 11%; font-size: clamp(42px, 6vw, 78px); transform: rotate(12deg); animation: album-star-dance 3.2s ease-in-out infinite; }
+.album-chaos-dot, .album-chaos-pill, .album-chaos-ring { position: absolute; z-index: 4; display: block; border: 2px solid var(--ink); }
+.album-chaos-dot { width: 13%; aspect-ratio: 1; left: var(--dot-x, 12%); top: var(--dot-y, 12%); border-radius: 50%; background: var(--coral); animation: album-dot-hop 2.7s ease-in-out infinite; }
+.album-chaos-pill { width: 10%; height: 31%; left: var(--pill-x, 69%); top: var(--pill-y, 56%); border-radius: 999px; background: var(--sun); animation: album-pill-sway 4.2s ease-in-out infinite; }
+.album-chaos-ring { width: 20%; aspect-ratio: 1; left: var(--ring-x, 35%); top: var(--ring-y, 40%); border-width: 4px; border-radius: 50%; background: transparent; animation: album-ring-pulse 3.4s ease-in-out infinite; }
+.art-variant-0 { --dot-x: 12%; --dot-y: 14%; --pill-x: 72%; --pill-y: 59%; --ring-x: 37%; --ring-y: 42%; }
+.art-variant-1 { --dot-x: 76%; --dot-y: 12%; --pill-x: 18%; --pill-y: 56%; --ring-x: 56%; --ring-y: 39%; }
+.art-variant-1 .album-circle { right: auto; left: 8%; top: 7%; background: var(--blue); }
+.art-variant-1 .album-stair { left: auto; right: 5%; }
+.art-variant-1 .album-star { right: 44%; bottom: 6%; }
+.art-variant-2 { --dot-x: 9%; --dot-y: 72%; --pill-x: 81%; --pill-y: 13%; --ring-x: 42%; --ring-y: 62%; }
+.art-variant-2 .album-circle { width: 52%; right: -7%; top: 21%; background: var(--sun); }
+.art-variant-2 .album-stair { width: 50%; height: 35%; bottom: 8%; left: 5%; }
+.art-variant-2 .album-star { right: 50%; bottom: 46%; }
+.art-variant-3 { --dot-x: 68%; --dot-y: 76%; --pill-x: 7%; --pill-y: 17%; --ring-x: 54%; --ring-y: 9%; }
+.art-variant-3 .album-circle { right: 27%; top: 34%; background: var(--coral); }
+.art-variant-3 .album-stair { bottom: auto; top: 5%; left: 5%; }
+.art-variant-3 .album-star { right: 8%; bottom: 27%; }
+.art-variant-4 { --dot-x: 44%; --dot-y: 9%; --pill-x: 15%; --pill-y: 64%; --ring-x: 72%; --ring-y: 56%; }
+.art-variant-4 .album-circle { width: 34%; right: 8%; top: 8%; background: var(--white); }
+.art-variant-4 .album-stair { width: 58%; height: 32%; bottom: 9%; left: 22%; }
+.art-variant-4 .album-star { right: 57%; bottom: 42%; }
 
 .track-copy h2 { margin: 0; font-size: clamp(30px, 4vw, 54px); line-height: .96; letter-spacing: -.06em; }
-.artist { margin: 12px 0 28px; font-size: 18px; }
+.track-meta-row { display: grid; justify-items: start; gap: 12px; margin: 12px 0 22px; }
+.artist { margin: 0; font-size: 18px; }
+.spotify-save-link { display: inline-flex; min-height: 32px; align-items: center; border: 2px solid var(--ink); background: #1ed760; box-shadow: 3px 3px 0 var(--ink); padding: 0 9px; color: var(--ink); font-size: 10px; font-weight: 900; text-decoration: none; transition: transform .18s ease, box-shadow .18s ease; }
+.spotify-save-link:hover { transform: translate(-2px, -2px) rotate(-.4deg); box-shadow: 5px 5px 0 var(--ink); }
+.spotify-save-link:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--ink); }
 .progress-track { height: 12px; border: 2px solid var(--ink); background: var(--paper); }
 .progress-track span { display: block; width: 64%; height: 100%; border-right: 2px solid var(--ink); background: var(--coral); }
 .submitted { margin: 10px 0 0; font-size: 12px; font-weight: 700; color: #5a574f; }
@@ -338,14 +363,11 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 .song-result > span > strong { font-size: 14px; }
 .song-result > span > small { margin-top: 3px; font-size: 11px; }
 .song-result > b { font-size: 25px; text-align: center; }
-.album-art.compact { width: 50px; height: 50px; }
-.album-art.compact .album-star { font-size: 17px; }
 .empty-results { margin: 18px 0; font-size: 13px; font-weight: 700; }
 .link-form { margin-top: 18px; border-top: 2px solid var(--ink); padding-top: 18px; }
 .link-form > div { display: grid; grid-template-columns: 1fr 74px; margin-top: 8px; }
 .link-form button { border: 2px solid var(--ink); border-left: 0; background: var(--mint); cursor: pointer; font-weight: 900; }
 .queue-note { margin: 14px 0 0; font-size: 11px; font-weight: 700; color: #5a574f; }
-.host-playback-note { margin: 20px 0 12px; border: 2px solid var(--ink); background: var(--mint); padding: 9px 11px; font-size: 11px; font-weight: 850; }
 .spotify-song-modal { max-width: 560px; }
 .spotify-add-guide { display: grid; gap: 6px; margin-top: 24px; border: 2px solid var(--ink); background: var(--sun); padding: 16px; }
 .spotify-add-guide strong { font-size: 14px; }
@@ -403,6 +425,12 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 @keyframes energy-bar { to { transform: scaleY(.35); opacity: .7; } }
 @keyframes rule-icon-bop { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-4px) rotate(4deg); } }
 @keyframes sticker-spin { to { transform: rotate(360deg); } }
+@keyframes album-circle-drift { 0%, 100% { transform: translate(0) scale(1); } 50% { transform: translate(-8%, 9%) scale(.9); } }
+@keyframes album-stair-wobble { 0%, 100% { transform: rotate(-8deg) translate(0); } 50% { transform: rotate(-2deg) translate(4%, -5%); } }
+@keyframes album-star-dance { 0%, 100% { transform: rotate(12deg) scale(1); } 50% { transform: rotate(-10deg) scale(1.18); } }
+@keyframes album-dot-hop { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-55%) scale(.82); } }
+@keyframes album-pill-sway { 0%, 100% { transform: rotate(18deg); } 50% { transform: rotate(-19deg) translateY(-10%); } }
+@keyframes album-ring-pulse { 0%, 100% { transform: scale(.72); opacity: .45; } 50% { transform: scale(1.15); opacity: 1; } }
 
 .entry-card button, .add-song-button, .reaction-button, .empty-player-copy button,
 .spotify-link-form button, .join-card button, .close-button, .song-result,
@@ -459,7 +487,9 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
   .track-card { grid-template-columns: 82px 1fr; gap: 14px; padding: 14px; align-items: start; }
   .track-copy h2 { font-size: 28px; }
   .track-label { margin-bottom: 5px; }
-  .artist { margin: 6px 0 16px; font-size: 14px; }
+  .track-meta-row { gap: 8px; margin: 8px 0 16px; }
+  .artist { margin: 0; font-size: 14px; }
+  .spotify-save-link { min-height: 30px; padding: 0 7px; font-size: 9px; }
   .submitted { font-size: 10px; }
   .reaction-button { gap: 9px; min-height: 84px; padding: 0 8px; }
   .reaction-icon { font-size: 32px; }
