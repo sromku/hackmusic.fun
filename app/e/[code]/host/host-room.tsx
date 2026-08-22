@@ -56,6 +56,33 @@ function spotifyTrackId(value: string) {
   return legacyMatch?.[1] ?? "";
 }
 
+function synthTone(context: AudioContext, frequency: number, endFrequency: number, start: number, duration: number, type: OscillatorType, volume: number) {
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, start);
+  oscillator.frequency.exponentialRampToValueAtTime(endFrequency, start + duration);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(volume, start + 0.018);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  oscillator.connect(gain).connect(context.destination);
+  oscillator.start(start);
+  oscillator.stop(start + duration + 0.02);
+}
+
+function playSynthReaction(context: AudioContext, kind: "up" | "down") {
+  const now = context.currentTime + 0.02;
+  if (kind === "up") {
+    synthTone(context, 440, 620, now, 0.16, "square", 0.32);
+    synthTone(context, 554, 760, now + 0.12, 0.17, "square", 0.3);
+    synthTone(context, 659, 990, now + 0.24, 0.28, "triangle", 0.38);
+  } else {
+    synthTone(context, 190, 72, now, 0.72, "sawtooth", 0.42);
+    synthTone(context, 142, 58, now + 0.05, 0.82, "triangle", 0.36);
+    synthTone(context, 96, 52, now + 0.12, 0.76, "sine", 0.4);
+  }
+}
+
 export default function HostRoom({ code }: { code: string }) {
   const [party, setParty] = useState<HostParty | null>(null);
   const [participantId, setParticipantId] = useState("");
@@ -73,6 +100,7 @@ export default function HostRoom({ code }: { code: string }) {
   const [speakerArmed, setSpeakerArmed] = useState(false);
   const [spotifyMessage, setSpotifyMessage] = useState("");
   const audioEnabledRef = useRef(false);
+  const reactionAudioContextRef = useRef<AudioContext | null>(null);
   const knownReactions = useRef<Set<string> | null>(null);
   const cancelEndRef = useRef<HTMLButtonElement | null>(null);
   const spotifyPlayerRef = useRef<SpotifyPlayer | null>(null);
@@ -82,14 +110,30 @@ export default function HostRoom({ code }: { code: string }) {
   const advancingTrackRef = useRef(false);
   const currentSpotifyId = party?.currentTrack ? spotifyTrackId(party.currentTrack.id) : "";
 
-  function sayReaction(kind: "up" | "down") {
-    if (!audioEnabledRef.current || !("speechSynthesis" in window)) return;
-    const voice = new SpeechSynthesisUtterance(kind === "up" ? "Yeah!" : "Boo!");
-    voice.rate = kind === "up" ? 1.25 : 0.75;
-    voice.pitch = kind === "up" ? 1.55 : 0.55;
-    voice.volume = 0.72;
-    window.speechSynthesis.speak(voice);
-  }
+  const getReactionAudioContext = useCallback(() => {
+    if (reactionAudioContextRef.current) return reactionAudioContextRef.current;
+    const AudioContextConstructor = window.AudioContext ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextConstructor) return null;
+    reactionAudioContextRef.current = new AudioContextConstructor();
+    return reactionAudioContextRef.current;
+  }, []);
+
+  const sayReaction = useCallback((kind: "up" | "down") => {
+    if (!audioEnabledRef.current) return;
+    const context = getReactionAudioContext();
+    if (context) {
+      const play = () => playSynthReaction(context, kind);
+      if (context.state === "suspended") void context.resume().then(play).catch(() => undefined);
+      else play();
+    }
+    if ("speechSynthesis" in window) {
+      const voice = new SpeechSynthesisUtterance(kind === "up" ? "Yeah!" : "Boooo!");
+      voice.rate = kind === "up" ? 1.35 : 0.62;
+      voice.pitch = kind === "up" ? 1.65 : 0.45;
+      voice.volume = 1;
+      window.speechSynthesis.speak(voice);
+    }
+  }, [getReactionAudioContext]);
 
   useEffect(() => {
     const participant = window.localStorage.getItem(`hackmusic:${code}:participant`) ?? "";
@@ -125,7 +169,7 @@ export default function HostRoom({ code }: { code: string }) {
     void refresh();
     const timer = window.setInterval(refresh, 2000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [code, hostKey, participantId]);
+  }, [code, hostKey, participantId, sayReaction]);
 
   useEffect(() => {
     if (!endConfirmOpen) return;
@@ -325,14 +369,13 @@ export default function HostRoom({ code }: { code: string }) {
   }, [currentSpotifyId, party?.status, playSpotifyTrack, speakerArmed, spotifyDeviceId, spotifyStatus]);
 
   function enableAudio() {
+    const context = getReactionAudioContext();
+    if (context) void context.resume().catch(() => undefined);
     audioEnabledRef.current = true;
     setAudioEnabled(true);
-    setMessage("Reaction sounds are armed. Keep this page open.");
-    if ("speechSynthesis" in window) {
-      const warmup = new SpeechSynthesisUtterance("Party sounds ready!");
-      warmup.volume = 0.5;
-      window.speechSynthesis.speak(warmup);
-    }
+    setMessage("Funny sounds are armed. You should hear a quick cheer and boo test now.");
+    sayReaction("up");
+    window.setTimeout(() => sayReaction("down"), 650);
   }
 
   async function copyInvite() {
@@ -424,8 +467,8 @@ export default function HostRoom({ code }: { code: string }) {
       {spotifyMessage && <p className="spotify-message" role="status">{spotifyMessage}</p>}
     </section>
 
-    <div className="host-grid"><section className="host-now-card"><div className="section-kicker"><span>ON THE SPEAKER</span><span>{party.queueCount} WAITING</span></div>{party.currentTrack ? <><div className="host-track"><div className={`host-art ${party.currentTrack.color}`}>♪</div><div><h2>{party.currentTrack.title}</h2><p>{party.currentTrack.artist}{party.currentTrack.duration ? ` · ${party.currentTrack.duration}` : ""}</p></div></div>{currentSpotifyId ? <div className={`spotify-host-player spotify-${spotifyStatus}`}><div><strong>SPOTIFY PREMIUM SPEAKER</strong><span>{spotifyStatus === "ready" ? "Full song · no preview limit" : "Connect Spotify above first"}</span></div><button type="button" disabled={spotifyStatus !== "ready" || party.status === "ended"} onClick={() => void playSpotifyTrack(currentSpotifyId, true).catch((reason) => setSpotifyMessage(reason instanceof Error ? reason.message : "Could not start Spotify."))}>{speakerArmed ? "Play this track again →" : "Start the speaker →"}</button><small>Tap once on this host device. Every next secret song will start automatically.</small></div> : <div className="unplayable-track"><strong>This item has no playable Spotify link.</strong><span>Skip it and add a real Spotify track URL.</span></div>}<div className="host-reaction-counts"><div className="host-cheers"><strong>{cheers}</strong><span>CHEERS</span></div><div className="host-boos"><strong>{boos}</strong><span>BOOS</span></div></div></> : <div className="host-empty"><strong>No song yet.</strong><p>Open the participant page and add the first one.</p></div>}</section>
-      <section className="host-controls-card"><div className="card-title-row"><h2>CONTROLS</h2><span>THIS PHONE ONLY</span></div><button className={`host-audio ${audioEnabled ? "armed" : ""}`} type="button" onClick={enableAudio}>{audioEnabled ? "✓ Reaction sounds armed" : "Enable reaction sounds"}</button><button className="host-skip" type="button" disabled={busy || !party.currentTrack || party.status === "ended"} onClick={() => void control("skip")}>Skip to next song →</button><button className="host-end" type="button" disabled={busy || party.status === "ended"} onClick={() => setEndConfirmOpen(true)}>End party & freeze scores</button>{message && <p className="host-message" role="status">{message}</p>}<p className="host-hint">The secret host key stays on the phone that created this room.</p></section>
+    <div className="host-grid"><section className="host-now-card"><div className="section-kicker"><span>ON THE SPEAKER</span><span>{party.queueCount} WAITING</span></div>{party.currentTrack ? <><div className="host-track"><div className={`host-art ${party.currentTrack.color}`}>♪</div><div><h2>{party.currentTrack.title}</h2><p>{party.currentTrack.artist}{party.currentTrack.duration ? ` · ${party.currentTrack.duration}` : ""}</p></div></div>{currentSpotifyId ? <div className={`spotify-host-player spotify-${spotifyStatus}`}><div><strong>SPOTIFY PREMIUM SPEAKER</strong><span>{spotifyStatus === "ready" ? "Full song · no preview limit" : "Connect Spotify above first"}</span></div><button type="button" disabled={spotifyStatus !== "ready" || party.status === "ended"} onClick={() => { enableAudio(); void playSpotifyTrack(currentSpotifyId, true).catch((reason) => setSpotifyMessage(reason instanceof Error ? reason.message : "Could not start Spotify.")); }}>{speakerArmed ? "Play this track again →" : "Start speaker + funny sounds →"}</button><small>Tap once on this host device. Every next secret song will start automatically.</small></div> : <div className="unplayable-track"><strong>This item has no playable Spotify link.</strong><span>Skip it and add a real Spotify track URL.</span></div>}<div className="host-reaction-counts"><div className="host-cheers"><strong>{cheers}</strong><span>CHEERS</span></div><div className="host-boos"><strong>{boos}</strong><span>BOOS</span></div></div></> : <div className="host-empty"><strong>No song yet.</strong><p>Open the participant page and add the first one.</p></div>}</section>
+      <section className="host-controls-card"><div className="card-title-row"><h2>CONTROLS</h2><span>THIS PHONE ONLY</span></div><button className={`host-audio ${audioEnabled ? "armed" : ""}`} type="button" onClick={enableAudio}>{audioEnabled ? "✓ Funny sounds armed · tap to test" : "Enable & test funny sounds"}</button><button className="host-skip" type="button" disabled={busy || !party.currentTrack || party.status === "ended"} onClick={() => void control("skip")}>Skip to next song →</button><button className="host-end" type="button" disabled={busy || party.status === "ended"} onClick={() => setEndConfirmOpen(true)}>End party & freeze scores</button>{message && <p className="host-message" role="status">{message}</p>}<p className="host-hint">Reaction sounds play only from this host device. Keep this page open and its volume up.</p></section>
     </div>
     <section className="leaderboard-card"><div className="card-title-row"><h2>{party.status === "ended" ? "FINAL SCOREBOARD" : "LIVE SCOREBOARD"}</h2><span>{party.people.length} PLAYERS</span></div><ol>{[...party.people].sort((a, b) => b.score - a.score).map((person, index) => <li key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><b>{index + 1}</b><strong>{person.name}</strong><span>{person.score} pts</span></li>)}</ol></section>
 
