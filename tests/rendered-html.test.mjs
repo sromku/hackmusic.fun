@@ -80,6 +80,9 @@ test("renders the create and join landing page", async () => {
   assert.doesNotMatch(landingSource, /next\/link/);
   const globalStyles = await readFile(new URL("app/globals.css", projectRoot), "utf8");
   assert.match(globalStyles, /\.landing-copy h1 \{[^}]*padding-bottom: \.12em;[^}]*margin-bottom: -\.12em;/);
+  assert.match(globalStyles, /\.landing-hero \{[^}]*align-items: start;/);
+  assert.match(globalStyles, /\.landing-copy \{ padding-top: clamp\(64px, 7vh, 84px\); \}/);
+  assert.match(globalStyles, /@media \(max-width: 840px\)[\s\S]*\.landing-copy \{ padding-top: 0; \}/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/);
 });
 
