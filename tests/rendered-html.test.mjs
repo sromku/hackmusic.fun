@@ -18,7 +18,7 @@ async function loadTypeScriptModule(pathname) {
   return import(`data:text/javascript;base64,${Buffer.from(output).toString("base64")}`);
 }
 
-test("normalizes Spotify share links to their actual track token", async () => {
+test("normalizes Spotify share links and short links to their actual track token", async () => {
   const spotify = await loadTypeScriptModule("lib/spotify-track.ts");
   const sharedUrl = "https://open.spotify.com/track/5lf9LK4eETye6DsPUJpHDB?si=_RP727UlSjaJQ9Br-CjVng&utm_source=copy-link&rowId=96b58bf6ac48b9f48565&context=spotify%3Aplaylist%3A37i9dQZF1F5p3rmiWPIYgZ";
   assert.deepEqual(spotify.parseSpotifyTrackReference(sharedUrl), {
@@ -27,6 +27,26 @@ test("normalizes Spotify share links to their actual track token", async () => {
     canonicalUrl: "https://open.spotify.com/track/5lf9LK4eETye6DsPUJpHDB",
   });
   assert.equal(spotify.extractSpotifyTrackId(`link-${sharedUrl}`), "5lf9LK4eETye6DsPUJpHDB");
+  const shortUrl = "https://open.spotify.com/s/TLUsRqX";
+  const shortResolved = await spotify.resolveSpotifyTrackReference(shortUrl, async (requestUrl) => {
+    assert.match(String(requestUrl), /^https:\/\/open\.spotify\.com\/oembed\?url=/);
+    return new Response(
+      JSON.stringify({ iframe_url: "https://open.spotify.com/embed/track/1fh4rarBaLB8l5ALt1UvPv?utm_source=oembed" }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  });
+  assert.deepEqual(shortResolved, {
+    trackId: "1fh4rarBaLB8l5ALt1UvPv",
+    uri: "spotify:track:1fh4rarBaLB8l5ALt1UvPv",
+    canonicalUrl: "https://open.spotify.com/track/1fh4rarBaLB8l5ALt1UvPv",
+  });
+  await assert.rejects(
+    () => spotify.resolveSpotifyTrackReference(
+      "https://open.spotify.com/s/not-a-track",
+      async () => new Response(JSON.stringify({ iframe_url: "https://open.spotify.com/embed/playlist/37i9dQZF1F5p3rmiWPIYgZ" }), { status: 200 }),
+    ),
+    /does not point to a playable track/,
+  );
   assert.throws(() => spotify.parseSpotifyTrackReference("https://open.spotify.com/playlist/37i9dQZF1F5p3rmiWPIYgZ"), /track token/);
   const embedState = { props: { pageProps: { state: { data: { entity: { id: "5lf9LK4eETye6DsPUJpHDB", title: "Zombie - Afro House", duration: 483903, artists: [{ name: "Afrynthe Vora" }] } } } } } };
   assert.deepEqual(spotify.parseSpotifyEmbedMetadata(`<script id="__NEXT_DATA__" type="application/json">${JSON.stringify(embedState)}</script>`, "5lf9LK4eETye6DsPUJpHDB"), {

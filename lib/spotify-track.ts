@@ -63,6 +63,43 @@ export function extractSpotifyTrackId(value: string) {
   }
 }
 
+function parseSpotifyShortUrl(value: string) {
+  let url: URL;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || url.hostname.toLowerCase() !== "open.spotify.com") return null;
+  const parts = url.pathname.split("/").filter(Boolean);
+  if (parts.length !== 2 || parts[0] !== "s" || !/^[A-Za-z0-9_-]{4,64}$/.test(parts[1])) return null;
+  return url;
+}
+
+export async function resolveSpotifyTrackReference(value: string, fetcher: typeof fetch = fetch) {
+  try {
+    return parseSpotifyTrackReference(value);
+  } catch (reason) {
+    const shortUrl = parseSpotifyShortUrl(value);
+    if (!shortUrl) throw reason;
+    let response: Response;
+    try {
+      response = await fetcher(`https://open.spotify.com/oembed?url=${encodeURIComponent(shortUrl.toString())}`);
+    } catch {
+      throw new PublicError("Spotify could not open that short link right now. Try it again, or copy the song link from Spotify.");
+    }
+    if (!response.ok) {
+      throw new PublicError("That Spotify short link could not be opened. In Spotify, open the song itself and copy its song link again.");
+    }
+    const data = await response.json() as SpotifyOEmbed;
+    const trackId = data.iframe_url ? extractSpotifyTrackId(data.iframe_url) : "";
+    if (!trackId || !trackIdPattern.test(trackId)) {
+      throw new PublicError("That Spotify short link does not point to a playable track. Open the song itself and copy its song link again.");
+    }
+    return { trackId, uri: `spotify:track:${trackId}`, canonicalUrl: `https://open.spotify.com/track/${trackId}` };
+  }
+}
+
 export function parseSpotifyEmbedMetadata(html: string, expectedTrackId: string) {
   const match = html.match(/<script[^>]+id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
   if (!match) return null;
@@ -88,7 +125,7 @@ function formatDuration(durationMs: number) {
 }
 
 export async function resolveSpotifyTrack(value: string): Promise<ResolvedSpotifyTrack> {
-  const { trackId, uri, canonicalUrl } = parseSpotifyTrackReference(value);
+  const { trackId, uri, canonicalUrl } = await resolveSpotifyTrackReference(value);
   const [response, embedResponse] = await Promise.all([
     fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(canonicalUrl)}`),
     fetch(`https://open.spotify.com/embed/track/${trackId}`),
