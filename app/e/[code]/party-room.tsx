@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { MAX_PENDING_TRACKS_PER_PERSON } from "../../../lib/party-rules";
 
@@ -153,7 +152,7 @@ export default function PartyRoom({ code }: { code: string }) {
     }
   }
 
-  if (error) return <main className="missing-room"><span className="brand-mark">HM</span><p className="eyebrow">ROOM LOST</p><h1>{error}</h1><Link href="/">Try another code →</Link></main>;
+  if (error) return <main className="missing-room"><span className="brand-mark">HM</span><p className="eyebrow">ROOM LOST</p><h1>{error}</h1><a href="/">Try another code →</a></main>;
   if (!room) return <main className="loading-room"><span className="brand-mark">HM</span><p>Finding room {code}…</p></main>;
   const currentSpotifyUrl = party?.currentTrack ? spotifyTrackUrl(party.currentTrack.id) : "";
 
@@ -161,7 +160,7 @@ export default function PartyRoom({ code }: { code: string }) {
     <main className="party-shell">
       <div className="shape shape-one" aria-hidden="true" /><div className="shape shape-two" aria-hidden="true" /><div className="shape shape-three" aria-hidden="true" />
       <header className="topbar">
-        <Link className="brand" href="/"><span className="brand-mark">HM</span><span>HackMusic</span></Link>
+        <a className="brand" href="/"><span className="brand-mark">HM</span><span>HackMusic</span></a>
         <div className={`room-pill ${lobby ? "lobby" : ""}`}><span className={`live-dot ${ended ? "ended" : lobby ? "lobby" : ""}`} /> {ended ? "🏁 ENDED" : lobby ? "🌙 LOBBY OPEN" : "⚡ LIVE"} · ROOM {room.code}</div>
       </header>
       <section className="event-heading" id="top">

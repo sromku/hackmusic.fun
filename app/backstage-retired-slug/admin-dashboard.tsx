@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 type AdminOverview = {
@@ -73,7 +72,7 @@ export default function AdminDashboard({ ownerEmail, signOutPath }: { ownerEmail
   }
 
   return <main className="hosted-admin-shell">
-    <header className="admin-topbar"><Link className="brand" href="/"><span className="brand-mark">HM</span><span>HackMusic Admin</span></Link><div className="admin-identity"><span>🔐 {ownerEmail}</span><a href={signOutPath}>Sign out</a></div></header>
+    <header className="admin-topbar"><a className="brand" href="/"><span className="brand-mark">HM</span><span>HackMusic Admin</span></a><div className="admin-identity"><span>🔐 {ownerEmail}</span><a href={signOutPath}>Sign out</a></div></header>
     <section className="admin-hero"><div><p className="eyebrow">🪩 DATABASE BACKSTAGE</p><h1>Party<br />evidence.</h1></div><div className="admin-hero-note"><strong>Owner only. Read only.</strong><span>No host keys. Boo identities remain anonymous. Chaos, but with boundaries.</span></div></section>
     {message && <p className="admin-message" role="alert">{message}</p>}
     {!selected ? <>

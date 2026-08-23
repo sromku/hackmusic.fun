@@ -35,6 +35,11 @@ const eslintConfig = defineConfig([
         version: "detect",
       },
     },
+    rules: {
+      // Full-page anchors are intentional: they remain reliable when Sites serves
+      // the app through a custom domain and do not depend on client navigation.
+      "@next/next/no-html-link-for-pages": "off",
+    },
   },
 ]);
 

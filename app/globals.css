@@ -50,15 +50,14 @@ body {
 .landing-how-heading { display: flex; justify-content: space-between; gap: 14px; align-items: center; margin-bottom: 9px; }
 .landing-how-heading strong, .landing-how-heading span { font-size: 10px; font-weight: 900; letter-spacing: .09em; }
 .landing-how-heading span { color: #5f5a52; letter-spacing: 0; }
-.landing-rules { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.landing-rules { display: grid; grid-template-columns: minmax(0, 1fr) 10px minmax(0, 1fr) 10px minmax(0, 1fr); align-items: stretch; }
 .landing-rule { position: relative; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto 1fr; column-gap: 8px; min-height: 128px; border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); padding: 11px; transition: transform .22s cubic-bezier(.2, .8, .25, 1.15), box-shadow .22s ease; }
-.landing-rule:nth-child(1) { z-index: 3; }
-.landing-rule:nth-child(2) { z-index: 2; }
-.landing-rule:nth-child(3) { z-index: 1; }
+.landing-rule:nth-of-type(1) { z-index: 3; }
+.landing-rule:nth-of-type(2) { z-index: 2; }
+.landing-rule:nth-of-type(3) { z-index: 1; }
 .landing-rule:hover { z-index: 4; transform: translateY(-5px) rotate(-1deg); box-shadow: 7px 7px 0 var(--ink); }
-.landing-rule:nth-child(2):hover { transform: translateY(-5px) rotate(1deg); }
-.landing-rule::after { content: "→"; position: absolute; z-index: 2; top: 50%; right: -19px; display: grid; width: 24px; height: 24px; place-items: center; border: 2px solid var(--ink); border-radius: 50%; background: var(--white); font-size: 13px; font-weight: 900; line-height: 1; transform: translateY(-50%); }
-.landing-rule:last-child::after { display: none; }
+.landing-rule:nth-of-type(2):hover { transform: translateY(-5px) rotate(1deg); }
+.rule-connector { z-index: 6; display: grid; width: 26px; height: 26px; place-self: center; place-items: center; border: 2px solid var(--ink); border-radius: 50%; background: var(--white); font-size: 13px; font-weight: 900; line-height: 1; pointer-events: none; }
 .rule-song { background: var(--blue); }
 .rule-react { background: var(--sun); }
 .rule-skip { background: var(--coral); }
@@ -170,9 +169,10 @@ body {
   .landing-energy { grid-template-columns: 38px 1fr; }
   .energy-bars { display: none; }
   .landing-how-heading { align-items: flex-start; flex-direction: column; gap: 3px; }
-  .landing-rules { grid-template-columns: 1fr; gap: 12px; }
+  .landing-rules { grid-template-columns: 1fr; gap: 0; }
   .landing-rule { grid-template-columns: 42px 1fr; grid-template-rows: 1fr; min-height: 94px; align-items: center; padding: 12px 14px; }
-  .landing-rule::after { content: "↓"; top: auto; right: 50%; bottom: -18px; transform: translateX(50%); }
+  .rule-connector { width: 26px; height: 18px; margin: -2px 0; border-radius: 12px; font-size: 0; }
+  .rule-connector::after { content: "↓"; font-size: 13px; }
   .landing-rule .rule-step { position: absolute; top: 9px; left: 10px; }
   .landing-rule .rule-icon { grid-column: 1; justify-self: start; font-size: 29px; }
   .landing-rule > div { grid-column: 2; align-self: center; }
@@ -209,7 +209,7 @@ button { color: inherit; }
   align-items: center;
 }
 
-.topbar { justify-content: space-between; margin-bottom: 58px; }
+.topbar { position: relative; z-index: 10; justify-content: space-between; margin-bottom: 58px; }
 
 .brand {
   display: inline-flex;
@@ -494,7 +494,7 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 }
 .host-toast { bottom: 22px; }
 
-.shape { position: fixed; z-index: -1; border: 2px solid var(--ink); will-change: transform; }
+.shape { position: fixed; z-index: -1; border: 2px solid var(--ink); pointer-events: none; will-change: transform; }
 .shape-one { width: 80px; height: 80px; top: 12%; left: -38px; border-radius: 50%; background: var(--blue); animation: shape-float-one 8s ease-in-out infinite; }
 .shape-two { width: 62px; height: 62px; top: 4%; right: 4%; background: var(--sun); transform: rotate(14deg); animation: shape-float-two 10s ease-in-out infinite; }
 .shape-three { width: 34px; height: 110px; bottom: 6%; right: 2%; background: var(--coral); transform: rotate(-35deg); animation: shape-float-three 9s ease-in-out infinite; }
@@ -612,12 +612,12 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 
 .legal-shell { width: min(1080px, calc(100% - (var(--page-gutter) * 2))); margin-inline: auto; padding: 26px 0 48px; }
 .legal-topbar { margin-bottom: 42px; }
-.legal-home-link { border-bottom: 2px solid var(--ink); color: var(--ink); font-size: 11px; font-weight: 900; text-decoration: none; }
+.legal-home-link { display: inline-flex; min-height: 34px; align-items: center; border-bottom: 2px solid var(--ink); color: var(--ink); font-size: 11px; font-weight: 900; text-decoration: none; }
 .legal-home-link:hover { background: var(--sun); }
 .legal-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 44px; align-items: end; border: 2px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); padding: clamp(24px, 5vw, 52px); overflow: hidden; }
 .legal-mint .legal-hero { background: var(--mint); }
 .legal-blue .legal-hero { background: var(--blue); }
-.legal-hero::after { content: "✦"; position: absolute; top: -24px; right: 28%; color: var(--sun); font-size: 92px; line-height: 1; transform: rotate(12deg); -webkit-text-stroke: 2px var(--ink); }
+.legal-hero::after { content: "✦"; position: absolute; top: -24px; right: 28%; color: var(--sun); font-size: 92px; line-height: 1; pointer-events: none; transform: rotate(12deg); -webkit-text-stroke: 2px var(--ink); }
 .legal-hero h1 { max-width: 760px; margin: 8px 0 16px; font-size: clamp(56px, 10vw, 112px); line-height: .84; letter-spacing: -.075em; }
 .legal-summary { max-width: 680px; margin: 0; font-size: clamp(17px, 2.2vw, 23px); font-weight: 800; line-height: 1.3; letter-spacing: -.02em; }
 .legal-stamp { position: relative; z-index: 1; display: grid; gap: 9px; border: 2px solid var(--ink); background: var(--white); box-shadow: 5px 5px 0 var(--ink); padding: 18px; transform: rotate(1.5deg); }

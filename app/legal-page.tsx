@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 
 type LegalSection = {
@@ -19,11 +18,11 @@ export default function LegalPage({ eyebrow, title, summary, accent, sections }:
   return (
     <main className={`legal-shell legal-${accent}`}>
       <header className="topbar legal-topbar">
-        <Link className="brand" href="/" aria-label="HackMusic home">
+        <a className="brand" href="/" aria-label="HackMusic home">
           <span className="brand-mark">HM</span>
           <span>HackMusic</span>
-        </Link>
-        <Link className="legal-home-link" href="/">← Back to the party</Link>
+        </a>
+        <a className="legal-home-link" href="/">← Back to the party</a>
       </header>
 
       <section className="legal-hero">
@@ -71,7 +70,7 @@ export default function LegalPage({ eyebrow, title, summary, accent, sections }:
         <nav aria-label="Legal pages">
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
-          <Link href="/">Home</Link>
+          <a href="/">Home</a>
         </nav>
       </footer>
     </main>

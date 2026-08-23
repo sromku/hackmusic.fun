@@ -72,6 +72,8 @@ test("renders the create and join landing page", async () => {
   assert.match(landingSource, /localStorage\.key\(index\)/);
   assert.match(landingSource, /hackmusic:\(\[A-Z0-9\]/);
   assert.match(landingSource, /Clear this browser’s site data/);
+  assert.equal((landingSource.match(/className="rule-connector"/g) ?? []).length, 2);
+  assert.doesNotMatch(landingSource, /next\/link/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/);
 });
 
@@ -95,6 +97,9 @@ test("renders tailored privacy and terms pages", async () => {
   assert.match(terms, /public-performance license/);
   assert.match(terms, /OpenAI Sites/);
   assert.match(terms, /hackmusic\.fun@gmail\.com/);
+  const legalSource = await readFile(new URL("app/legal-page.tsx", projectRoot), "utf8");
+  assert.match(legalSource, /<a className="legal-home-link" href="\/">← Back to the party<\/a>/);
+  assert.doesNotMatch(legalSource, /next\/link|<Link/);
 });
 
 test("renders a code-specific participant room", async () => {

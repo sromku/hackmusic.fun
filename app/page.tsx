@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -162,7 +161,7 @@ export default function Home() {
       <div className="shape shape-two" aria-hidden="true" />
       <div className="shape shape-three" aria-hidden="true" />
       <header className="topbar landing-topbar">
-        <Link className="brand" href="/" aria-label="HackMusic home"><span className="brand-mark">HM</span><span>HackMusic</span></Link>
+        <a className="brand" href="/" aria-label="HackMusic home"><span className="brand-mark">HM</span><span>HackMusic</span></a>
         <span className="landing-tag">🎉 PRIVATE PARTIES · 🔊 LOUD OPINIONS</span>
       </header>
       <section className="landing-hero">
@@ -179,7 +178,9 @@ export default function Home() {
             <div className="landing-how-heading"><strong id="how-it-works-title">THREE MOVES. MAXIMUM DRAMA.</strong><span>⚡ instant party rules</span></div>
             <div className="landing-rules">
               <article className="landing-rule rule-song"><span className="rule-step">01</span><span className="rule-icon" aria-hidden="true">🎵</span><div><strong>Drop a secret song</strong><small>Paste a Spotify track. Nobody sees what’s next.</small></div></article>
+              <span className="rule-connector" aria-hidden="true">→</span>
               <article className="landing-rule rule-react"><span className="rule-step">02</span><span className="rule-icon" aria-hidden="true">🙌</span><div><strong>React out loud</strong><small>Cheers give +3. Boos stay completely anonymous.</small></div></article>
+              <span className="rule-connector" aria-hidden="true">→</span>
               <article className="landing-rule rule-skip"><span className="rule-step">03</span><span className="rule-icon" aria-hidden="true">⏭️</span><div><strong>The crowd can skip</strong><small>Three boos and the next secret song starts.</small></div></article>
             </div>
           </section>
@@ -208,14 +209,14 @@ export default function Home() {
       </section>
       {hostedRooms.length > 0 && <section className="hosted-history" aria-labelledby="hosted-history-title">
         <div className="hosted-history-heading"><div><p className="eyebrow">🗝️ THIS BROWSER REMEMBERS</p><h2 id="hosted-history-title">Your hosted rooms</h2><p>Private to this browser. No account, no awkward archaeological expedition.</p></div>{hostedRooms.length > visibleHostedRooms && <button type="button" onClick={() => setHistoryOpen(true)}>See all {hostedRooms.length} rooms →</button>}</div>
-        <div className="hosted-room-grid">{hostedRooms.slice(0, visibleHostedRooms).map((room) => <article className="hosted-room-card" key={room.code}><div className="hosted-room-topline"><span className={`hosted-room-status ${room.status}`}>{room.status === "lobby" ? "🌙 LOBBY" : room.status === "live" ? "⚡ LIVE" : room.status === "ended" ? "🏁 ENDED" : "📼 SAVED"}</span><span>{hostedRoomDate(room.createdAt)}</span></div><h3>{room.title}</h3><strong className="hosted-room-code">{room.code}</strong><div className="hosted-room-actions"><Link href={`/e/${room.code}/host`} onClick={() => rememberRoomOpened(room.code)}>🎛️ Host controls →</Link><Link href={`/e/${room.code}`} onClick={() => rememberRoomOpened(room.code)}>Guest view</Link></div></article>)}</div>
+        <div className="hosted-room-grid">{hostedRooms.slice(0, visibleHostedRooms).map((room) => <article className="hosted-room-card" key={room.code}><div className="hosted-room-topline"><span className={`hosted-room-status ${room.status}`}>{room.status === "lobby" ? "🌙 LOBBY" : room.status === "live" ? "⚡ LIVE" : room.status === "ended" ? "🏁 ENDED" : "📼 SAVED"}</span><span>{hostedRoomDate(room.createdAt)}</span></div><h3>{room.title}</h3><strong className="hosted-room-code">{room.code}</strong><div className="hosted-room-actions"><a href={`/e/${room.code}/host`} onClick={() => rememberRoomOpened(room.code)}>🎛️ Host controls →</a><a href={`/e/${room.code}`} onClick={() => rememberRoomOpened(room.code)}>Guest view</a></div></article>)}</div>
       </section>}
       <footer className="landing-footer">
         <span>Chaos-ed by <a href="https://sromku.com" target="_blank" rel="noreferrer">@sromku ↗</a> and an AI Codex agent.</span>
         <nav aria-label="Legal links"><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
         <span>SOTA unlocked. Common sense still in beta.</span>
       </footer>
-      {historyOpen && <div className="hosted-history-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setHistoryOpen(false)}><section className="hosted-history-sheet" role="dialog" aria-modal="true" aria-labelledby="all-hosted-rooms-title"><div className="hosted-sheet-handle" aria-hidden="true" /><div className="hosted-sheet-heading"><div><p className="eyebrow">🗃️ THE HOST ARCHIVES</p><h2 id="all-hosted-rooms-title">All rooms from this browser</h2></div><button ref={closeHistoryRef} type="button" onClick={() => setHistoryOpen(false)} aria-label="Close hosted room history">×</button></div><div className="hosted-sheet-list">{hostedRooms.map((room) => <article key={room.code}><span className={`hosted-room-status ${room.status}`}>{room.status === "lobby" ? "🌙 LOBBY" : room.status === "live" ? "⚡ LIVE" : room.status === "ended" ? "🏁 ENDED" : "📼 SAVED"}</span><div><strong>{room.title}</strong><small>Room {room.code} · {hostedRoomDate(room.createdAt)}</small></div><Link href={`/e/${room.code}/host`} onClick={() => { rememberRoomOpened(room.code); setHistoryOpen(false); }}>Open host →</Link></article>)}</div><p className="hosted-sheet-note">🧠 Clear this browser’s site data and these shortcuts disappear. The actual event data is unaffected.</p></section></div>}
+      {historyOpen && <div className="hosted-history-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setHistoryOpen(false)}><section className="hosted-history-sheet" role="dialog" aria-modal="true" aria-labelledby="all-hosted-rooms-title"><div className="hosted-sheet-handle" aria-hidden="true" /><div className="hosted-sheet-heading"><div><p className="eyebrow">🗃️ THE HOST ARCHIVES</p><h2 id="all-hosted-rooms-title">All rooms from this browser</h2></div><button ref={closeHistoryRef} type="button" onClick={() => setHistoryOpen(false)} aria-label="Close hosted room history">×</button></div><div className="hosted-sheet-list">{hostedRooms.map((room) => <article key={room.code}><span className={`hosted-room-status ${room.status}`}>{room.status === "lobby" ? "🌙 LOBBY" : room.status === "live" ? "⚡ LIVE" : room.status === "ended" ? "🏁 ENDED" : "📼 SAVED"}</span><div><strong>{room.title}</strong><small>Room {room.code} · {hostedRoomDate(room.createdAt)}</small></div><a href={`/e/${room.code}/host`} onClick={() => { rememberRoomOpened(room.code); setHistoryOpen(false); }}>Open host →</a></article>)}</div><p className="hosted-sheet-note">🧠 Clear this browser’s site data and these shortcuts disappear. The actual event data is unaffected.</p></section></div>}
     </main>
   );
 }

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import Image from "next/image";
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -529,14 +528,14 @@ export default function HostRoom({ code }: { code: string }) {
     }
   }
 
-  if (error) return <main className="missing-room"><span className="brand-mark">HM</span><p className="eyebrow">HOST KEY REQUIRED</p><h1>{error}</h1><Link href={`/e/${code}`}>Open the participant room →</Link><Link href="/">Create a new room →</Link></main>;
+  if (error) return <main className="missing-room"><span className="brand-mark">HM</span><p className="eyebrow">HOST KEY REQUIRED</p><h1>{error}</h1><a href={`/e/${code}`}>Open the participant room →</a><a href="/">Create a new room →</a></main>;
   if (!party) return <main className="loading-room"><span className="brand-mark">HM</span><p>Warming up room {code}…</p></main>;
 
   const cheers = party.reactions.filter((reaction) => reaction.tone === "up").length;
   const boos = party.reactions.filter((reaction) => reaction.tone === "down").length;
   const spotifyCallbackUrl = shareUrl ? new URL("/api/spotify/callback", shareUrl).toString() : "";
   return <main className="host-shell">
-    <header className="topbar"><Link className="brand" href="/"><span className="brand-mark">HM</span><span>HackMusic Host</span></Link><Link className="participant-link" href={`/e/${code}`}>🎉 Open participant page →</Link></header>
+    <header className="topbar"><a className="brand" href="/"><span className="brand-mark">HM</span><span>HackMusic Host</span></a><a className="participant-link" href={`/e/${code}`}>🎉 Open participant page →</a></header>
     <div className="host-heading"><div><p className="eyebrow">🎛️ HOST CONTROL · ROOM {party.code}</p><h1>{party.title}</h1></div><span className={`host-status ${party.status}`}>{party.status === "ended" ? "🏁 PARTY ENDED" : party.status === "lobby" ? "🌙 LOBBY OPEN" : "⚡ LIVE"}</span></div>
 
     <section className="share-room-card"><div className="share-code"><span>📱 ROOM CODE</span><strong>{party.code}</strong><p>{shareUrl}</p><div><button type="button" onClick={() => void copyInvite()}>📋 Copy invite</button><button type="button" onClick={() => void shareInvite()}>🚀 Share</button></div></div>{qrUrl && <Image unoptimized src={qrUrl} width={180} height={180} alt={`QR code to join room ${party.code}`} />}</section>
