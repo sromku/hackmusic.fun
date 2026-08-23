@@ -94,6 +94,17 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 - `npm test`: build the starter and verify its rendered loading skeleton
 - `npm run deploy:prepare`: validate and package a committed OpenAI Sites release
 - `npm run db:generate`: generate Drizzle migrations after schema changes
+- `npm run admin`: start the read-only HackMusic database dashboard on `127.0.0.1`
+
+## Local Admin Dashboard
+
+The admin dashboard is deliberately local-only. It reads production data through a secret-protected, read-only API and never returns host control keys or the identity behind a boo.
+
+1. Put the hosted `HACKMUSIC_ADMIN_KEY` in an ignored `.env.admin` file using `.env.admin.example` as the template.
+2. Run `npm run admin`.
+3. Open `http://127.0.0.1:4177`.
+
+The local server keeps the admin key out of browser storage and binds only to the current computer. Stop it with Control-C.
 
 ## Deploy to OpenAI Sites
 

@@ -246,6 +246,22 @@ test("starts Spotify PKCE without exposing a client secret", async () => {
   assert.equal(tokenResponse.status, 401);
 });
 
+test("keeps database administration secret, local, and read only", async () => {
+  const routeSource = await readFile(new URL("app/api/admin/route.ts", projectRoot), "utf8");
+  assert.match(routeSource, /authorization/);
+  assert.match(routeSource, /no-store, private/);
+  assert.match(routeSource, /x-robots-tag/);
+  const adminSource = await readFile(new URL("db/admin.ts", projectRoot), "utf8");
+  assert.doesNotMatch(adminSource, /host_pin/);
+  assert.match(adminSource, /Anonymous boo/);
+  const localServer = await readFile(new URL("tools/admin/server.mjs", projectRoot), "utf8");
+  assert.match(localServer, /server\.listen\(port, "127\.0\.0\.1"/);
+  assert.match(localServer, /authorization: `Bearer \$\{adminKey\}`/);
+  await access(new URL("tools/admin/index.html", projectRoot));
+  await access(new URL("tools/admin/admin.css", projectRoot));
+  await access(new URL("tools/admin/admin.js", projectRoot));
+});
+
 test("ships product metadata and removes starter artifacts", async () => {
   const response = await render();
   const html = await response.text();

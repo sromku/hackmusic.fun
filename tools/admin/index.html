@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>HackMusic Local Admin</title>
+    <link rel="stylesheet" href="/admin.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand"><span>HM</span><strong>HackMusic Admin</strong></div>
+        <div class="local-pill">🔒 LOCAL · READ ONLY</div>
+      </header>
+
+      <section class="hero">
+        <div><p class="eyebrow">🪩 DATABASE BACKSTAGE</p><h1>Party<br>evidence.</h1></div>
+        <div class="hero-note"><strong>No destructive buttons.</strong><span>No host keys. No boo identities. Just the useful truth.</span></div>
+      </section>
+
+      <section class="toolbar">
+        <label for="search">FIND A ROOM</label>
+        <input id="search" type="search" placeholder="Room code or event name">
+        <button id="refresh" type="button">↻ Refresh data</button>
+        <span id="updated">Connecting…</span>
+      </section>
+
+      <section id="message" class="message" hidden></section>
+      <section id="metrics" class="metrics" aria-label="Database totals"></section>
+
+      <section class="panel rooms-panel">
+        <div class="panel-title"><h2>🎉 Rooms</h2><span>Newest 100</span></div>
+        <div id="rooms" class="rooms"></div>
+      </section>
+
+      <section id="detail" class="detail" hidden>
+        <div class="detail-heading"><button id="close-detail" type="button">← All rooms</button><div><p id="detail-code" class="eyebrow"></p><h2 id="detail-title"></h2><p id="detail-meta"></p></div></div>
+        <div class="detail-grid">
+          <section class="panel"><div class="panel-title"><h3>👥 Participants</h3><span id="participants-count"></span></div><div id="participants" class="table-wrap"></div></section>
+          <section class="panel"><div class="panel-title"><h3>🎵 Tracks</h3><span id="tracks-count"></span></div><div id="tracks" class="table-wrap"></div></section>
+          <section class="panel"><div class="panel-title"><h3>⚡ Reactions</h3><span id="reactions-count"></span></div><div id="reactions" class="table-wrap"></div></section>
+          <section class="panel"><div class="panel-title"><h3>🔊 Activity</h3><span id="activity-count"></span></div><div id="activity" class="table-wrap"></div></section>
+        </div>
+      </section>
+    </main>
+    <script src="/admin.js" defer></script>
+  </body>
+</html>
