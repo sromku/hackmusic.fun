@@ -183,6 +183,30 @@ test("a targeted one-use handoff rotates the host key and retires the previous b
   assert.equal(newHostControl.data.party.queueMode, "fair");
 });
 
+test("only the active host can rename a live event", async () => {
+  const room = await createRoom(db, { title: "Name Pending Party" });
+
+  const rejected = await action(db, { action: "rename", code: room.code, participantId: room.participantId, pin: "wrong-host-key", title: "Stolen Party Name" });
+  assert.equal(rejected.response.status, 403);
+  assert.equal(db.first("SELECT title FROM events WHERE code = ?", room.code).title, "Name Pending Party");
+
+  const invalid = await action(db, { action: "rename", code: room.code, participantId: room.participantId, pin: room.hostKey, title: "No" });
+  assert.equal(invalid.response.status, 400);
+  assert.match(invalid.data.error, /between 3 and 60/i);
+
+  const renamed = await action(db, { action: "rename", code: room.code, participantId: room.participantId, pin: room.hostKey, title: "  Freshly Scrambled Party  " });
+  assert.equal(renamed.response.status, 200, JSON.stringify(renamed.data));
+  assert.equal(renamed.data.party.title, "Freshly Scrambled Party");
+  assert.equal(db.first("SELECT title FROM events WHERE code = ?", room.code).title, "Freshly Scrambled Party");
+  assert.equal(renamed.data.party.code, room.code);
+
+  const ended = await action(db, { action: "end", code: room.code, participantId: room.participantId, pin: room.hostKey });
+  assert.equal(ended.response.status, 200, JSON.stringify(ended.data));
+  const frozen = await action(db, { action: "rename", code: room.code, participantId: room.participantId, pin: room.hostKey, title: "Too Late Party" });
+  assert.equal(frozen.response.status, 400);
+  assert.match(frozen.data.error, /name is frozen/i);
+});
+
 test("a room rejects participant 101 without corrupting existing membership", async () => {
   const room = await createRoom(db, { title: "Capacity Test Party" });
   const event = db.first("SELECT id FROM events WHERE code = ?", room.code);

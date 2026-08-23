@@ -336,6 +336,15 @@ export async function setQueueMode(code: string, hostKey: string, queueMode: Que
   await getD1().prepare("UPDATE events SET queue_mode = ? WHERE id = ?").bind(queueMode, event.id).run();
 }
 
+export async function renameParty(code: string, hostKey: string, titleInput: string) {
+  const event = await loadEvent(code);
+  if (!event || event.host_pin !== hostKey) throw new PublicError("Host controls belong to the browser holding the aux cable.", 403);
+  if (event.status === "ended") throw new PublicError("This party has ended, so its name is frozen with the scores.");
+  const title = normalizeDisplayName(titleInput);
+  if (title.length < 3 || title.length > 60) throw new PublicError("Use an event name between 3 and 60 characters.");
+  await getD1().prepare("UPDATE events SET title = ? WHERE id = ?").bind(title, event.id).run();
+}
+
 export async function setRoomPasscode(code: string, hostKey: string, passcodeInput: string) {
   const event = await loadEvent(code);
   if (!event || event.host_pin !== hostKey) throw new PublicError("Host controls belong to the browser that created this room.", 403);

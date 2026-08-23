@@ -97,7 +97,7 @@ export async function protectPartyAction(request: Request, action: string, code:
     if (participantId) await consumeRequestLimit(request, { bucket: "claim-host-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 8 });
     return;
   }
-  if (["start", "skip", "advance", "end", "queueMode", "passcode", "prepareHostTransfer", "cancelHostTransfer", "skipProgress"].includes(action)) {
+  if (["start", "skip", "advance", "end", "rename", "queueMode", "passcode", "prepareHostTransfer", "cancelHostTransfer", "skipProgress"].includes(action)) {
     await consumeRequestLimit(request, { bucket: "host-control", subject: normalizedCode, windowMs: 60_000, maximum: 90 });
   }
 }

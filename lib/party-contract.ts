@@ -133,6 +133,7 @@ export type PartyAction =
   | "skip"
   | "advance"
   | "end"
+  | "rename"
   | "queueMode"
   | "passcode"
   | "prepareHostTransfer"

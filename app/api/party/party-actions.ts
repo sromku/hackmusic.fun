@@ -8,6 +8,7 @@ import {
   reactToCurrent,
   readParty,
   prepareHostTransfer,
+  renameParty,
   recordBooSkipProgress,
   removePendingTrack,
   setParticipantAvatar,
@@ -27,6 +28,7 @@ export function partyActionFallback(action?: PartyAction) {
   if (action === "react") return "Your reaction did not go through. Check your connection and try again.";
   if (action === "remove") return "We could not remove that song. Refresh your list and try again.";
   if (action === "avatar") return "Your party face did not change. Try another emoji.";
+  if (action === "rename") return "We could not rename the event. The current name is still safely intact.";
   if (action === "passcode") return "We could not update the room passcode. Try again—the current passcode is still active.";
   if (action === "prepareHostTransfer") return "We could not prepare the host handoff. The current host still has control.";
   if (action === "cancelHostTransfer") return "We could not cancel the host handoff. Create a new handoff link to replace it.";
@@ -103,6 +105,11 @@ export async function executePartyAction(request: Request, input: PartyRequest):
       if (!input.queueMode || !input.pin) invalidAction();
       await protectPartyAction(request, input.action, code);
       await setQueueMode(code, input.pin, input.queueMode);
+      break;
+    case "rename":
+      if (!input.title || !input.pin) invalidAction();
+      await protectPartyAction(request, input.action, code);
+      await renameParty(code, input.pin, input.title);
       break;
     case "passcode":
       if (!input.passcode || !input.pin) invalidAction();

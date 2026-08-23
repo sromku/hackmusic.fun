@@ -336,6 +336,10 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /Computer/);
   assert.doesNotMatch(source, /Android auto-lock is blocked|stop Android from auto-locking/);
   assert.match(source, /Rare host moves/);
+  assert.match(source, /Rename event/);
+  assert.match(source, /action: "rename"/);
+  assert.match(source, /Rename the chaos/);
+  assert.match(source, /Only the name changes/);
   assert.match(source, /Pass the aux cable/);
   assert.match(source, /HIGHLY CONTROLLED MUTINY/);
   assert.match(source, /action: "prepareHostTransfer"/);

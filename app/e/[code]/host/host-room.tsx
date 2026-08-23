@@ -31,6 +31,9 @@ export default function HostRoom({ code }: { code: string }) {
   const [roomSyncing, setRoomSyncing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameTitle, setRenameTitle] = useState("");
+  const [renameBusy, setRenameBusy] = useState(false);
   const [handoffOpen, setHandoffOpen] = useState(false);
   const [handoffInvite, setHandoffInvite] = useState<(HostTransfer & { url: string }) | null>(null);
   const [handoffBusy, setHandoffBusy] = useState(false);
@@ -48,6 +51,7 @@ export default function HostRoom({ code }: { code: string }) {
   const knownSoundActivityRef = useRef<Set<string> | null>(null);
   const soundActivityCursorRef = useRef("");
   const cancelEndRef = useRef<HTMLButtonElement | null>(null);
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
   const closeHandoffRef = useRef<HTMLButtonElement | null>(null);
   const spotifyPlayerRef = useRef<SpotifyPlayer | null>(null);
   const lastSpotifyTrackRef = useRef("");
@@ -192,6 +196,19 @@ export default function HostRoom({ code }: { code: string }) {
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [endConfirmOpen]);
+
+  useEffect(() => {
+    if (!renameOpen) return;
+    const focusFrame = window.requestAnimationFrame(() => renameInputRef.current?.focus());
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !renameBusy) setRenameOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [renameBusy, renameOpen]);
 
   useEffect(() => {
     if (!handoffOpen) return;
@@ -487,7 +504,7 @@ export default function HostRoom({ code }: { code: string }) {
     finally { setBusy(false); }
   }
 
-  function rememberTransferredRoom(nextParty: HostParty) {
+  function rememberHostedRoom(nextParty: HostParty) {
     const storageKey = "hackmusic:hostedRooms";
     const now = new Date().toISOString();
     let rooms: Array<{ code: string; title: string; status: string; createdAt: string; lastOpenedAt: string }> = [];
@@ -497,8 +514,38 @@ export default function HostRoom({ code }: { code: string }) {
     } catch {
       // A damaged shortcut list should not block a host handoff.
     }
-    const shortcut = { code: nextParty.code, title: nextParty.title, status: nextParty.status, createdAt: now, lastOpenedAt: now };
+    const existing = rooms.find((room) => room.code === nextParty.code);
+    const shortcut = { code: nextParty.code, title: nextParty.title, status: nextParty.status, createdAt: existing?.createdAt ?? now, lastOpenedAt: now };
     window.localStorage.setItem(storageKey, JSON.stringify([shortcut, ...rooms.filter((room) => room.code !== nextParty.code)].slice(0, 100)));
+  }
+
+  function openRename() {
+    if (!party) return;
+    setRenameTitle(party.title);
+    setRenameOpen(true);
+  }
+
+  async function renameEvent(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const title = renameTitle.trim();
+    if (title.length < 3 || title.length > 60) {
+      setMessage("✏️ Give the event a name between 3 and 60 characters.");
+      return;
+    }
+    setRenameBusy(true);
+    try {
+      const response = await fetch("/api/party", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "rename", code, participantId, pin: hostKey, title }) });
+      const data = await response.json() as { error?: string; party?: HostParty };
+      if (!response.ok || !data.party) throw new Error(data.error ?? "Could not rename the event.");
+      setParty(data.party);
+      rememberHostedRoom(data.party);
+      setRenameOpen(false);
+      setMessage(`✏️ Event renamed to “${data.party.title}”. Same chaos, fresher label.`);
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "Could not rename the event. The old name is still safe.");
+    } finally {
+      setRenameBusy(false);
+    }
   }
 
   async function prepareHandoff(targetParticipantId: string) {
@@ -565,7 +612,7 @@ export default function HostRoom({ code }: { code: string }) {
       window.localStorage.setItem(`hackmusic:${code}:host`, data.hostKey);
       window.sessionStorage.removeItem(`hackmusic:${code}:handoff`);
       window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
-      rememberTransferredRoom(data.party);
+      rememberHostedRoom(data.party);
       setHostKey(data.hostKey);
       setParty(data.party);
       setHandoffToken("");
@@ -661,7 +708,7 @@ export default function HostRoom({ code }: { code: string }) {
   const spotifyCallbackUrl = shareUrl ? new URL("/api/spotify/callback", shareUrl).toString() : "";
   return <main className="host-shell">
     <header className="topbar"><a className="brand" href="/"><span className="brand-mark">HM</span><span>HackMusic Host</span></a><a className="participant-link" href={`/e/${code}`} target="_blank" rel="noreferrer">{party.status === "ended" ? "🏆 View final party page ↗" : "🎉 Open participant page safely ↗"}</a></header>
-    <div className="host-heading"><div><p className="eyebrow">🎛️ HOST CONTROL · ROOM {party.code}</p><h1>{party.title}</h1></div><div className="host-heading-actions"><span className={`host-status ${party.status}`}>{party.status === "ended" ? "🏁 PARTY ENDED" : party.status === "lobby" ? "🌙 LOBBY OPEN" : "⚡ LIVE"}</span>{party.status !== "ended" && <><button className="host-soft-refresh" type="button" onClick={() => void refreshParty(true)} disabled={roomSyncing}>{roomSyncing ? "↻ SYNCING…" : "↻ REFRESH ROOM DATA"}</button><small>Safe refresh · music keeps playing</small></>}</div></div>
+    <div className="host-heading"><div><p className="eyebrow">🎛️ HOST CONTROL · ROOM {party.code}</p><h1>{party.title}</h1>{party.status !== "ended" && <button className="host-rename-trigger" type="button" onClick={openRename}>✏️ Rename event</button>}</div><div className="host-heading-actions"><span className={`host-status ${party.status}`}>{party.status === "ended" ? "🏁 PARTY ENDED" : party.status === "lobby" ? "🌙 LOBBY OPEN" : "⚡ LIVE"}</span>{party.status !== "ended" && <><button className="host-soft-refresh" type="button" onClick={() => void refreshParty(true)} disabled={roomSyncing}>{roomSyncing ? "↻ SYNCING…" : "↻ REFRESH ROOM DATA"}</button><small>Safe refresh · music keeps playing</small></>}</div></div>
 
     {(syncProblem || error) && <section className={`host-sync-banner ${error ? "access" : "offline"}`} role="status"><div><strong>{error ? "🔐 Host access needs attention" : "📡 Room data is reconnecting"}</strong><span>{error || syncProblem}</span><small>{error ? "Spotify may continue, but host controls need the creator browser." : "Do not reload. Automatic retries are running and Spotify is untouched."}</small></div><button type="button" onClick={() => void refreshParty(true)} disabled={roomSyncing}>{roomSyncing ? "Trying…" : "Try now →"}</button></section>}
 
@@ -697,6 +744,7 @@ export default function HostRoom({ code }: { code: string }) {
     <section className="leaderboard-card"><div className="card-title-row"><h2>{party.status === "ended" ? "🏆 FINAL SCOREBOARD" : party.status === "lobby" ? "🌙 LOBBY ROSTER" : "⚡ LIVE SCOREBOARD"}</h2><span>🎉 {party.people.length} PLAYERS</span></div><ol>{[...party.people].sort((a, b) => b.score - a.score).map((person, index) => <li key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><b>{party.status === "lobby" ? index + 1 : index === 0 ? "👑" : index + 1}</b><strong>{person.name}</strong><span>{person.score} pts</span></li>)}</ol></section>
 
     {message && <div className="toast host-toast" role="status">{message}</div>}
+    {party.status !== "ended" && renameOpen && <div className="modal-backdrop host-rename-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && !renameBusy && setRenameOpen(false)}><section className="host-rename-card" role="dialog" aria-modal="true" aria-labelledby="host-rename-title" aria-describedby="host-rename-description"><div className="host-rename-handle" aria-hidden="true" /><div className="modal-topline"><div><p className="eyebrow">✏️ SAME PARTY, NEW LABEL</p><h2 id="host-rename-title">Rename the chaos.</h2></div><button className="close-button" type="button" onClick={() => setRenameOpen(false)} disabled={renameBusy} aria-label="Close event rename">×</button></div><p id="host-rename-description">Only the name changes. Room code, passcode, songs, scores, history, and questionable decisions remain exactly where you left them.</p><form className="host-rename-form" onSubmit={renameEvent}><label htmlFor="host-event-name">EVENT NAME</label><input ref={renameInputRef} id="host-event-name" value={renameTitle} onChange={(event) => setRenameTitle(event.target.value)} minLength={3} maxLength={60} required /><small>{renameTitle.trim().length}/60 characters · dramatic rebranding is optional</small><div><button className="host-rename-cancel" type="button" onClick={() => setRenameOpen(false)} disabled={renameBusy}>Never mind</button><button className="host-rename-save" type="submit" disabled={renameBusy || renameTitle.trim() === party.title}>{renameBusy ? "Renaming the paperwork…" : "✨ Save new name"}</button></div></form></section></div>}
     {party.status !== "ended" && handoffOpen && <div className="modal-backdrop host-transfer-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setHandoffOpen(false)}><section className="host-transfer-card" role="dialog" aria-modal="true" aria-labelledby="host-transfer-title"><div className="host-transfer-handle" aria-hidden="true" /><div className="modal-topline"><div><p className="eyebrow">🎚️ HIGHLY CONTROLLED MUTINY</p><h2 id="host-transfer-title">Pass the aux.</h2></div><button ref={closeHandoffRef} className="close-button" type="button" onClick={() => setHandoffOpen(false)} aria-label="Close host handoff">×</button></div>{handoffInvite ? <div className="host-transfer-ready"><div className="host-transfer-ticket"><span>ONE-USE HOST LINK FOR</span><strong>{handoffInvite.targetName}</strong><small>Expires at {new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(handoffInvite.expiresAt))}</small></div><p>Send this only to the chosen human. When they accept, this browser loses host control and disconnects from DJ duty.</p><code>{handoffInvite.url}</code><div className="host-transfer-actions"><button type="button" onClick={() => void copyHandoff()}>📋 Copy handoff</button><button type="button" onClick={() => void shareHandoff()}>🚀 Share privately</button></div><button className="host-transfer-cancel" type="button" disabled={handoffBusy} onClick={() => void cancelHandoff()}>{handoffBusy ? "Cancelling…" : "🧯 Cancel this tiny coup"}</button></div> : <><p className="host-transfer-intro">Choose one joined human. They get a targeted link that works once, for 10 minutes. No permanent master password wandering around the internet.</p><div className="host-transfer-warning"><strong>🔊 The speaker stays with the device, not the crown.</strong><span>The new host must connect Spotify on their device and press Start speaker. When they accept, this host tab retires automatically.</span></div><div className="host-transfer-people" role="group" aria-label="Humans eligible to become host">{party.people.filter((person) => person.name !== "You").map((person) => <button type="button" disabled={handoffBusy} onClick={() => void prepareHandoff(person.id)} key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><span><strong>{person.name}</strong><small>{handoffBusy ? "Preparing the paperwork…" : "Make this human the next host"}</small></span><b>→</b></button>)}</div>{party.people.length <= 1 && <div className="host-transfer-empty"><strong>🦗 No eligible humans yet.</strong><span>Invite someone into the room first. Transferring control to yourself is just refreshing with extra paperwork.</span></div>}<small className="host-transfer-footnote">🔐 The raw handoff secret lives only in the link. HackMusic stores a one-way hash until it expires.</small></>}</section></div>}
     {party.status !== "ended" && endConfirmOpen && <div className="modal-backdrop end-confirm-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setEndConfirmOpen(false)}><section className="end-confirm-card" role="dialog" aria-modal="true" aria-labelledby="end-confirm-title" aria-describedby="end-confirm-description"><p className="eyebrow">🚨 POINT OF NO RETURN</p><h2 id="end-confirm-title">End the party? 🥲</h2><p id="end-confirm-description">This freezes every score and closes the room for new songs and votes. There is no undo.</p><div className="end-confirm-actions"><button ref={cancelEndRef} className="keep-partying" type="button" onClick={() => setEndConfirmOpen(false)}>🎉 Nope, keep partying</button><button className="really-end-party" type="button" disabled={busy} onClick={() => { setEndConfirmOpen(false); void control("end"); }}>{busy ? "⏳ Ending…" : "🏁 Yes, end it forever"}</button></div><small>Press Escape or tap outside to cancel.</small></section></div>}
   </main>;
