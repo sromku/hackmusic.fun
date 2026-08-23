@@ -11,7 +11,6 @@
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "admin": "node tools/admin/server.mjs",
     "deploy:prepare": "./scripts/prepare-openai-sites-deploy.sh",
     "db:generate": "drizzle-kit generate"
   },

@@ -73,7 +73,7 @@ const sections = [
     id: "third-party",
     title: "Third-party infrastructure",
     content: <>
-      <p>HackMusic depends on third parties including Spotify, OpenAI Sites and its infrastructure providers, domain and network providers, browsers, operating systems, and connected speakers. Their services, content, security, pricing, availability, advertisements, subscriptions, and policies are outside our control.</p>
+      <p>HackMusic depends on third parties including Spotify, OpenAI Sites, ChatGPT sign-in for the owner-only admin page, infrastructure providers, domain and network providers, browsers, operating systems, and connected speakers. Their services, content, security, pricing, availability, advertisements, subscriptions, and policies are outside our control.</p>
       <div className="legal-callout">
         <strong>🧩 Many moving pieces.</strong>
         <span>If Spotify, OpenAI infrastructure, the internet, or your speaker takes a nap, HackMusic cannot promise to wake it.</span>

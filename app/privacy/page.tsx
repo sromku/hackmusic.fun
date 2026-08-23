@@ -37,6 +37,7 @@ const sections = [
         <li>Random room, participant, submission, reaction, activity, and host-control identifiers.</li>
         <li>Event status, queue order, timestamps, reaction history, and final scores.</li>
         <li>Basic request and security information that our hosting and network providers may process, such as IP address, browser/device details, request logs, and error information.</li>
+        <li>For the owner-only admin page, the ChatGPT account identifier and email forwarded by OpenAI Sites are used at request time to authenticate the owner and enforce the email allowlist. HackMusic does not add them to the event database.</li>
       </ul>
       <p>We do not ask for a HackMusic account, legal name, postal address, phone number, or payment information during normal play.</p>
     </>,
@@ -45,7 +46,7 @@ const sections = [
     id: "use",
     title: "How we use information",
     content: <>
-      <p>We use information only to provide and protect the service: create and operate rooms, remember participants and the host device, validate Spotify tracks, control authorized playback, calculate scores, display event history, prevent abuse, diagnose failures, answer support requests, and comply with law.</p>
+      <p>We use information only to provide and protect the service: create and operate rooms, remember participants and the host device, validate Spotify tracks, control authorized playback, calculate scores, display event history, authenticate the owner-only administration page, prevent abuse, diagnose failures, answer support requests, and comply with law.</p>
       <p>We do not sell personal data. We do not use event data for targeted advertising, cross-site behavioral profiling, credit decisions, employment decisions, or other legally significant automated decisions.</p>
     </>,
   },
@@ -81,7 +82,7 @@ const sections = [
     content: <>
       <p>We disclose information only as reasonably necessary to:</p>
       <ul>
-        <li>OpenAI Sites and infrastructure/service providers that host, secure, route, store, and operate HackMusic.</li>
+        <li>OpenAI Sites and ChatGPT sign-in, plus infrastructure/service providers that host, authenticate, secure, route, store, and operate HackMusic.</li>
         <li>Spotify, when a track is validated or the host authorizes and controls playback.</li>
         <li>Other people in the same event room. Display names, cheers, tracks, event history, and scores may be visible as described in the interface; boo identities are hidden from participant views.</li>
         <li>Professional advisers, authorities, or other parties when reasonably necessary to comply with law, protect rights and safety, investigate abuse, or handle a business transfer.</li>

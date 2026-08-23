@@ -12,6 +12,8 @@ The host can see and manage the waiting queue, enable reaction sounds, prevent t
 
 The home page keeps a browser-local list of rooms created on that device, with quick links back to host controls. This shortcut history is not an account and disappears if the browser's site data is cleared.
 
+HackMusic has a separate read-only owner dashboard at `/admin`. It requires ChatGPT sign-in and a server-side owner email allowlist, is excluded from indexing, never returns host keys, and keeps boo identities anonymous.
+
 ## Product principles
 
 - Fun and understandable within seconds.

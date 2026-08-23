@@ -1,24 +1,8 @@
-import { env } from "cloudflare:workers";
 import { readAdminOverview, readAdminRoom } from "../../../db/admin";
+import { adminAccessForEmail } from "../../admin-auth";
+import { getChatGPTUser } from "../../chatgpt-auth";
 
 export const dynamic = "force-dynamic";
-
-function runtimeSecret() {
-  return (env as unknown as { ADMIN_API_KEY?: string }).ADMIN_API_KEY?.trim() ?? "";
-}
-
-async function secretsMatch(left: string, right: string) {
-  const encode = (value: string) => new TextEncoder().encode(value);
-  const [leftHash, rightHash] = await Promise.all([
-    crypto.subtle.digest("SHA-256", encode(left)),
-    crypto.subtle.digest("SHA-256", encode(right)),
-  ]);
-  const leftBytes = new Uint8Array(leftHash);
-  const rightBytes = new Uint8Array(rightHash);
-  let difference = leftBytes.length ^ rightBytes.length;
-  for (let index = 0; index < leftBytes.length; index += 1) difference |= leftBytes[index] ^ rightBytes[index];
-  return difference === 0;
-}
 
 function json(data: unknown, status = 200, extraHeaders?: HeadersInit) {
   return Response.json(data, {
@@ -34,13 +18,11 @@ function json(data: unknown, status = 200, extraHeaders?: HeadersInit) {
 }
 
 export async function GET(request: Request) {
-  const expected = runtimeSecret();
-  if (!expected) return json({ error: "Admin access is not configured." }, 503);
-  const authorization = request.headers.get("authorization") ?? "";
-  const supplied = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
-  if (!supplied || !(await secretsMatch(supplied, expected))) {
-    return json({ error: "Admin access denied." }, 401, { "www-authenticate": "Bearer" });
-  }
+  const user = await getChatGPTUser();
+  if (!user) return json({ error: "Sign in with ChatGPT to continue." }, 401);
+  const access = adminAccessForEmail(user.email);
+  if (!access.configured) return json({ error: "The admin owner allowlist is not configured." }, 503);
+  if (!access.allowed) return json({ error: "This ChatGPT account is not allowed to access HackMusic admin." }, 403);
 
   try {
     const code = new URL(request.url).searchParams.get("code")?.trim();

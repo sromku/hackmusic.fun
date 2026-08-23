@@ -5,14 +5,14 @@ import ts from "typescript";
 
 const projectRoot = new URL("../", import.meta.url);
 
-async function render(pathname = "/") {
+async function render(pathname = "/", requestHeaders = {}, bindings = {}) {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}-${pathname}`);
   const { default: worker } = await import(workerUrl.href);
 
   return worker.fetch(
-    new Request(`http://localhost${pathname}`, { headers: { accept: "text/html", host: "localhost" } }),
-    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
+    new Request(`http://localhost${pathname}`, { headers: { accept: "text/html", host: "localhost", ...requestHeaders } }),
+    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) }, ...bindings },
     { waitUntil() {}, passThroughOnException() {} },
   );
 }
@@ -166,6 +166,7 @@ test("publishes crawler, sitemap, and install metadata without exposing private 
   assert.match(robots, /Disallow: \/api\//);
   assert.match(robots, /Disallow: \/e\//);
   assert.match(robots, /Disallow: \/host/);
+  assert.match(robots, /Disallow: \/admin/);
   assert.match(robots, /Sitemap: https:\/\/hackmusic\.fun\/sitemap\.xml/);
 
   const sitemapResponse = await render("/sitemap.xml");
@@ -271,20 +272,33 @@ test("starts Spotify PKCE without exposing a client secret", async () => {
   assert.equal(tokenResponse.status, 401);
 });
 
-test("keeps database administration secret, local, and read only", async () => {
+test("protects the hosted read-only admin with ChatGPT identity and an owner allowlist", async () => {
   const routeSource = await readFile(new URL("app/api/admin/route.ts", projectRoot), "utf8");
-  assert.match(routeSource, /authorization/);
+  assert.match(routeSource, /getChatGPTUser/);
+  assert.match(routeSource, /adminAccessForEmail/);
+  assert.doesNotMatch(routeSource, /authorization|ADMIN_API_KEY|Bearer/);
   assert.match(routeSource, /no-store, private/);
   assert.match(routeSource, /x-robots-tag/);
+  const authSource = await readFile(new URL("app/admin-auth.ts", projectRoot), "utf8");
+  assert.match(authSource, /ADMIN_ALLOWED_EMAILS/);
+  assert.match(authSource, /adminAllowlistAccess/);
+  const allowlist = await loadTypeScriptModule("lib/admin-allowlist.ts");
+  assert.deepEqual(allowlist.adminAllowlistAccess(" OWNER@Example.com ", "other@example.com, owner@example.COM"), { configured: true, allowed: true });
+  assert.deepEqual(allowlist.adminAllowlistAccess("stranger@example.com", "owner@example.com"), { configured: true, allowed: false });
+  assert.deepEqual(allowlist.adminAllowlistAccess("owner@example.com", ""), { configured: false, allowed: false });
+  const pageSource = await readFile(new URL("app/admin/page.tsx", projectRoot), "utf8");
+  assert.match(pageSource, /requireChatGPTUser\("\/admin"\)/);
+  assert.match(pageSource, /OWNER ACCESS ONLY/);
+  assert.match(pageSource, /robots: \{ index: false/);
+  const dashboardSource = await readFile(new URL("app/admin/admin-dashboard.tsx", projectRoot), "utf8");
+  assert.match(dashboardSource, /Owner only\. Read only/);
+  assert.match(dashboardSource, /\/api\/admin/);
+  assert.match(dashboardSource, /No host keys/);
   const adminSource = await readFile(new URL("db/admin.ts", projectRoot), "utf8");
   assert.doesNotMatch(adminSource, /host_pin/);
   assert.match(adminSource, /Anonymous boo/);
-  const localServer = await readFile(new URL("tools/admin/server.mjs", projectRoot), "utf8");
-  assert.match(localServer, /server\.listen\(port, "127\.0\.0\.1"/);
-  assert.match(localServer, /authorization: `Bearer \$\{adminKey\}`/);
-  await access(new URL("tools/admin/index.html", projectRoot));
-  await access(new URL("tools/admin/admin.css", projectRoot));
-  await access(new URL("tools/admin/admin.js", projectRoot));
+  await assert.rejects(access(new URL("tools/admin/server.mjs", projectRoot)));
+
 });
 
 test("ships product metadata and removes starter artifacts", async () => {
