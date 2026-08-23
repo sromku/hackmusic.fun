@@ -13,6 +13,44 @@ type HostedRoom = {
 
 const hostedRoomsKey = "hackmusic:hostedRooms";
 const visibleHostedRooms = 3;
+const partyLessons = [
+  {
+    id: 0,
+    number: "01",
+    icon: "🎵",
+    tone: "song",
+    kicker: "THE SECRET DROP",
+    title: "Feed the mystery.",
+    shout: "ADD A SONG. TELL NOBODY.",
+    body: "Join the private party, pick a human name, and paste a Spotify track. It disappears into a hidden queue. No peeking. No lobbying the DJ. No twelve-person committee meeting about tempo.",
+    equation: ["YOU", "+", "SPOTIFY LINK", "→", "SECRET QUEUE"],
+    footnote: "The host sees the queue. The humans see suspense.",
+  },
+  {
+    id: 1,
+    number: "02",
+    icon: "🙌",
+    tone: "react",
+    kicker: "FEELINGS, BUT AUDIBLE",
+    title: "React out loud.",
+    shout: "CHEER IT. BOO IT. COMMIT.",
+    body: "Cheer and the host speaker ducks the music, fires a ridiculous happy sound, and gives the song picker +3. Boo and it fires an equally ridiculous complaint, removes 3 points, and keeps your identity gloriously anonymous.",
+    equation: ["CHEER = +3 + YEAH!", "⚡", "BOO = −3 + BOOO!"],
+    footnote: "One human. One vote per song. Democracy has guardrails now.",
+  },
+  {
+    id: 2,
+    number: "03",
+    icon: "⏭️",
+    tone: "skip",
+    kicker: "THE CROWD HAS SPOKEN",
+    title: "Three boos. Gone.",
+    shout: "THIRD BOO PULLS THE PLUG.",
+    body: "When three different humans boo the current song, playback stops and the next secret pick starts. When the party ends, every score is revealed and selective memory becomes the official after-party policy.",
+    equation: ["👻", "+", "👻", "+", "👻", "=", "NEXT SONG ⏭️"],
+    footnote: "Final scores unlock at the end. Bragging may continue indefinitely.",
+  },
+] as const;
 
 function hostedRoomDate(value: string) {
   const date = new Date(value);
@@ -55,9 +93,15 @@ export default function Home() {
   const [scheduledFor, setScheduledFor] = useState("");
   const [hostedRooms, setHostedRooms] = useState<HostedRoom[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [lessonOpen, setLessonOpen] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const closeHistoryRef = useRef<HTMLButtonElement | null>(null);
+  const closeLessonRef = useRef<HTMLButtonElement | null>(null);
+  const lessonDialogRef = useRef<HTMLElement | null>(null);
+  const lessonTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const lessonVisible = lessonOpen !== null;
+  const activeLesson = lessonOpen === null ? null : partyLessons[lessonOpen];
 
   useEffect(() => {
     let active = true;
@@ -102,6 +146,37 @@ export default function Home() {
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [historyOpen]);
+
+  useEffect(() => {
+    if (!lessonVisible) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const frame = window.requestAnimationFrame(() => closeLessonRef.current?.focus());
+    const handleLessonKeys = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setLessonOpen(null);
+      if (event.key === "ArrowRight") setLessonOpen((current) => current === null ? null : (current + 1) % partyLessons.length);
+      if (event.key === "ArrowLeft") setLessonOpen((current) => current === null ? null : (current + partyLessons.length - 1) % partyLessons.length);
+      if (event.key !== "Tab") return;
+      const focusable = lessonDialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])');
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    window.addEventListener("keydown", handleLessonKeys);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", handleLessonKeys);
+      window.requestAnimationFrame(() => lessonTriggerRef.current?.focus());
+    };
+  }, [lessonVisible]);
+
+  function openLesson(index: number, trigger: HTMLButtonElement) {
+    lessonTriggerRef.current = trigger;
+    setLessonOpen(index);
+  }
 
   function rememberRoomOpened(code: string) {
     const next = hostedRooms.map((room) => room.code === code ? { ...room, lastOpenedAt: new Date().toISOString() } : room)
@@ -177,13 +252,13 @@ export default function Home() {
             <span className="energy-bars" aria-hidden="true"><i /><i /><i /><i /><i /></span>
           </div>
           <section className="landing-how" aria-labelledby="how-it-works-title">
-            <div className="landing-how-heading"><strong id="how-it-works-title">THREE MOVES. MAXIMUM DRAMA.</strong><span>⚡ instant party rules</span></div>
+            <div className="landing-how-heading"><strong id="how-it-works-title">THREE MOVES. MAXIMUM DRAMA.</strong><span>⚡ tap a rule · become dangerous</span></div>
             <div className="landing-rules">
-              <article className="landing-rule rule-song"><span className="rule-step">01</span><span className="rule-icon" aria-hidden="true">🎵</span><div><strong>Drop a secret song</strong><small>Paste a Spotify track. Nobody sees what’s next.</small></div></article>
+              <button type="button" className="landing-rule rule-song" aria-haspopup="dialog" onClick={(event) => openLesson(0, event.currentTarget)}><span className="rule-step">01</span><span className="rule-icon" aria-hidden="true">🎵</span><div><strong>Drop a secret song</strong><small>Paste a Spotify track. Nobody sees what’s next.</small></div><em>OPEN THE MANUAL ↗</em></button>
               <span className="rule-connector" aria-hidden="true">→</span>
-              <article className="landing-rule rule-react"><span className="rule-step">02</span><span className="rule-icon" aria-hidden="true">🙌</span><div><strong>React out loud</strong><small>Cheers give +3. Boos stay completely anonymous.</small></div></article>
+              <button type="button" className="landing-rule rule-react" aria-haspopup="dialog" onClick={(event) => openLesson(1, event.currentTarget)}><span className="rule-step">02</span><span className="rule-icon" aria-hidden="true">🙌</span><div><strong>React out loud</strong><small>Cheers give +3. Boos stay completely anonymous.</small></div><em>OPEN THE MANUAL ↗</em></button>
               <span className="rule-connector" aria-hidden="true">→</span>
-              <article className="landing-rule rule-skip"><span className="rule-step">03</span><span className="rule-icon" aria-hidden="true">⏭️</span><div><strong>The crowd can skip</strong><small>Three boos and the next secret song starts.</small></div></article>
+              <button type="button" className="landing-rule rule-skip" aria-haspopup="dialog" onClick={(event) => openLesson(2, event.currentTarget)}><span className="rule-step">03</span><span className="rule-icon" aria-hidden="true">⏭️</span><div><strong>The crowd can skip</strong><small>Three boos and the next secret song starts.</small></div><em>OPEN THE MANUAL ↗</em></button>
             </div>
           </section>
         </div>
@@ -220,6 +295,8 @@ export default function Home() {
         <span>AGI unlocked. Common sense still in beta.</span>
       </footer>
       {historyOpen && <div className="hosted-history-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setHistoryOpen(false)}><section className="hosted-history-sheet" role="dialog" aria-modal="true" aria-labelledby="all-hosted-rooms-title"><div className="hosted-sheet-handle" aria-hidden="true" /><div className="hosted-sheet-heading"><div><p className="eyebrow">🗃️ THE HOST ARCHIVES</p><h2 id="all-hosted-rooms-title">All rooms from this browser</h2></div><button ref={closeHistoryRef} type="button" onClick={() => setHistoryOpen(false)} aria-label="Close hosted room history">×</button></div><div className="hosted-sheet-list">{hostedRooms.map((room) => <article key={room.code}><span className={`hosted-room-status ${room.status}`}>{room.status === "lobby" ? "🌙 LOBBY" : room.status === "live" ? "⚡ LIVE" : room.status === "ended" ? "🏁 ENDED" : "📼 SAVED"}</span><div><strong>{room.title}</strong><small>Room {room.code} · {hostedRoomDate(room.createdAt)}</small></div><a href={`/e/${room.code}/host`} onClick={() => { rememberRoomOpened(room.code); setHistoryOpen(false); }}>Open host →</a></article>)}</div><p className="hosted-sheet-note">🧠 Clear this browser’s site data and these shortcuts disappear. The actual event data is unaffected.</p></section></div>}
+
+      {activeLesson && <div className="party-lesson-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setLessonOpen(null)}><section ref={lessonDialogRef} className={`party-lesson lesson-${activeLesson.tone}`} role="dialog" aria-modal="true" aria-labelledby="party-lesson-title"><div className="party-lesson-handle" aria-hidden="true" /><div className="lesson-chaos lesson-chaos-one" aria-hidden="true" /><div className="lesson-chaos lesson-chaos-two" aria-hidden="true" /><span className="lesson-giant-number" aria-hidden="true">{activeLesson.number}</span><header className="party-lesson-header"><div><span>{activeLesson.icon}</span><strong>HACKMUSIC FIELD MANUAL · {activeLesson.number}/03</strong></div><button ref={closeLessonRef} type="button" onClick={() => setLessonOpen(null)} aria-label="Close party instructions">×</button></header><div className="party-lesson-copy"><p>{activeLesson.kicker}</p><h2 id="party-lesson-title">{activeLesson.title}</h2><strong>{activeLesson.shout}</strong><p>{activeLesson.body}</p><div className="lesson-equation" aria-label={activeLesson.equation.join(" ")}>{activeLesson.equation.map((part, index) => <span key={`${part}-${index}`}>{part}</span>)}</div><small>{activeLesson.footnote}</small></div><footer className="party-lesson-footer"><nav aria-label="Party instruction steps">{partyLessons.map((lesson) => <button key={lesson.number} type="button" className={lesson.id === activeLesson.id ? "active" : ""} aria-label={`Open instruction ${lesson.number}: ${lesson.title}`} aria-current={lesson.id === activeLesson.id ? "step" : undefined} onClick={() => setLessonOpen(lesson.id)}><span>{lesson.number}</span>{lesson.icon}</button>)}</nav><button type="button" onClick={() => setLessonOpen((activeLesson.id + 1) % partyLessons.length)}>{activeLesson.id === partyLessons.length - 1 ? "REPLAY THE CHAOS ↺" : "NEXT BAD IDEA →"}</button></footer></section></div>}
     </main>
   );
 }

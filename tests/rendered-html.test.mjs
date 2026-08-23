@@ -114,6 +114,15 @@ test("renders the create and join landing page", async () => {
   assert.match(landingSource, /lede-play lede-room/);
   assert.match(landingSource, /lede-play lede-speaker/);
   assert.equal((landingSource.match(/className="rule-connector"/g) ?? []).length, 2);
+  assert.equal((landingSource.match(/aria-haspopup="dialog"/g) ?? []).length, 3);
+  assert.match(landingSource, /HACKMUSIC FIELD MANUAL/);
+  assert.match(landingSource, /ADD A SONG\. TELL NOBODY/);
+  assert.match(landingSource, /CHEER IT\. BOO IT\. COMMIT/);
+  assert.match(landingSource, /THIRD BOO PULLS THE PLUG/);
+  assert.match(landingSource, /One human\. One vote per song/);
+  assert.match(landingSource, /Final scores unlock at the end/);
+  assert.match(landingSource, /ArrowRight/);
+  assert.match(landingSource, /aria-modal="true"/);
   assert.doesNotMatch(landingSource, /next\/link/);
   const globalStyles = await readFile(new URL("app/globals.css", projectRoot), "utf8");
   assert.match(globalStyles, /\.landing-copy h1 \{[^}]*padding-bottom: \.12em;[^}]*margin-bottom: -\.12em;/);
@@ -123,6 +132,10 @@ test("renders the create and join landing page", async () => {
   assert.match(globalStyles, /\.rule-connector::before \{[^}]*width: 3px;[^}]*background: var\(--ink\);/);
   assert.match(globalStyles, /\.rule-connector::after \{[^}]*width: 9px;[^}]*background: var\(--mint\);/);
   assert.doesNotMatch(globalStyles, /\.rule-connector::after \{ content: "↓";/);
+  assert.match(globalStyles, /\.party-lesson-backdrop \{[^}]*position: fixed;[^}]*z-index: 100;/);
+  assert.match(globalStyles, /\.party-lesson-copy h2 \{[^}]*font-size: clamp\(66px, 10vw, 152px\);/);
+  assert.match(globalStyles, /@media \(max-width: 560px\)[\s\S]*\.party-lesson-backdrop \{ align-items: end;/);
+  assert.match(globalStyles, /\.party-lesson \{ width: 100%; height: auto;[^}]*max-height: 90dvh;/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/);
 });
 
