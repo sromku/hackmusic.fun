@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-const ADMIN_FAVICON = "/admin-favicon.svg?v=admin-hm-red-1";
+const ADMIN_FAVICON = "/admin-favicon.svg?v=admin-hm-red-2";
 
 export default function AdminFavicon() {
   useEffect(() => {

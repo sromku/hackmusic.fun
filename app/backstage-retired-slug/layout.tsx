@@ -3,8 +3,8 @@ import AdminFavicon from "./admin-favicon";
 
 export const metadata: Metadata = {
   icons: {
-    icon: [{ url: "/admin-favicon.svg?v=admin-hm-red-1", type: "image/svg+xml", sizes: "any" }],
-    shortcut: "/admin-favicon.svg?v=admin-hm-red-1",
+    icon: [{ url: "/admin-favicon.svg?v=admin-hm-red-2", type: "image/svg+xml", sizes: "any" }],
+    shortcut: "/admin-favicon.svg?v=admin-hm-red-2",
   },
 };
 

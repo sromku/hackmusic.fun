@@ -478,7 +478,7 @@ test("protects the hosted read-only admin with ChatGPT identity and an owner all
   assert.match(pageSource, /OWNER ACCESS ONLY/);
   assert.match(pageSource, /robots: \{ index: false/);
   const adminLayoutSource = await readFile(new URL("app/backstage-retired-slug/layout.tsx", projectRoot), "utf8");
-  assert.match(adminLayoutSource, /\/admin-favicon\.svg\?v=admin-hm-red-1/);
+  assert.match(adminLayoutSource, /\/admin-favicon\.svg\?v=admin-hm-red-2/);
   assert.match(adminLayoutSource, /<AdminFavicon \/>/);
   const adminFaviconSource = await readFile(new URL("app/backstage-retired-slug/admin-favicon.tsx", projectRoot), "utf8");
   assert.match(adminFaviconSource, /link\[rel~="icon"\]/);
