@@ -738,6 +738,31 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .bigger-hero-copy h1 { margin: 8px 0 24px; font-size: clamp(64px, 9vw, 118px); line-height: .82; letter-spacing: -.08em; }
 .bigger-hero-copy h1 span { color: var(--coral); -webkit-text-stroke: 2px var(--ink); }
 .bigger-hero-copy > p:not(.eyebrow) { max-width: 680px; margin: 0 0 26px; font-size: clamp(18px, 2.1vw, 25px); font-weight: 750; line-height: 1.32; letter-spacing: -.025em; }
+.bigger-word { position: relative; z-index: 0; display: inline-block; isolation: isolate; transform-origin: center bottom; cursor: crosshair; transition: color .22s ease, transform .34s cubic-bezier(.16, 1, .3, 1), text-shadow .28s ease, filter .28s ease; }
+.bigger-word::before { content: ""; position: absolute; z-index: -1; inset: 56% -.1em -.05em; border: 1.5px solid var(--ink); background: var(--sun); transform: scaleX(0); transform-origin: left center; transition: inset .3s cubic-bezier(.16, 1, .3, 1), border-radius .3s ease, transform .3s cubic-bezier(.16, 1, .3, 1); }
+.bigger-word:hover::before, .bigger-word:active::before { transform: scaleX(1); }
+.word-restaurant::before { background: var(--coral); }
+.word-restaurant::after { content: "♨"; position: absolute; right: -.36em; top: -.72em; color: var(--coral); font-size: .7em; opacity: 0; transform: translateY(8px) rotate(-10deg); transition: opacity .2s ease, transform .4s cubic-bezier(.16, 1, .3, 1); -webkit-text-stroke: 1px var(--ink); }
+.word-restaurant:hover { transform: translateY(-3px) rotate(-1.5deg); }
+.word-restaurant:hover::after { opacity: 1; transform: translateY(0) rotate(8deg); }
+.word-company::before { background: var(--blue); transform-origin: center; }
+.word-company:hover { transform: translateY(-3px) scale(1.045) rotate(1deg); }
+.word-conference::before { inset: 8% -.08em -.03em; background: var(--sun); transform-origin: right center; }
+.word-conference:hover { transform: translateY(-4px) rotate(-1deg); text-shadow: 3px 3px 0 var(--blue); }
+.word-venue::before { inset: 2% -.12em -.05em; border-radius: 999px; background: var(--mint); transform: scale(.55); transform-origin: center; }
+.word-venue:hover::before { border-radius: 999px; transform: scale(1); }
+.word-venue:hover { transform: rotate(3deg) scale(1.06); }
+.word-gravity::before { background: var(--blue); transform-origin: center; }
+.word-gravity::after { content: "✦"; position: absolute; left: 50%; top: 50%; width: 1.6em; height: 1.6em; color: var(--sun); font-size: .68em; line-height: 1; opacity: 0; transform-origin: .8em .8em; animation: word-orbit 2.4s linear infinite; animation-play-state: paused; transition: opacity .22s ease; -webkit-text-stroke: 1px var(--ink); }
+.word-gravity:hover { transform: translateY(-2px) rotate(-1deg); }
+.word-gravity:hover::after { opacity: 1; animation-play-state: running; }
+.word-hackmusic { font-weight: 950; }
+.word-hackmusic::before { inset: 4% -.08em -.04em; background: linear-gradient(90deg, var(--blue), var(--mint), var(--sun), var(--coral)); transform-origin: center; }
+.word-hackmusic:hover { transform: translateY(-3px) scale(1.08); text-shadow: 2px 2px 0 var(--white); }
+.word-fit-room::before { background: var(--mint); }
+.word-fit-room:hover { transform: scale(1.09) rotate(-1deg); }
+.word-room-app::before { inset: 5% -.08em -.03em; background: var(--coral); transform-origin: right center; }
+.word-room-app:hover { transform: scale(.93) rotate(1deg); filter: saturate(1.2); }
 .bigger-primary-cta { display: inline-flex; min-height: 58px; align-items: center; border: 2px solid var(--ink); background: var(--blue); box-shadow: 6px 6px 0 var(--ink); padding: 0 20px; color: var(--ink); font-size: 15px; font-weight: 950; text-decoration: none; transition: transform .2s cubic-bezier(.2, .8, .25, 1.2), box-shadow .2s ease; }
 .bigger-primary-cta:hover { transform: translate(-3px, -3px) rotate(-.5deg); box-shadow: 9px 9px 0 var(--ink); }
 .bigger-hero-copy > small { display: block; max-width: 520px; margin-top: 15px; color: #625d55; font-size: 10px; font-weight: 800; line-height: 1.4; }
@@ -815,6 +840,11 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
   .bigger-final-icon { width: 56px; height: 56px; font-size: 25px; }
   .bigger-contact-actions { grid-column: auto; }
   .bigger-footer nav { flex-wrap: wrap; }
+}
+
+@keyframes word-orbit {
+  from { transform: translate(-50%, -50%) rotate(0deg) translateX(5.2em) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg) translateX(5.2em) rotate(-360deg); }
 }
 
 @media (max-width: 760px) {

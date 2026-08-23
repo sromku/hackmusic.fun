@@ -59,7 +59,9 @@ export default function GoBiggerPage() {
         <div className="bigger-hero-copy">
           <p className="eyebrow">🏟️ THE LIVING ROOM WAS ONLY THE PILOT</p>
           <h1>Go bigger.<br /><span>Keep the chaos.</span></h1>
-          <p>Running a restaurant, company event, conference, venue, or a party with its own gravitational field? Let’s make HackMusic fit the room instead of making the room fit the app.</p>
+          <p className="bigger-playful-copy">
+            Running a <span className="bigger-word word-restaurant">restaurant</span>, <span className="bigger-word word-company">company event</span>, <span className="bigger-word word-conference">conference</span>, <span className="bigger-word word-venue">venue</span>, or a party with its own <span className="bigger-word word-gravity">gravitational field</span>? Let’s make <span className="bigger-word word-hackmusic">HackMusic</span> <span className="bigger-word word-fit-room">fit the room</span> instead of making <span className="bigger-word word-room-app">the room fit the app</span>.
+          </p>
           <a className="bigger-primary-cta" href={contactHref}>Tell us your grand scheme →</a>
           <small>Opens your email app. No CRM labyrinth. No “book a synergy discovery ritual.”</small>
         </div>

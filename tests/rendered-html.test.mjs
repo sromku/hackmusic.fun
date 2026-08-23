@@ -125,6 +125,9 @@ test("renders the commercial go bigger page with an email path", async () => {
   assert.match(html, /Company events/);
   assert.match(html, /Venues &amp; conferences/);
   assert.match(html, /Custom chaos\. Sensibly invoiced/);
+  assert.match(html, /bigger-word word-restaurant/);
+  assert.match(html, /bigger-word word-gravity/);
+  assert.match(html, /bigger-word word-room-app/);
   assert.match(html, /mailto:hackmusic\.fun@gmail\.com\?subject=HackMusic/);
   assert.match(html, /Event%20or%20venue/);
   assert.match(html, /href="\/"/);
