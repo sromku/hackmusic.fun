@@ -316,6 +316,10 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /useReactionSounds/);
   assert.match(source, /useScreenWakeLock/);
   assert.match(source, /Start speaker →/);
+  assert.match(source, /Speaker armed\. Enjoy the dramatic silence/);
+  assert.match(source, /for \(let attempt = 1; attempt <= 4/);
+  assert.match(source, /It will wake the speaker and start automatically/);
+  assert.doesNotMatch(source, /party\?\.status === "ended" \|\| !currentSpotifyId/);
   assert.match(source, /Starts Spotify only\. Funny sounds stay off/);
   assert.match(source, /formatPlaybackTime/);
   assert.match(source, /setInterval\(updateProgress, 500\)/);
