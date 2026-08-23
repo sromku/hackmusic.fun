@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { AVATAR_EMOJIS } from "../../../lib/avatar-emojis";
 import { artworkVariant, durationSeconds, formatActivityTime, formatMusicDuration, formatPartyStart, mySongStatusLabel, spotifyTrackWebUrl } from "../../../lib/party-format";
 import { MAX_PENDING_TRACKS_PER_PERSON } from "../../../lib/party-rules";
@@ -23,6 +23,8 @@ export default function PartyRoom({ code }: { code: string }) {
   const [busy, setBusy] = useState(false);
   const [removeConfirmId, setRemoveConfirmId] = useState("");
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [spotifyHelpOpen, setSpotifyHelpOpen] = useState(false);
+  const spotifyHelpCloseRef = useRef<HTMLButtonElement>(null);
 
   const myReaction = party?.reactions.find((reaction) => reaction.mine)?.tone;
   const boos = party?.reactions.filter((reaction) => reaction.tone === "down").length ?? 0;
@@ -81,6 +83,20 @@ export default function PartyRoom({ code }: { code: string }) {
     const timer = window.setTimeout(() => setNotice(""), 2800);
     return () => window.clearTimeout(timer);
   }, [notice]);
+
+  useEffect(() => {
+    if (!spotifyHelpOpen) return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSpotifyHelpOpen(false);
+    };
+    window.queueMicrotask(() => spotifyHelpCloseRef.current?.focus());
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
+    };
+  }, [spotifyHelpOpen]);
 
   async function postAction(payload: Record<string, unknown>) {
     if (!participantId) throw new Error("Join the room first.");
@@ -178,6 +194,11 @@ export default function PartyRoom({ code }: { code: string }) {
     void changeAvatar(choice.emoji);
   }
 
+  function closeSpotifyHelp() {
+    setSpotifyHelpOpen(false);
+    window.setTimeout(() => document.getElementById("song-link")?.focus(), 0);
+  }
+
   if (error) return <main className="missing-room"><span className="brand-mark">HM</span><p className="eyebrow">ROOM LOST</p><h1>{error}</h1><a href="/">Try another code →</a></main>;
   if (!room) return <main className="loading-room"><span className="brand-mark">HM</span><p>Finding room {code}…</p></main>;
   const currentSpotifyUrl = party?.currentTrack ? spotifyTrackWebUrl(party.currentTrack.id) : "";
@@ -247,7 +268,21 @@ export default function PartyRoom({ code }: { code: string }) {
         </div>
       </section>}
 
-      {!ended && addOpen && party && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setAddOpen(false)}><section className="song-modal spotify-song-modal" role="dialog" aria-modal="true" aria-labelledby="add-song-title"><div className="modal-topline"><div><p className="eyebrow">🤫 SECRET WEAPON</p><h2 id="add-song-title">🎵 Add a Spotify song</h2></div><button className="close-button" type="button" onClick={() => setAddOpen(false)} aria-label="Close">×</button></div><div className="spotify-add-guide"><strong>🟢 Spotify → Share → Copy song link</strong><span>Paste the track below. Its title is checked before it joins the secret queue.</span></div><form className="link-form spotify-link-form" onSubmit={(event) => void submitLink(event)}><label htmlFor="song-link">SPOTIFY TRACK LINK</label><input id="song-link" name="song-link" type="url" inputMode="url" autoComplete="off" placeholder="Paste a full track or short /s/ link…" required /><button type="submit" disabled={busy || party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON}>{busy ? "🔎 Checking Spotify…" : party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON ? "🚧 Your waiting queue is full" : "🤫 Add to the secret queue →"}</button></form><p className="queue-note">🕵️ The queue stays secret. You have {Math.max(0, MAX_PENDING_TRACKS_PER_PERSON - party.pendingCount)} of {MAX_PENDING_TRACKS_PER_PERSON} waiting slots left. Played and skipped songs free their slots.</p></section></div>}
+      {!ended && addOpen && party && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
+        if (event.currentTarget === event.target) {
+          setSpotifyHelpOpen(false);
+          setAddOpen(false);
+        }
+      }}><section className="song-modal spotify-song-modal" role="dialog" aria-modal="true" aria-hidden={spotifyHelpOpen || undefined} aria-labelledby="add-song-title"><div className="modal-topline"><div><p className="eyebrow">🤫 SECRET WEAPON</p><h2 id="add-song-title">🎵 Add a Spotify song</h2></div><button className="close-button" type="button" onClick={() => {
+        setSpotifyHelpOpen(false);
+        setAddOpen(false);
+      }} aria-label="Close">×</button></div><div className="spotify-add-guide"><div><strong>🟢 Spotify → Share → Copy song link</strong><span>Paste the track below. Its title is checked before it joins the secret queue.</span></div><button className="spotify-how-button" type="button" aria-haspopup="dialog" onClick={() => setSpotifyHelpOpen(true)}>🤔 Show me how</button></div><form className="link-form spotify-link-form" onSubmit={(event) => void submitLink(event)}><label htmlFor="song-link">SPOTIFY TRACK LINK</label><input id="song-link" name="song-link" type="url" inputMode="url" autoComplete="off" placeholder="Paste a full track or short /s/ link…" required /><button type="submit" disabled={busy || party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON}>{busy ? "🔎 Checking Spotify…" : party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON ? "🚧 Your waiting queue is full" : "🤫 Add to the secret queue →"}</button></form><p className="queue-note">🕵️ The queue stays secret. You have {Math.max(0, MAX_PENDING_TRACKS_PER_PERSON - party.pendingCount)} of {MAX_PENDING_TRACKS_PER_PERSON} waiting slots left. Played and skipped songs free their slots.</p></section></div>}
+
+      {spotifyHelpOpen && <div className="modal-backdrop spotify-help-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && closeSpotifyHelp()}><section className="spotify-help-card" role="dialog" aria-modal="true" aria-labelledby="spotify-help-title"><div className="modal-topline"><div><p className="eyebrow">🟢 THREE TAPS · ZERO DJ DEGREE</p><h2 id="spotify-help-title">Borrow the link. Keep the chaos.</h2></div><button className="close-button" type="button" onClick={closeSpotifyHelp} aria-label="Close Spotify instructions" ref={spotifyHelpCloseRef}>×</button></div><p className="spotify-help-intro">Spotify buried the useful button under a tiny menu. Naturally. Here is the escape route.</p><div className="spotify-help-steps">
+        <article className="spotify-help-step step-song"><div className="spotify-step-top"><span>01</span><strong>Find the actual song</strong></div><div className="spotify-mini-screen spotify-song-screen" aria-hidden="true"><div className="mini-spotify-bar"><b>●</b><span>SPOTIFY</span></div><div className="mini-song-row"><i>♪</i><span><strong>Your excellent song</strong><small>Mystery artist</small></span><b>•••</b></div><em>tap the dots ↗</em></div><p>Open the song itself, then tap the <strong>•••</strong> menu. A playlist link is not invited to this party.</p></article>
+        <article className="spotify-help-step step-share"><div className="spotify-step-top"><span>02</span><strong>Tap Share</strong></div><div className="spotify-mini-screen spotify-menu-screen" aria-hidden="true"><i /><div><span>↗</span><strong>Share</strong></div><div className="menu-ghost"><span>＋</span><b>Add to playlist</b></div></div><p>Scroll the song menu if needed. Find <strong>Share</strong>. It is usually pretending not to be important.</p></article>
+        <article className="spotify-help-step step-copy"><div className="spotify-step-top"><span>03</span><strong>Copy the link</strong></div><div className="spotify-mini-screen spotify-share-screen" aria-hidden="true"><div className="share-bubbles"><i>↗</i><i>💬</i><i>⋯</i></div><div className="copy-link-tile"><span>🔗</span><strong>Copy link</strong></div></div><p>Tap <strong>Copy link</strong>, return here, and paste. Full links and short <strong>/s/</strong> links both work.</p></article>
+      </div><div className="spotify-help-finish"><span>🎉</span><div><strong>That’s it. Your song enters anonymously.</strong><small>Nobody sees the queue. Your suspiciously specific taste remains a surprise.</small></div><button type="button" onClick={closeSpotifyHelp}>I found the link →</button></div></section></div>}
 
       {avatarOpen && party && <div className="modal-backdrop avatar-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setAvatarOpen(false)}><section className="avatar-picker-card" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title"><div className="modal-topline"><div><p className="eyebrow">🎭 IDENTITY, BUT LOUDER</p><h2 id="avatar-picker-title">Pick your party face</h2></div><button className="close-button" type="button" onClick={() => setAvatarOpen(false)} aria-label="Close avatar picker">×</button></div><p className="avatar-picker-intro">Choose wisely. This tiny face will represent your enormous musical opinions.</p><div className="avatar-grid" role="group" aria-label="Party face emojis">{AVATAR_EMOJIS.map((option) => <button className={party.viewer.initials === option.emoji ? "selected" : ""} type="button" onClick={() => void changeAvatar(option.emoji)} disabled={busy} aria-label={`Use ${option.label} as my party face`} aria-pressed={party.viewer.initials === option.emoji} key={option.emoji}><span aria-hidden="true">{option.emoji}</span><small>{option.label}</small></button>)}</div><button className="avatar-surprise" type="button" onClick={surpriseAvatar} disabled={busy}>{busy ? "✨ Summoning chaos…" : "🎲 Surprise me, algorithm →"}</button><p className="avatar-privacy-note">🔐 Only your avatar changes. Your anonymous boos remain delightfully anonymous.</p></section></div>}
 

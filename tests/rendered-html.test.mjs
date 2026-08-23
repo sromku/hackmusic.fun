@@ -225,9 +225,16 @@ test("renders a code-specific participant room", async () => {
   assert.match(html, /noindex/);
   assert.doesNotMatch(html, /og(?:-v2)?\.png/);
   const source = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
-  for (const copy of ["CHEER", "BOO", "Add a song", "YOUR FINAL SCORE", "🔊 ROOM NOISE", "FULL PARTY HISTORY", "🎧 My music", "Pick your party face", "Paste a full track or short /s/ link…"]) {
+  for (const copy of ["CHEER", "BOO", "Add a song", "YOUR FINAL SCORE", "🔊 ROOM NOISE", "FULL PARTY HISTORY", "🎧 My music", "Pick your party face", "Paste a full track or short /s/ link…", "Show me how", "Borrow the link. Keep the chaos.", "Copy link", "I found the link"]) {
     assert.match(source, new RegExp(copy));
   }
+  assert.match(source, /spotifyHelpOpen/);
+  assert.match(source, /aria-labelledby="spotify-help-title"/);
+  assert.match(source, /event\.key === "Escape"/);
+  const globalStyles = await readFile(new URL("app/globals.css", projectRoot), "utf8");
+  assert.match(globalStyles, /\.spotify-help-steps \{[^}]*grid-template-columns: repeat\(3,/);
+  assert.match(globalStyles, /@media \(max-width: 820px\)[\s\S]*\.spotify-help-card \{[^}]*width: 100%;[^}]*max-height: 94dvh;/);
+  assert.match(globalStyles, /@media \(max-width: 820px\)[\s\S]*\.spotify-help-steps \{ grid-template-columns: 1fr;/);
   assert.ok(source.indexOf("🔊 ROOM NOISE") < source.indexOf("🎧 My music"));
   assert.match(source, /import type \{[\s\S]*ParticipantParty[\s\S]*\} from "\.\.\/\.\.\/\.\.\/lib\/party-contract"/);
   assert.match(source, /formatMusicDuration/);
