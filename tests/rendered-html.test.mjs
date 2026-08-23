@@ -276,8 +276,14 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /x-hackmusic-host-key/);
   assert.doesNotMatch(source, /pin=\$\{encodeURIComponent\(hostKey\)\}/);
   assert.match(source, /JOIN PASSCODE/);
-  assert.match(source, /\/sounds\/cheer\.wav/);
-  assert.match(source, /\/sounds\/boo\.wav/);
+  assert.match(source, /\/sounds\/woohoo\.mp3/);
+  assert.match(source, /\/sounds\/boo\.mp3/);
+  assert.match(source, /REACTION_SOUND_VERSION = "2026-08-23-1"/);
+  assert.match(source, /REACTION_DUCK_VOLUME = 0\.16/);
+  assert.match(source, /player\.getVolume\(\)/);
+  assert.match(source, /player\.setVolume\(volume\)/);
+  assert.match(source, /hostDevice === "ios"/);
+  assert.match(source, /player\.resume\(\)/);
   assert.match(source, /wakeLock\.request\("screen"\)/);
   assert.match(source, /visibilitychange/);
   assert.match(source, /Keep this screen awake/);
@@ -408,8 +414,8 @@ test("ships product metadata and removes starter artifacts", async () => {
   await access(new URL("public/favicon-32.png", projectRoot));
   await access(new URL("public/favicon.ico", projectRoot));
   await access(new URL("public/apple-touch-icon.png", projectRoot));
-  await access(new URL("public/sounds/cheer.wav", projectRoot));
-  await access(new URL("public/sounds/boo.wav", projectRoot));
+  await access(new URL("public/sounds/woohoo.mp3", projectRoot));
+  await access(new URL("public/sounds/boo.mp3", projectRoot));
   await assert.rejects(access(new URL("app/_sites-preview/SkeletonPreview.tsx", projectRoot)));
   const packageJson = await readFile(new URL("package.json", projectRoot), "utf8");
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
