@@ -225,7 +225,7 @@ test("renders a code-specific participant room", async () => {
   assert.match(html, /noindex/);
   assert.doesNotMatch(html, /og(?:-v2)?\.png/);
   const source = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
-  for (const copy of ["CHEER", "BOO", "Add a song", "YOUR FINAL SCORE", "🔊 ROOM NOISE", "FULL PARTY HISTORY", "🎧 My music", "Pick your party face"]) {
+  for (const copy of ["CHEER", "BOO", "Add a song", "YOUR FINAL SCORE", "🔊 ROOM NOISE", "FULL PARTY HISTORY", "🎧 My music", "Pick your party face", "Paste a full track or short /s/ link…"]) {
     assert.match(source, new RegExp(copy));
   }
   assert.ok(source.indexOf("🔊 ROOM NOISE") < source.indexOf("🎧 My music"));
