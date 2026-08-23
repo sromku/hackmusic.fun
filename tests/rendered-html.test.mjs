@@ -192,6 +192,12 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /PRE-PARTY LOBBY/);
   assert.match(source, /The queue is undercover/);
   assert.match(source, /Reactions unlock when the host starts the party/);
+  assert.match(source, /The room has spoken/);
+  assert.match(source, /Final scores are frozen\. The music stopped; the bragging did not/);
+  assert.match(source, /SPEAKER RETIRED/);
+  assert.match(source, /LEFT UNPLAYED/);
+  assert.match(source, /A remarkably peaceful party/);
+  assert.match(source, /!ended && addOpen && party/);
   assert.match(source, /ROOM PASSCODE/);
   assert.match(source, /x-hackmusic-participant/);
   assert.doesNotMatch(source, /participantId=\$\{encodeURIComponent/);
