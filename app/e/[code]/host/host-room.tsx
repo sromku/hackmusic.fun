@@ -39,6 +39,13 @@ type SpotifyPlaybackState = {
   track_window: { current_track: { uri: string } };
 };
 
+type SpotifyProgress = {
+  position: number;
+  duration: number;
+  paused: boolean;
+  trackUri: string;
+};
+
 type SpotifyPlayer = {
   connect: () => Promise<boolean>;
   disconnect: () => void;
@@ -58,6 +65,16 @@ type SpotifyPlayer = {
 const REACTION_DUCK_VOLUME = 0.16;
 const REACTION_SOUND_VERSION = "2026-08-23-3";
 const waitForAudioFade = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
+
+function formatPlaybackTime(milliseconds: number) {
+  const safeSeconds = Math.max(0, Math.floor(milliseconds / 1_000));
+  return `${Math.floor(safeSeconds / 60)}:${String(safeSeconds % 60).padStart(2, "0")}`;
+}
+
+function trackDurationMilliseconds(value: string) {
+  const match = value.match(/^(\d+):(\d{2})$/);
+  return match ? (Number(match[1]) * 60 + Number(match[2])) * 1_000 : 0;
+}
 
 type SpotifyConstructor = new (options: {
   name: string;
@@ -101,6 +118,7 @@ export default function HostRoom({ code }: { code: string }) {
   const [spotifyDeviceId, setSpotifyDeviceId] = useState("");
   const [speakerArmed, setSpeakerArmed] = useState(false);
   const [speakerStarting, setSpeakerStarting] = useState(false);
+  const [spotifyProgress, setSpotifyProgress] = useState<SpotifyProgress>({ position: 0, duration: 0, paused: true, trackUri: "" });
   const [spotifyMessage, setSpotifyMessage] = useState("");
   const [wakeLockSupported, setWakeLockSupported] = useState<boolean | null>(() => typeof navigator === "undefined" ? null : Boolean((navigator as NavigatorWithWakeLock).wakeLock));
   const [wakeLockActive, setWakeLockActive] = useState(false);
@@ -117,6 +135,7 @@ export default function HostRoom({ code }: { code: string }) {
   const reactionRestoreTimerRef = useRef<number | null>(null);
   const lastSpotifyTrackRef = useRef("");
   const lastPlaybackStateRef = useRef<SpotifyPlaybackState | null>(null);
+  const spotifyStateReceivedAtRef = useRef(0);
   const spotifyEndTimerRef = useRef<number | null>(null);
   const advancingTrackRef = useRef(false);
   const wakeLockRef = useRef<ScreenWakeLockSentinel | null>(null);
@@ -306,6 +325,24 @@ export default function HostRoom({ code }: { code: string }) {
   }, []);
 
   useEffect(() => {
+    const updateProgress = () => {
+      const state = lastPlaybackStateRef.current;
+      if (!state) return;
+      const position = state.paused
+        ? state.position
+        : Math.min(state.duration, state.position + Math.max(0, Date.now() - spotifyStateReceivedAtRef.current));
+      setSpotifyProgress({
+        position,
+        duration: state.duration,
+        paused: state.paused,
+        trackUri: state.track_window.current_track.uri,
+      });
+    };
+    const timer = window.setInterval(updateProgress, 500);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     if (!participantId || !hostKey || partyStatus === "ended") return;
     let active = true;
     const refresh = () => fetch(`/api/party?code=${encodeURIComponent(code)}`, { headers: { "x-hackmusic-participant": participantId, "x-hackmusic-host-key": hostKey } })
@@ -419,6 +456,12 @@ export default function HostRoom({ code }: { code: string }) {
             if (!active) return;
             const previous = lastPlaybackStateRef.current;
             lastPlaybackStateRef.current = state;
+            spotifyStateReceivedAtRef.current = Date.now();
+            if (state) {
+              setSpotifyProgress({ position: state.position, duration: state.duration, paused: state.paused, trackUri: state.track_window.current_track.uri });
+            } else {
+              setSpotifyProgress({ position: 0, duration: 0, paused: true, trackUri: "" });
+            }
             if (state && spotifyEndTimerRef.current) {
               window.clearTimeout(spotifyEndTimerRef.current);
               spotifyEndTimerRef.current = null;
@@ -642,6 +685,9 @@ export default function HostRoom({ code }: { code: string }) {
     spotifyPlayerRef.current = null;
     await fetch("/api/spotify/disconnect", { method: "POST" });
     lastSpotifyTrackRef.current = "";
+    lastPlaybackStateRef.current = null;
+    spotifyStateReceivedAtRef.current = 0;
+    setSpotifyProgress({ position: 0, duration: 0, paused: true, trackUri: "" });
     setSpeakerArmed(false);
     setSpotifyDeviceId("");
     setSpotifyStatus("disconnected");
@@ -683,6 +729,11 @@ export default function HostRoom({ code }: { code: string }) {
 
   const cheers = party.reactions.filter((reaction) => reaction.tone === "up").length;
   const boos = party.reactions.filter((reaction) => reaction.tone === "down").length;
+  const progressMatchesCurrent = Boolean(currentSpotifyId && spotifyProgress.trackUri.endsWith(currentSpotifyId));
+  const progressDuration = progressMatchesCurrent && spotifyProgress.duration > 0 ? spotifyProgress.duration : trackDurationMilliseconds(party.currentTrack?.duration ?? "");
+  const progressPosition = progressMatchesCurrent ? Math.min(spotifyProgress.position, progressDuration || spotifyProgress.position) : 0;
+  const progressPercent = progressDuration > 0 ? Math.min(100, Math.max(0, progressPosition / progressDuration * 100)) : 0;
+  const progressState = speakerStarting ? "STARTING" : speakerArmed && progressMatchesCurrent ? spotifyProgress.paused ? "PAUSED" : "PLAYING" : speakerArmed ? "LOADING" : "READY";
   const spotifyCallbackUrl = shareUrl ? new URL("/api/spotify/callback", shareUrl).toString() : "";
   return <main className="host-shell">
     <header className="topbar"><a className="brand" href="/"><span className="brand-mark">HM</span><span>HackMusic Host</span></a><a className="participant-link" href={`/e/${code}`}>{party.status === "ended" ? "🏆 View final party page →" : "🎉 Open participant page →"}</a></header>
@@ -712,7 +763,7 @@ export default function HostRoom({ code }: { code: string }) {
       {spotifyMessage && <p className="spotify-message" role="status">{spotifyMessage}</p>}
     </section>}
 
-    <div className="host-grid"><section className="host-now-card"><div className="section-kicker"><span>{party.status === "ended" ? "📼 LAST SONG" : party.status === "lobby" ? "🌙 SPEAKER SLEEPING" : "🔊 ON THE SPEAKER"}</span><span>{party.status === "ended" ? `📦 ${party.queueCount} UNPLAYED` : `🤫 ${party.queueCount} WAITING`}</span></div>{party.currentTrack ? <><div className="host-track"><div className={`host-art ${party.currentTrack.color}`}>🎵</div><div><h2>{party.currentTrack.title}</h2><p>{party.currentTrack.artist}{party.currentTrack.duration ? ` · ${party.currentTrack.duration}` : ""}</p></div></div>{party.status !== "ended" && (currentSpotifyId ? <div className={`spotify-host-player spotify-${spotifyStatus}`}><div><strong>🟢 SPOTIFY PREMIUM SPEAKER</strong><span>{spotifyStatus === "ready" ? "🎶 Full song · no preview limit" : "👆 Connect Spotify above first"}</span></div><button type="button" disabled={speakerStarting || spotifyStatus !== "ready" || party.status !== "live"} onClick={() => void startHostSpeaker()}>{speakerStarting ? "🔊 Starting speaker…" : speakerArmed ? "🔁 Play this track again →" : "🔊 Start speaker →"}</button><small>👉 Starts Spotify only. Funny sounds stay off unless you enable them separately.</small></div> : <div className="unplayable-track"><strong>⚠️ This older queue item has no Spotify track token.</strong><span>Skip this legacy item once. Every newly added song is now validated before it enters the queue.</span></div>)}<div className="host-reaction-counts"><div className="host-cheers"><strong>{cheers}</strong><span>🙌 CHEERS</span></div><div className="host-boos"><strong>{boos}</strong><span>👻 BOOS</span></div></div></> : <div className="host-empty"><strong>{party.status === "ended" ? "🏁 The speaker is off." : party.status === "lobby" ? "🌙 Playback is locked." : "🦗 No song yet."}</strong><p>{party.status === "ended" ? "The final scoreboard and any unplayed songs are saved below." : party.status === "lobby" ? `🤫 ${party.queueCount} secret ${party.queueCount === 1 ? "song is" : "songs are"} waiting for your launch.` : "🎵 Open the participant page and add the first one."}</p></div>}</section>
+    <div className="host-grid"><section className="host-now-card"><div className="section-kicker"><span>{party.status === "ended" ? "📼 LAST SONG" : party.status === "lobby" ? "🌙 SPEAKER SLEEPING" : "🔊 ON THE SPEAKER"}</span><span>{party.status === "ended" ? `📦 ${party.queueCount} UNPLAYED` : `🤫 ${party.queueCount} WAITING`}</span></div>{party.currentTrack ? <><div className="host-track"><div className={`host-art ${party.currentTrack.color}`}>🎵</div><div><h2>{party.currentTrack.title}</h2><p>{party.currentTrack.artist}{party.currentTrack.duration ? ` · ${party.currentTrack.duration}` : ""}</p></div></div>{party.status !== "ended" && (currentSpotifyId ? <div className={`spotify-host-player spotify-${spotifyStatus}`}><div><strong>🟢 SPOTIFY PREMIUM SPEAKER</strong><span>{spotifyStatus === "ready" ? "🎶 Full song · no preview limit" : "👆 Connect Spotify above first"}</span></div><button type="button" disabled={speakerStarting || spotifyStatus !== "ready" || party.status !== "live"} onClick={() => void startHostSpeaker()}>{speakerStarting ? "🔊 Starting speaker…" : speakerArmed ? "🔁 Play this track again →" : "🔊 Start speaker →"}</button><div className={`host-playback-progress ${progressState.toLowerCase()}`}><div><strong>{formatPlaybackTime(progressPosition)}</strong><span>{progressState === "PLAYING" ? "⚡ PLAYING" : progressState === "PAUSED" ? "⏸ PAUSED" : progressState === "STARTING" ? "🔊 STARTING" : progressState === "LOADING" ? "⏳ LOADING TRACK" : "👆 READY TO START"}</span><strong>{formatPlaybackTime(progressDuration)}</strong></div><div className="host-progress-track" role="progressbar" aria-label={`Spotify playback: ${formatPlaybackTime(progressPosition)} of ${formatPlaybackTime(progressDuration)}`} aria-valuemin={0} aria-valuemax={Math.max(1, progressDuration)} aria-valuenow={Math.round(progressPosition)}><span style={{ width: `${progressPercent}%` }} /></div></div><small>👉 Starts Spotify only. Funny sounds stay off unless you enable them separately.</small></div> : <div className="unplayable-track"><strong>⚠️ This older queue item has no Spotify track token.</strong><span>Skip this legacy item once. Every newly added song is now validated before it enters the queue.</span></div>)}<div className="host-reaction-counts"><div className="host-cheers"><strong>{cheers}</strong><span>🙌 CHEERS</span></div><div className="host-boos"><strong>{boos}</strong><span>👻 BOOS</span></div></div></> : <div className="host-empty"><strong>{party.status === "ended" ? "🏁 The speaker is off." : party.status === "lobby" ? "🌙 Playback is locked." : "🦗 No song yet."}</strong><p>{party.status === "ended" ? "The final scoreboard and any unplayed songs are saved below." : party.status === "lobby" ? `🤫 ${party.queueCount} secret ${party.queueCount === 1 ? "song is" : "songs are"} waiting for your launch.` : "🎵 Open the participant page and add the first one."}</p></div>}</section>
       {party.status === "ended" ? <section className="host-controls-card host-controls-retired"><div className="card-title-row"><h2>🧊 CONTROLS FROZEN</h2><span>FINAL</span></div><div className="host-retired-mark">🏁</div><h3>The buttons have left the building.</h3><p>Playback, reactions, invitations, passcodes, queue rules, funny sounds, and screen wake lock are finished for this room.</p><a href="/">Start fresh with a new party →</a></section> : <section className="host-controls-card"><div className="card-title-row"><h2>🎛️ CONTROLS</h2><span>📱 HOST DEVICE</span></div><button className={`host-audio ${audioEnabled ? "armed" : ""}`} type="button" aria-pressed={audioEnabled} onClick={audioEnabled ? disableAudio : enableAudio}>{audioEnabled ? "🔇 Disable funny sounds" : "🎉 Enable & test funny sounds"}</button><button className={`host-wake-lock ${wakeLockActive ? "armed" : ""}`} type="button" aria-pressed={wakeLockActive} disabled={wakeLockSupported === false} onClick={() => wakeLockActive ? void releaseScreenWakeLock() : void requestScreenWakeLock()}>{wakeLockActive ? "🔒 Screen staying awake · tap to release" : wakeLockSupported === false ? "⚠️ Screen wake lock unavailable" : "☀️ Keep this screen awake"}</button><button className="host-skip" type="button" disabled={busy || !party.currentTrack} onClick={() => void control("skip")}>⏭️ Skip to next song →</button><button className="host-end" type="button" disabled={busy} onClick={() => setEndConfirmOpen(true)}>🏁 End party & freeze scores</button><p className={`host-wake-status ${wakeLockActive ? "active" : ""}`}>{wakeLockStatus}</p><details className="host-wake-guide"><summary>🛟 Screen-awake help · detected {hostDeviceName}</summary><ul><li className={hostDevice === "ios" ? "current" : ""}><strong>🍎 iPhone / iPad</strong><span>Try the button first. If unavailable, use Settings → Display &amp; Brightness → Auto-Lock and choose Never or the longest available time.</span></li><li className={hostDevice === "android" ? "current" : ""}><strong>🤖 Android</strong><span>Try the button first. Otherwise increase Display → Screen timeout, or enable Developer options → Stay awake while charging.</span></li><li className={hostDevice === "computer" ? "current" : ""}><strong>💻 Computer</strong><span>Keep this tab visible. If needed, temporarily disable display sleep in the computer’s power or display settings.</span></li></ul></details><p className="host-hint">🔊 Reaction sounds play only from this host device. Keep this page open and its volume up.</p></section>}
     </div>
     <section className="host-queue-card"><div className="card-title-row"><h2>{party.status === "ended" ? "📦 UNPLAYED AT CLOSING" : "🎶 WAITING IN THE QUEUE"}</h2><span>{party.status === "ended" ? "ARCHIVE" : "🤫"} {party.queuedTracks.length} {party.queuedTracks.length === 1 ? "SONG" : "SONGS"}</span></div>{party.status !== "ended" && <fieldset className="queue-mode-picker"><legend>HOW SHOULD THE NEXT SONG BE PICKED?</legend><div>{queueModes.map((mode) => <button className={party.queueMode === mode.id ? "active" : ""} type="button" aria-pressed={party.queueMode === mode.id} disabled={busy} onClick={() => void changeQueueMode(mode.id)} key={mode.id}><span className="queue-mode-icon">{mode.icon}</span><span className="queue-mode-copy"><strong>{mode.title}</strong><small>{mode.copy}</small></span><span className="queue-mode-state">{party.queueMode === mode.id ? "✓ ACTIVE" : "SELECT"}</span></button>)}</div></fieldset>}{party.queuedTracks.length ? <><p className="queue-order-note">{party.status === "ended" ? "📼 These songs were still waiting when the final bell rang." : party.queueMode === "ordered" ? "📍 The numbered list below is the exact play order." : party.queueMode === "random" ? "🎲 These songs are the chaos pool. The next one is chosen only when it’s time." : "⚖️ These songs are the fair-play pool. HackMusic balances people first, then rolls the dice."}</p><ol className="host-queue-list">{party.queuedTracks.map((track, index) => <li key={track.queueId}><span className="queue-position">{party.status === "ended" ? String(index + 1).padStart(2, "0") : party.queueMode === "ordered" ? String(index + 1).padStart(2, "0") : party.queueMode === "random" ? "🎲" : "⚖️"}</span><span className={`queue-art ${track.color}`}>🎵</span><div className="queue-track-copy"><strong dir="auto">{track.title}</strong><span dir="auto">🎤 {track.artist}{track.duration ? ` · ${track.duration}` : ""}</span></div><div className="queue-submitter"><span className={`avatar ${track.color}`}>{track.submitterInitials}</span><small>Added by</small><strong>{track.submittedBy}</strong></div></li>)}</ol></> : <div className="host-queue-empty"><span>{party.status === "ended" ? "✅" : "🪹"}</span><div><strong>{party.status === "ended" ? "Nothing was left behind." : "The queue is gloriously empty."}</strong><p>{party.status === "ended" ? "Every queued song got its moment, or met a strategically timed skip." : "Share the room code and let somebody make a questionable musical decision."}</p></div></div>}</section>

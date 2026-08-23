@@ -337,6 +337,12 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /player\.resume\(\)/);
   assert.match(source, /Start speaker →/);
   assert.match(source, /Starts Spotify only\. Funny sounds stay off/);
+  assert.match(source, /formatPlaybackTime/);
+  assert.match(source, /setInterval\(updateProgress, 500\)/);
+  assert.match(source, /host-playback-progress/);
+  assert.match(source, /role="progressbar"/);
+  assert.match(source, /READY TO START/);
+  assert.match(source, /LOADING TRACK/);
   assert.match(source, /Disable funny sounds/);
   assert.match(source, /function disableAudio\(\)/);
   assert.doesNotMatch(source, /Start speaker \+ funny sounds/);
@@ -356,6 +362,8 @@ test("renders a code-specific host control surface", async () => {
   const hostStyles = await readFile(new URL("app/globals.css", projectRoot), "utf8");
   assert.match(hostStyles, /\.host-grid \{[^}]*align-items: start/);
   assert.match(hostStyles, /\.host-reaction-counts > div \{[^}]*align-items: center;[^}]*min-height: 82px/);
+  assert.match(hostStyles, /\.host-progress-track \{[^}]*height: 16px/);
+  assert.match(hostStyles, /\.host-progress-track > span \{[^}]*transition: width \.45s linear/);
   const partySource = await readFile(new URL("db/party.ts", projectRoot), "utf8");
   assert.match(partySource, /const queuedTracks = isHost/);
   assert.match(partySource, /s\.status = 'pending'/);

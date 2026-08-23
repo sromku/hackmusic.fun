@@ -1004,6 +1004,16 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .spotify-host-player button { min-height: 50px; border: 2px solid var(--ink); background: var(--sun); box-shadow: 4px 4px 0 var(--ink); cursor: pointer; font-weight: 950; }
 .spotify-host-player button:disabled { box-shadow: none; cursor: not-allowed; opacity: .58; }
 .spotify-host-player small { font-size: 10px; font-weight: 750; }
+.host-playback-progress { display: grid; gap: 7px; border: 2px solid var(--ink); background: var(--white); padding: 10px 11px; }
+.host-playback-progress > div:first-child { display: grid; grid-template-columns: 42px 1fr 42px; gap: 9px; align-items: center; }
+.host-playback-progress strong { font: 900 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+.host-playback-progress strong:last-child { text-align: right; }
+.host-playback-progress > div:first-child > span { justify-self: center; color: #5f5a52; font-size: 8px; font-weight: 950; letter-spacing: .1em; text-align: center; }
+.host-playback-progress.playing > div:first-child > span { color: var(--ink); }
+.host-progress-track { height: 16px; overflow: hidden; border: 2px solid var(--ink); background: var(--paper); }
+.host-progress-track > span { display: block; width: 0; height: 100%; border-right: 2px solid var(--ink); background: var(--blue); transition: width .45s linear; }
+.host-playback-progress.playing .host-progress-track > span { background: var(--coral); }
+.host-playback-progress.paused .host-progress-track > span { background: var(--sun); }
 .unplayable-track { display: grid; gap: 4px; border-top: 2px solid var(--ink); background: var(--coral); padding: 16px 20px; }
 .unplayable-track strong { font-size: 12px; }
 .unplayable-track span { font-size: 11px; font-weight: 700; }
