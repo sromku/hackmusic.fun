@@ -56,7 +56,7 @@ type SpotifyPlayer = {
 };
 
 const REACTION_DUCK_VOLUME = 0.16;
-const REACTION_SOUND_VERSION = "2026-08-23-1";
+const REACTION_SOUND_VERSION = "2026-08-23-2";
 const waitForAudioFade = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
 
 type SpotifyConstructor = new (options: {
@@ -283,7 +283,7 @@ export default function HostRoom({ code }: { code: string }) {
   }, [requestScreenWakeLock]);
 
   useEffect(() => {
-    const cheerSound = new Audio(`/sounds/woohoo.mp3?v=${REACTION_SOUND_VERSION}`);
+    const cheerSound = new Audio(`/sounds/woohoo-v2.wav?v=${REACTION_SOUND_VERSION}`);
     const booSound = new Audio(`/sounds/boo.mp3?v=${REACTION_SOUND_VERSION}`);
     cheerSound.preload = "auto";
     booSound.preload = "auto";
