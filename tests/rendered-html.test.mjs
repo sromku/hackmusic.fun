@@ -120,6 +120,9 @@ test("renders the create and join landing page", async () => {
   assert.match(globalStyles, /\.landing-hero \{[^}]*align-items: start;/);
   assert.match(globalStyles, /\.landing-copy \{ padding-top: clamp\(64px, 7vh, 84px\); \}/);
   assert.match(globalStyles, /@media \(max-width: 840px\)[\s\S]*\.landing-copy \{ padding-top: 0; \}/);
+  assert.match(globalStyles, /\.rule-connector::before \{[^}]*width: 3px;[^}]*background: var\(--ink\);/);
+  assert.match(globalStyles, /\.rule-connector::after \{[^}]*width: 9px;[^}]*background: var\(--mint\);/);
+  assert.doesNotMatch(globalStyles, /\.rule-connector::after \{ content: "↓";/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/);
 });
 

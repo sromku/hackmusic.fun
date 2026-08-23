@@ -209,8 +209,10 @@ body {
   .landing-how-heading { align-items: flex-start; flex-direction: column; gap: 3px; }
   .landing-rules { grid-template-columns: 1fr; gap: 0; }
   .landing-rule { grid-template-columns: 42px 1fr; grid-template-rows: 1fr; min-height: 94px; align-items: center; padding: 12px 14px; }
-  .rule-connector { width: 26px; height: 18px; margin: -2px 0; border-radius: 12px; font-size: 0; }
-  .rule-connector::after { content: "↓"; font-size: 13px; }
+  .rule-connector { position: relative; width: 28px; height: 28px; margin: 0 auto; border: 0; border-radius: 0; background: transparent; font-size: 0; overflow: visible; }
+  .rule-connector::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; background: var(--ink); transform: translateX(-50%); }
+  .rule-connector::after { content: ""; position: absolute; top: 50%; left: 50%; width: 9px; height: 9px; border: 2px solid var(--ink); background: var(--mint); transform: translate(-50%, -50%) rotate(45deg); }
+  .landing-rules > .rule-connector:nth-of-type(2)::after { background: var(--sun); }
   .landing-rule .rule-step { position: absolute; top: 9px; left: 10px; }
   .landing-rule .rule-icon { grid-column: 1; justify-self: start; font-size: 29px; }
   .landing-rule > div { grid-column: 2; align-self: center; }
