@@ -74,6 +74,8 @@ test("renders the create and join landing page", async () => {
   assert.match(landingSource, /Clear this browser’s site data/);
   assert.equal((landingSource.match(/className="rule-connector"/g) ?? []).length, 2);
   assert.doesNotMatch(landingSource, /next\/link/);
+  const globalStyles = await readFile(new URL("app/globals.css", projectRoot), "utf8");
+  assert.match(globalStyles, /\.landing-copy h1 \{[^}]*padding-bottom: \.12em;[^}]*margin-bottom: -\.12em;/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/);
 });
 
