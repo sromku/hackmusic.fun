@@ -238,7 +238,12 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /wakeLock\.request\("screen"\)/);
   assert.match(source, /visibilitychange/);
   assert.match(source, /Keep this screen awake/);
-  assert.match(source, /Android auto-lock is blocked/);
+  assert.match(source, /detectHostDevice/);
+  assert.match(source, /Screen-awake help · detected/);
+  assert.match(source, /iPhone \/ iPad/);
+  assert.match(source, /Developer options → Stay awake/);
+  assert.match(source, /Computer/);
+  assert.doesNotMatch(source, /Android auto-lock is blocked|stop Android from auto-locking/);
   assert.match(source, /PRE-PARTY LOBBY IS OPEN/);
   assert.match(source, /Start the party now/);
   assert.match(source, /Let the queue marinate/);
@@ -266,6 +271,14 @@ test("renders a code-specific host control surface", async () => {
   const participantSource = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
   assert.match(participantSource, /Checking Spotify/);
   assert.match(participantSource, /Add to the secret queue/);
+});
+
+test("detects the host device used for wake-lock guidance", async () => {
+  const devices = await loadTypeScriptModule("lib/host-device.ts");
+  assert.equal(devices.detectHostDevice("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)"), "ios");
+  assert.equal(devices.detectHostDevice("Mozilla/5.0 (Linux; Android 15; Pixel 9)"), "android");
+  assert.equal(devices.detectHostDevice("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"), "computer");
+  assert.equal(devices.detectHostDevice("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", "MacIntel", 5), "ios");
 });
 
 test("starts Spotify PKCE without exposing a client secret", async () => {

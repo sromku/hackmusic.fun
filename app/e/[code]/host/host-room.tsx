@@ -3,6 +3,7 @@
 import Image from "next/image";
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { detectHostDevice, type HostDevice } from "../../../../lib/host-device";
 import { extractSpotifyTrackId } from "../../../../lib/spotify-track";
 
 type HostParty = {
@@ -92,6 +93,7 @@ export default function HostRoom({ code }: { code: string }) {
   const [spotifyMessage, setSpotifyMessage] = useState("");
   const [wakeLockSupported, setWakeLockSupported] = useState<boolean | null>(() => typeof navigator === "undefined" ? null : Boolean((navigator as NavigatorWithWakeLock).wakeLock));
   const [wakeLockActive, setWakeLockActive] = useState(false);
+  const [hostDevice, setHostDevice] = useState<HostDevice>("unknown");
   const audioEnabledRef = useRef(false);
   const cheerAudioRef = useRef<HTMLAudioElement | null>(null);
   const booAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -105,12 +107,18 @@ export default function HostRoom({ code }: { code: string }) {
   const wakeLockRef = useRef<ScreenWakeLockSentinel | null>(null);
   const wakeLockWantedRef = useRef(false);
   const currentSpotifyId = party?.currentTrack ? extractSpotifyTrackId(party.currentTrack.id) : "";
+  const hostDeviceName = hostDevice === "ios" ? "iPhone / iPad" : hostDevice === "android" ? "Android device" : hostDevice === "computer" ? "computer" : "device";
+  const wakeLockStatus = wakeLockActive
+    ? `✅ This ${hostDeviceName} will stay awake while the host tab remains visible.`
+    : wakeLockSupported === false
+      ? `⚠️ Automatic wake lock is unavailable here. Open the ${hostDeviceName} fallback below.`
+      : `💤 Keep this ${hostDeviceName} awake during the party.`;
 
   const requestScreenWakeLock = useCallback(async (announce = true) => {
     const wakeLock = (navigator as NavigatorWithWakeLock).wakeLock;
     if (!wakeLock) {
       setWakeLockSupported(false);
-      if (announce) setMessage("⚠️ This browser cannot keep the screen awake automatically. Use Android’s Stay awake setting while charging.");
+      if (announce) setMessage(`⚠️ This browser cannot keep the ${hostDeviceName} awake automatically. Open the screen-awake help below.`);
       return false;
     }
     setWakeLockSupported(true);
@@ -129,15 +137,15 @@ export default function HostRoom({ code }: { code: string }) {
           setWakeLockActive(false);
         }
       });
-      if (announce) setMessage("🔒 Screen lock blocked. Keep this host tab visible and the phone charging.");
+      if (announce) setMessage(`🔒 Screen lock blocked on this ${hostDeviceName}. Keep the host tab visible.`);
       return true;
     } catch {
       wakeLockWantedRef.current = false;
       setWakeLockActive(false);
-      if (announce) setMessage("⚠️ Android would not allow the screen wake lock. Turn off Battery Saver or use Developer options → Stay awake.");
+      if (announce) setMessage("⚠️ The device rejected the wake lock. Check battery or power-saving settings and the fallback guide below.");
       return false;
     }
-  }, []);
+  }, [hostDeviceName]);
 
   const releaseScreenWakeLock = useCallback(async (announce = true) => {
     wakeLockWantedRef.current = false;
@@ -145,8 +153,8 @@ export default function HostRoom({ code }: { code: string }) {
     wakeLockRef.current = null;
     setWakeLockActive(false);
     if (sentinel && !sentinel.released) await sentinel.release().catch(() => undefined);
-    if (announce) setMessage("💤 Screen wake lock released. Android may auto-lock again.");
-  }, []);
+    if (announce) setMessage(`💤 Screen wake lock released. This ${hostDeviceName} may sleep again.`);
+  }, [hostDeviceName]);
 
   const playReactionSound = useCallback((kind: "up" | "down") => {
     if (!audioEnabledRef.current) return;
@@ -168,6 +176,7 @@ export default function HostRoom({ code }: { code: string }) {
       setHostKey(key);
       setShareUrl(url);
       setSpotifyClientId(savedSpotifyClientId);
+      setHostDevice(detectHostDevice(navigator.userAgent, navigator.platform, navigator.maxTouchPoints));
       if (!participant || !key) setError("This browser did not create that room, so its host controls are locked.");
     });
     QRCode.toDataURL(url, { width: 220, margin: 1, color: { dark: "#151515", light: "#fffef9" } }).then(setQrUrl).catch(() => undefined);
@@ -563,7 +572,7 @@ export default function HostRoom({ code }: { code: string }) {
     </section>
 
     <div className="host-grid"><section className="host-now-card"><div className="section-kicker"><span>{party.status === "lobby" ? "🌙 SPEAKER SLEEPING" : "🔊 ON THE SPEAKER"}</span><span>🤫 {party.queueCount} WAITING</span></div>{party.currentTrack ? <><div className="host-track"><div className={`host-art ${party.currentTrack.color}`}>🎵</div><div><h2>{party.currentTrack.title}</h2><p>{party.currentTrack.artist}{party.currentTrack.duration ? ` · ${party.currentTrack.duration}` : ""}</p></div></div>{currentSpotifyId ? <div className={`spotify-host-player spotify-${spotifyStatus}`}><div><strong>🟢 SPOTIFY PREMIUM SPEAKER</strong><span>{spotifyStatus === "ready" ? "🎶 Full song · no preview limit" : "👆 Connect Spotify above first"}</span></div><button type="button" disabled={spotifyStatus !== "ready" || party.status !== "live"} onClick={startHostSpeaker}>{speakerArmed ? "🔁 Play this track again →" : "🔊 Start speaker + funny sounds →"}</button><small>👉 Tap once on this host device. Every next secret song will start automatically.</small></div> : <div className="unplayable-track"><strong>⚠️ This older queue item has no Spotify track token.</strong><span>Skip this legacy item once. Every newly added song is now validated before it enters the queue.</span></div>}<div className="host-reaction-counts"><div className="host-cheers"><strong>{cheers}</strong><span>🙌 CHEERS</span></div><div className="host-boos"><strong>{boos}</strong><span>👻 BOOS</span></div></div></> : <div className="host-empty"><strong>{party.status === "lobby" ? "🌙 Playback is locked." : "🦗 No song yet."}</strong><p>{party.status === "lobby" ? `🤫 ${party.queueCount} secret ${party.queueCount === 1 ? "song is" : "songs are"} waiting for your launch.` : "🎵 Open the participant page and add the first one."}</p></div>}</section>
-      <section className="host-controls-card"><div className="card-title-row"><h2>🎛️ CONTROLS</h2><span>📱 THIS PHONE ONLY</span></div><button className={`host-audio ${audioEnabled ? "armed" : ""}`} type="button" onClick={enableAudio}>{audioEnabled ? "✅ Funny sounds armed · tap to test" : "🔊 Enable & test funny sounds"}</button><button className={`host-wake-lock ${wakeLockActive ? "armed" : ""}`} type="button" aria-pressed={wakeLockActive} disabled={wakeLockSupported === false} onClick={() => wakeLockActive ? void releaseScreenWakeLock() : void requestScreenWakeLock()}>{wakeLockActive ? "🔒 Screen staying awake · tap to release" : wakeLockSupported === false ? "⚠️ Screen wake lock unavailable" : "☀️ Keep this screen awake"}</button><button className="host-skip" type="button" disabled={busy || !party.currentTrack || party.status === "ended"} onClick={() => void control("skip")}>⏭️ Skip to next song →</button><button className="host-end" type="button" disabled={busy || party.status === "ended"} onClick={() => setEndConfirmOpen(true)}>🏁 End party & freeze scores</button><p className={`host-wake-status ${wakeLockActive ? "active" : ""}`}>{wakeLockActive ? "✅ Android auto-lock is blocked while this host tab stays visible." : wakeLockSupported === false ? "⚠️ Use Android Developer options → Stay awake while charging." : "💤 Arm this to stop Android from auto-locking during the party."}</p><p className="host-hint">🔊 Reaction sounds play only from this host device. Keep this page open and its volume up.</p></section>
+      <section className="host-controls-card"><div className="card-title-row"><h2>🎛️ CONTROLS</h2><span>📱 HOST DEVICE</span></div><button className={`host-audio ${audioEnabled ? "armed" : ""}`} type="button" onClick={enableAudio}>{audioEnabled ? "✅ Funny sounds armed · tap to test" : "🔊 Enable & test funny sounds"}</button><button className={`host-wake-lock ${wakeLockActive ? "armed" : ""}`} type="button" aria-pressed={wakeLockActive} disabled={wakeLockSupported === false} onClick={() => wakeLockActive ? void releaseScreenWakeLock() : void requestScreenWakeLock()}>{wakeLockActive ? "🔒 Screen staying awake · tap to release" : wakeLockSupported === false ? "⚠️ Screen wake lock unavailable" : "☀️ Keep this screen awake"}</button><button className="host-skip" type="button" disabled={busy || !party.currentTrack || party.status === "ended"} onClick={() => void control("skip")}>⏭️ Skip to next song →</button><button className="host-end" type="button" disabled={busy || party.status === "ended"} onClick={() => setEndConfirmOpen(true)}>🏁 End party & freeze scores</button><p className={`host-wake-status ${wakeLockActive ? "active" : ""}`}>{wakeLockStatus}</p><details className="host-wake-guide"><summary>🛟 Screen-awake help · detected {hostDeviceName}</summary><ul><li className={hostDevice === "ios" ? "current" : ""}><strong>🍎 iPhone / iPad</strong><span>Try the button first. If unavailable, use Settings → Display &amp; Brightness → Auto-Lock and choose Never or the longest available time.</span></li><li className={hostDevice === "android" ? "current" : ""}><strong>🤖 Android</strong><span>Try the button first. Otherwise increase Display → Screen timeout, or enable Developer options → Stay awake while charging.</span></li><li className={hostDevice === "computer" ? "current" : ""}><strong>💻 Computer</strong><span>Keep this tab visible. If needed, temporarily disable display sleep in the computer’s power or display settings.</span></li></ul></details><p className="host-hint">🔊 Reaction sounds play only from this host device. Keep this page open and its volume up.</p></section>
     </div>
     <section className="host-queue-card"><div className="card-title-row"><h2>🎶 WAITING IN THE QUEUE</h2><span>🤫 {party.queuedTracks.length} {party.queuedTracks.length === 1 ? "SONG" : "SONGS"}</span></div><fieldset className="queue-mode-picker"><legend>HOW SHOULD THE NEXT SONG BE PICKED?</legend><div>{queueModes.map((mode) => <button className={party.queueMode === mode.id ? "active" : ""} type="button" aria-pressed={party.queueMode === mode.id} disabled={busy || party.status === "ended"} onClick={() => void changeQueueMode(mode.id)} key={mode.id}><span className="queue-mode-icon">{mode.icon}</span><span className="queue-mode-copy"><strong>{mode.title}</strong><small>{mode.copy}</small></span><span className="queue-mode-state">{party.queueMode === mode.id ? "✓ ACTIVE" : "SELECT"}</span></button>)}</div></fieldset>{party.queuedTracks.length ? <><p className="queue-order-note">{party.queueMode === "ordered" ? "📍 The numbered list below is the exact play order." : party.queueMode === "random" ? "🎲 These songs are the chaos pool. The next one is chosen only when it’s time." : "⚖️ These songs are the fair-play pool. HackMusic balances people first, then rolls the dice."}</p><ol className="host-queue-list">{party.queuedTracks.map((track, index) => <li key={track.queueId}><span className="queue-position">{party.queueMode === "ordered" ? String(index + 1).padStart(2, "0") : party.queueMode === "random" ? "🎲" : "⚖️"}</span><span className={`queue-art ${track.color}`}>🎵</span><div className="queue-track-copy"><strong dir="auto">{track.title}</strong><span dir="auto">🎤 {track.artist}{track.duration ? ` · ${track.duration}` : ""}</span></div><div className="queue-submitter"><span className={`avatar ${track.color}`}>{track.submitterInitials}</span><small>Added by</small><strong>{track.submittedBy}</strong></div></li>)}</ol></> : <div className="host-queue-empty"><span>🪹</span><div><strong>The queue is gloriously empty.</strong><p>Share the room code and let somebody make a questionable musical decision.</p></div></div>}</section>
     <section className="leaderboard-card"><div className="card-title-row"><h2>{party.status === "ended" ? "🏆 FINAL SCOREBOARD" : party.status === "lobby" ? "🌙 LOBBY ROSTER" : "⚡ LIVE SCOREBOARD"}</h2><span>🎉 {party.people.length} PLAYERS</span></div><ol>{[...party.people].sort((a, b) => b.score - a.score).map((person, index) => <li key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><b>{party.status === "lobby" ? index + 1 : index === 0 ? "👑" : index + 1}</b><strong>{person.name}</strong><span>{person.score} pts</span></li>)}</ol></section>

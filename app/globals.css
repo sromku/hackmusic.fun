@@ -768,6 +768,13 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .host-hint { margin: 14px 0 0; color: #6b675f; font-size: 11px; }
 .host-wake-status { margin: 16px 0 0; border-left: 4px solid var(--coral); background: var(--paper); padding: 9px 10px; color: #5d5951; font-size: 10px; font-weight: 800; line-height: 1.4; }
 .host-wake-status.active { border-left-color: var(--ink); background: var(--mint); color: var(--ink); }
+.host-wake-guide { margin-top: 10px; border: 2px solid var(--ink); background: var(--white); }
+.host-wake-guide summary { padding: 10px; cursor: pointer; font-size: 10px; font-weight: 900; line-height: 1.35; }
+.host-wake-guide ul { display: grid; gap: 8px; margin: 0; border-top: 2px solid var(--ink); padding: 10px; list-style: none; }
+.host-wake-guide li { display: grid; gap: 3px; border-left: 4px solid #c7c0b4; padding: 5px 8px; }
+.host-wake-guide li.current { border-left-color: var(--coral); background: var(--sun); }
+.host-wake-guide strong { font-size: 10px; }
+.host-wake-guide span { color: #5d5951; font-size: 9px; font-weight: 750; line-height: 1.4; }
 .host-queue-card { margin-top: 24px; padding: 22px; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .host-queue-card > .card-title-row h2 { font-size: 17px; }
 .host-queue-card > .card-title-row > span { border: 2px solid var(--ink); background: var(--sun); padding: 6px 8px; }
