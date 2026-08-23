@@ -478,7 +478,7 @@ test("protects the hosted read-only admin with ChatGPT identity and an owner all
   assert.match(pageSource, /OWNER ACCESS ONLY/);
   assert.match(pageSource, /robots: \{ index: false/);
   const adminLayoutSource = await readFile(new URL("app/backstage-retired-slug/layout.tsx", projectRoot), "utf8");
-  assert.match(adminLayoutSource, /\/admin-favicon\.svg\?v=admin-red-3/);
+  assert.match(adminLayoutSource, /\/admin-favicon\.svg\?v=admin-hm-red-1/);
   assert.match(adminLayoutSource, /<AdminFavicon \/>/);
   const adminFaviconSource = await readFile(new URL("app/backstage-retired-slug/admin-favicon.tsx", projectRoot), "utf8");
   assert.match(adminFaviconSource, /link\[rel~="icon"\]/);
@@ -487,7 +487,9 @@ test("protects the hosted read-only admin with ChatGPT identity and an owner all
   const rootLayoutSource = await readFile(new URL("app/layout.tsx", projectRoot), "utf8");
   assert.match(rootLayoutSource, /icons: \{/);
   assert.doesNotMatch(rootLayoutSource, /<link rel="icon"/);
-  await access(new URL("public/admin-favicon.svg", projectRoot));
+  const adminFaviconSvg = await readFile(new URL("public/admin-favicon.svg", projectRoot), "utf8");
+  assert.match(adminFaviconSvg, /#FF5B51/);
+  assert.match(adminFaviconSvg, /#FFF9ED/);
   const dashboardSource = await readFile(new URL("app/backstage-retired-slug/admin-dashboard.tsx", projectRoot), "utf8");
   assert.match(dashboardSource, /Owner only\. Read only/);
   assert.match(dashboardSource, /\/api\/backstage-retired-slug/);
