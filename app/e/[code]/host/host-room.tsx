@@ -65,7 +65,7 @@ type SpotifyPlayer = {
 };
 
 const REACTION_DUCK_VOLUME = 0.28;
-const REACTION_SOUND_VERSION = "2026-08-23-5";
+const REACTION_SOUND_VERSION = "2026-08-23-6";
 const waitForAudioFade = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
 
 function formatPlaybackTime(milliseconds: number) {
@@ -220,7 +220,7 @@ export default function HostRoom({ code }: { code: string }) {
     if (!reactionAudioBuffersRef.current) {
       const [cheerResponse, booResponse] = await Promise.all([
         fetch(`/sounds/woohoo-crowd.wav?v=${REACTION_SOUND_VERSION}`),
-        fetch(`/sounds/boo.wav?v=${REACTION_SOUND_VERSION}`),
+        fetch(`/sounds/boo.mp3?v=${REACTION_SOUND_VERSION}`),
       ]);
       if (!cheerResponse.ok || !booResponse.ok) throw new Error("The funny sounds could not be loaded.");
       const [cheerBytes, booBytes] = await Promise.all([cheerResponse.arrayBuffer(), booResponse.arrayBuffer()]);

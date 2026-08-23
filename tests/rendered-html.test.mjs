@@ -394,8 +394,9 @@ test("renders a code-specific host control surface", async () => {
   assert.doesNotMatch(source, /pin=\$\{encodeURIComponent\(hostKey\)\}/);
   assert.match(source, /JOIN PASSCODE/);
   assert.match(source, /\/sounds\/woohoo-crowd\.wav/);
-  assert.match(source, /\/sounds\/boo\.mp3/);
-  assert.match(source, /REACTION_SOUND_VERSION = "2026-08-23-5"/);
+  assert.equal((source.match(/\/sounds\/boo\.mp3/g) ?? []).length, 2);
+  assert.doesNotMatch(source, /\/sounds\/boo\.wav/);
+  assert.match(source, /REACTION_SOUND_VERSION = "2026-08-23-6"/);
   assert.match(source, /activityAfter=\$\{encodeURIComponent\(soundActivityCursorRef\.current\)\}/);
   assert.match(source, /knownSoundActivityRef/);
   assert.match(source, /template\.cloneNode\(true\)/);
@@ -599,6 +600,7 @@ test("ships product metadata and removes starter artifacts", async () => {
   await access(new URL("public/apple-touch-icon.png", projectRoot));
   await access(new URL("public/sounds/woohoo-crowd.wav", projectRoot));
   await access(new URL("public/sounds/boo.mp3", projectRoot));
+  await assert.rejects(access(new URL("public/sounds/boo.wav", projectRoot)));
   await assert.rejects(access(new URL("app/_sites-preview/SkeletonPreview.tsx", projectRoot)));
   const packageJson = await readFile(new URL("package.json", projectRoot), "utf8");
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
