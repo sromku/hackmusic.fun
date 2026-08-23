@@ -116,6 +116,12 @@ export type HostParty = {
   activity?: Array<{ id: string; tone: ReactionTone | "song"; createdAt: string }>;
 };
 
+export type HostTransfer = {
+  token: string;
+  targetName: string;
+  expiresAt: string;
+};
+
 export type PartyAction =
   | "create"
   | "join"
@@ -129,6 +135,9 @@ export type PartyAction =
   | "end"
   | "queueMode"
   | "passcode"
+  | "prepareHostTransfer"
+  | "cancelHostTransfer"
+  | "claimHost"
   | "skipProgress";
 
 export type PartyRequest = {
@@ -148,6 +157,8 @@ export type PartyRequest = {
   trackId?: string;
   submissionId?: string;
   avatarEmoji?: string;
+  targetParticipantId?: string;
+  transferToken?: string;
   skipPercent?: number;
   track?: PartyTrack;
 };

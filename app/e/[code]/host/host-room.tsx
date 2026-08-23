@@ -5,7 +5,7 @@ import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { detectHostDevice, type HostDevice } from "../../../../lib/host-device";
 import { formatPartyStart, formatPlaybackTime, durationMilliseconds as trackDurationMilliseconds, hostSongOutcome } from "../../../../lib/party-format";
-import type { HostParty } from "../../../../lib/party-contract";
+import type { HostParty, HostTransfer } from "../../../../lib/party-contract";
 import { extractSpotifyTrackId } from "../../../../lib/spotify-track";
 import type { SpotifyPlaybackState, SpotifyPlayer, SpotifyProgress } from "./spotify-sdk";
 import { useReactionSounds } from "./use-reaction-sounds";
@@ -31,6 +31,12 @@ export default function HostRoom({ code }: { code: string }) {
   const [roomSyncing, setRoomSyncing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
+  const [handoffOpen, setHandoffOpen] = useState(false);
+  const [handoffInvite, setHandoffInvite] = useState<(HostTransfer & { url: string }) | null>(null);
+  const [handoffBusy, setHandoffBusy] = useState(false);
+  const [handoffToken, setHandoffToken] = useState("");
+  const [handoffClaimBusy, setHandoffClaimBusy] = useState(false);
+  const [handoffClaimError, setHandoffClaimError] = useState("");
   const [spotifyClientId, setSpotifyClientId] = useState("");
   const [spotifyStatus, setSpotifyStatus] = useState<"checking" | "disconnected" | "loading" | "ready" | "error">("checking");
   const [spotifyDeviceId, setSpotifyDeviceId] = useState("");
@@ -42,6 +48,7 @@ export default function HostRoom({ code }: { code: string }) {
   const knownSoundActivityRef = useRef<Set<string> | null>(null);
   const soundActivityCursorRef = useRef("");
   const cancelEndRef = useRef<HTMLButtonElement | null>(null);
+  const closeHandoffRef = useRef<HTMLButtonElement | null>(null);
   const spotifyPlayerRef = useRef<SpotifyPlayer | null>(null);
   const lastSpotifyTrackRef = useRef("");
   const previousPartyTrackRef = useRef("");
@@ -67,15 +74,18 @@ export default function HostRoom({ code }: { code: string }) {
     const key = window.localStorage.getItem(`hackmusic:${code}:host`) ?? "";
     const savedSpotifyClientId = window.localStorage.getItem("hackmusic:spotify:clientId") ?? "";
     const savedJoinPasscode = window.localStorage.getItem(`hackmusic:${code}:joinPasscode`) ?? "";
+    const fragmentToken = new URLSearchParams(window.location.hash.slice(1)).get("handoff") ?? "";
     const url = `${window.location.origin}/e/${code}`;
+    if (fragmentToken) window.sessionStorage.setItem(`hackmusic:${code}:handoff`, fragmentToken);
     queueMicrotask(() => {
       setParticipantId(participant);
       setHostKey(key);
       setShareUrl(url);
       setSpotifyClientId(savedSpotifyClientId);
       setJoinPasscode(savedJoinPasscode);
+      setHandoffToken(fragmentToken);
       setHostDevice(detectHostDevice(navigator.userAgent, navigator.platform, navigator.maxTouchPoints));
-      if (!participant || !key) setError("This browser did not create that room, so its host controls are locked.");
+      if ((!participant || !key) && !fragmentToken) setError("This browser does not hold the current host key, so its controls are locked.");
     });
     QRCode.toDataURL(url, { width: 220, margin: 1, color: { dark: "#151515", light: "#fffef9" } }).then(setQrUrl).catch(() => undefined);
   }, [code]);
@@ -107,6 +117,14 @@ export default function HostRoom({ code }: { code: string }) {
       const data = await response.json().catch(() => null) as { error?: string; party?: HostParty & { activity?: Array<{ id: string; tone: "up" | "down" | "song"; createdAt: string }> } } | null;
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
+          window.localStorage.removeItem(`hackmusic:${code}:host`);
+          spotifyPlayerRef.current?.disconnect();
+          spotifyPlayerRef.current = null;
+          setSpeakerArmed(false);
+          disableReactionAudio();
+          void releaseScreenWakeLock(false);
+          setHostKey("");
+          setParty(null);
           setError(data?.error ?? "This browser no longer has access to the host controls.");
           return false;
         }
@@ -140,7 +158,7 @@ export default function HostRoom({ code }: { code: string }) {
       roomRefreshInFlightRef.current = false;
       if (announce) setRoomSyncing(false);
     }
-  }, [code, hostKey, participantId, playReactionSound]);
+  }, [code, disableReactionAudio, hostKey, participantId, playReactionSound, releaseScreenWakeLock]);
 
   useEffect(() => {
     if (!participantId || !hostKey || partyStatus === "ended") return;
@@ -174,6 +192,19 @@ export default function HostRoom({ code }: { code: string }) {
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [endConfirmOpen]);
+
+  useEffect(() => {
+    if (!handoffOpen) return;
+    const focusFrame = window.requestAnimationFrame(() => closeHandoffRef.current?.focus());
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setHandoffOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [handoffOpen]);
 
   useEffect(() => {
     if (!message) return;
@@ -456,6 +487,97 @@ export default function HostRoom({ code }: { code: string }) {
     finally { setBusy(false); }
   }
 
+  function rememberTransferredRoom(nextParty: HostParty) {
+    const storageKey = "hackmusic:hostedRooms";
+    const now = new Date().toISOString();
+    let rooms: Array<{ code: string; title: string; status: string; createdAt: string; lastOpenedAt: string }> = [];
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(storageKey) ?? "[]") as unknown;
+      if (Array.isArray(stored)) rooms = stored.filter((room): room is typeof rooms[number] => Boolean(room && typeof room === "object" && "code" in room && typeof room.code === "string"));
+    } catch {
+      // A damaged shortcut list should not block a host handoff.
+    }
+    const shortcut = { code: nextParty.code, title: nextParty.title, status: nextParty.status, createdAt: now, lastOpenedAt: now };
+    window.localStorage.setItem(storageKey, JSON.stringify([shortcut, ...rooms.filter((room) => room.code !== nextParty.code)].slice(0, 100)));
+  }
+
+  async function prepareHandoff(targetParticipantId: string) {
+    setHandoffBusy(true);
+    setHandoffInvite(null);
+    try {
+      const response = await fetch("/api/party", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "prepareHostTransfer", code, participantId, pin: hostKey, targetParticipantId }) });
+      const data = await response.json() as { error?: string; transfer?: HostTransfer };
+      if (!response.ok || !data.transfer) throw new Error(data.error ?? "Could not prepare the handoff link.");
+      const url = `${window.location.origin}/e/${code}/host#handoff=${encodeURIComponent(data.transfer.token)}`;
+      setHandoffInvite({ ...data.transfer, url });
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "Could not prepare the handoff link.");
+    } finally {
+      setHandoffBusy(false);
+    }
+  }
+
+  async function copyHandoff() {
+    if (!handoffInvite) return;
+    const handoff = `HackMusic host handoff for room ${code}\n${handoffInvite.url}\nOne use · expires in 10 minutes`;
+    try {
+      await navigator.clipboard.writeText(handoff);
+      setMessage(`🎚️ One-use host link copied for ${handoffInvite.targetName}.`);
+    } catch {
+      setMessage("Copy the one-use link shown in the handoff panel.");
+    }
+  }
+
+  async function shareHandoff() {
+    if (!handoffInvite) return;
+    if (!navigator.share) { await copyHandoff(); return; }
+    try {
+      await navigator.share({ title: `Host HackMusic room ${code}`, text: `You have been chosen to hold the aux cable. One use; 10 minutes.`, url: handoffInvite.url });
+    } catch (reason) {
+      if (!(reason instanceof DOMException) || reason.name !== "AbortError") setMessage("Sharing took a small dramatic pause. Copy the link instead.");
+    }
+  }
+
+  async function cancelHandoff() {
+    setHandoffBusy(true);
+    try {
+      const response = await fetch("/api/party", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "cancelHostTransfer", code, participantId, pin: hostKey }) });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Could not cancel the handoff.");
+      setHandoffInvite(null);
+      setHandoffOpen(false);
+      setMessage("🧯 Host handoff cancelled. You still control the chaos.");
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "Could not cancel the handoff.");
+    } finally {
+      setHandoffBusy(false);
+    }
+  }
+
+  async function claimHandoff() {
+    if (!participantId || !handoffToken) return;
+    setHandoffClaimBusy(true);
+    setHandoffClaimError("");
+    try {
+      const response = await fetch("/api/party", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "claimHost", code, participantId, transferToken: handoffToken }) });
+      const data = await response.json() as { error?: string; hostKey?: string; party?: HostParty };
+      if (!response.ok || !data.hostKey || !data.party) throw new Error(data.error ?? "Could not accept the host controls.");
+      window.localStorage.setItem(`hackmusic:${code}:host`, data.hostKey);
+      window.sessionStorage.removeItem(`hackmusic:${code}:handoff`);
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+      rememberTransferredRoom(data.party);
+      setHostKey(data.hostKey);
+      setParty(data.party);
+      setHandoffToken("");
+      setError("");
+      setMessage("🎛️ You are the host now. Power remains a terrible idea.");
+    } catch (reason) {
+      setHandoffClaimError(reason instanceof Error ? reason.message : "Could not accept the host controls.");
+    } finally {
+      setHandoffClaimBusy(false);
+    }
+  }
+
   function connectSpotify(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const clientId = spotifyClientId.trim();
@@ -521,7 +643,11 @@ export default function HostRoom({ code }: { code: string }) {
     }
   }
 
-  if (error && !party) return <main className="missing-room"><span className="brand-mark">HM</span><p className="eyebrow">HOST KEY REQUIRED</p><h1>{error}</h1><a href={`/e/${code}`}>Open the participant room →</a><a href="/">Create a new room →</a></main>;
+  if (handoffToken && !party) return <main className="host-claim-shell"><section className="host-claim-card"><span className="brand-mark">HM</span><p className="eyebrow">🎚️ CONTROLLED MUTINY · ROOM {code}</p><h1>The aux cable chose you.</h1><p className="host-claim-intro">Accept this one-use handoff and this browser becomes the only host. The previous host is politely demoted to audience.</p><div className="host-claim-truth"><strong>Spotify cannot teleport. Rude, honestly.</strong><span>After accepting, connect Spotify Premium on this device and start the speaker here. The previous device will disconnect from host duty.</span></div>{participantId ? <button type="button" onClick={() => void claimHandoff()} disabled={handoffClaimBusy}>{handoffClaimBusy ? "🎛️ Moving the giant imaginary switch…" : "🎛️ Accept host controls →"}</button> : <><div className="host-claim-join"><strong>First, enter the party on this browser.</strong><span>We saved the handoff in this tab. Join normally, and HackMusic will bring you straight back.</span></div><a className="host-claim-link" href={`/e/${code}`}>🥳 Join room {code} first →</a></>}{handoffClaimError && <p className="host-claim-error" role="alert">⚠️ {handoffClaimError}</p>}<small>🔐 Targeted human · one use · expires after 10 minutes</small></section></main>;
+  if (error && !party) {
+    const moved = error.includes("aux cable moved");
+    return <main className="missing-room"><span className="brand-mark">HM</span><p className="eyebrow">{moved ? "🎚️ HOST ROLE MOVED" : "HOST KEY REQUIRED"}</p><h1>{moved ? "Audience era unlocked." : error}</h1>{moved && <p>{error}</p>}<a href={`/e/${code}`}>Open the participant room →</a><a href="/">Create a new room →</a></main>;
+  }
   if (syncProblem && !party) return <main className="missing-room host-reconnect-screen"><span className="brand-mark">HM</span><p className="eyebrow">📡 RECONNECTING THE DJ BOOTH</p><h1>Connection hiccup.</h1><p>{syncProblem}</p><button type="button" onClick={() => void refreshParty(true)} disabled={roomSyncing}>{roomSyncing ? "Trying again…" : "↻ Try room data again"}</button><a href={`/e/${code}`} target="_blank" rel="noreferrer">Open participant view safely ↗</a></main>;
   if (!party) return <main className="loading-room"><span className="brand-mark">HM</span><p>Warming up room {code}…</p></main>;
 
@@ -564,13 +690,14 @@ export default function HostRoom({ code }: { code: string }) {
     </section>}
 
     <div className="host-grid"><section className="host-now-card"><div className="section-kicker"><span>{party.status === "ended" ? "📼 LAST SONG" : party.status === "lobby" ? "🌙 SPEAKER SLEEPING" : "🔊 ON THE SPEAKER"}</span><span>{party.status === "ended" ? `📦 ${party.queueCount} UNPLAYED` : `🤫 ${party.queueCount} WAITING`}</span></div>{party.currentTrack ? <><div className="host-track"><div className={`host-art ${party.currentTrack.color}`}>🎵</div><div><h2>{party.currentTrack.title}</h2><p>{party.currentTrack.artist}{party.currentTrack.duration ? ` · ${party.currentTrack.duration}` : ""}</p></div></div>{party.status !== "ended" && (currentSpotifyId ? <div className={`spotify-host-player spotify-${spotifyStatus}`}><div><strong>🟢 SPOTIFY PREMIUM SPEAKER</strong><span>{spotifyStatus === "ready" ? "🎶 Full song · no preview limit" : "👆 Connect Spotify above first"}</span></div><button type="button" disabled={speakerStarting || spotifyStatus !== "ready" || party.status !== "live"} onClick={() => void startHostSpeaker()}>{speakerStarting ? "🔊 Starting speaker…" : speakerArmed ? "🔁 Play this track again →" : "🔊 Start speaker →"}</button><div className={`host-playback-progress ${progressState.toLowerCase()}`}><div><strong>{formatPlaybackTime(progressPosition)}</strong><span>{progressState === "PLAYING" ? "⚡ PLAYING" : progressState === "PAUSED" ? "⏸ PAUSED" : progressState === "STARTING" ? "🔊 STARTING" : progressState === "LOADING" ? "⏳ LOADING TRACK" : "👆 READY TO START"}</span><strong>{formatPlaybackTime(progressDuration)}</strong></div><div className="host-progress-track" role="progressbar" aria-label={`Spotify playback: ${formatPlaybackTime(progressPosition)} of ${formatPlaybackTime(progressDuration)}`} aria-valuemin={0} aria-valuemax={Math.max(1, progressDuration)} aria-valuenow={Math.round(progressPosition)}><span style={{ width: `${progressPercent}%` }} /></div></div><small>👉 Starts Spotify only. Funny sounds stay off unless you enable them separately.</small></div> : <div className="unplayable-track"><strong>⚠️ This older queue item has no Spotify track token.</strong><span>Skip this legacy item once. Every newly added song is now validated before it enters the queue.</span></div>)}<div className="host-reaction-counts"><div className="host-cheers"><strong>{cheers}</strong><span>🙌 CHEERS</span></div><div className="host-boos"><strong>{boos}</strong><span>👻 BOOS</span></div></div></> : <div className="host-empty"><strong>{party.status === "ended" ? "🏁 The speaker is off." : party.status === "lobby" ? "🌙 Playback is locked." : "🦗 No song yet."}</strong><p>{party.status === "ended" ? "The final scoreboard and any unplayed songs are saved below." : party.status === "lobby" ? `🤫 ${party.queueCount} secret ${party.queueCount === 1 ? "song is" : "songs are"} waiting for your launch.` : "🎵 Open the participant page and add the first one."}</p></div>}</section>
-      {party.status === "ended" ? <section className="host-controls-card host-controls-retired"><div className="card-title-row"><h2>🧊 CONTROLS FROZEN</h2><span>FINAL</span></div><div className="host-retired-mark">🏁</div><h3>The buttons have left the building.</h3><p>Playback, reactions, invitations, passcodes, queue rules, funny sounds, and screen wake lock are finished for this room.</p><a href="/">Start fresh with a new party →</a></section> : <section className="host-controls-card"><div className="card-title-row"><h2>🎛️ CONTROLS</h2><span>📱 HOST DEVICE</span></div><button className={`host-audio ${audioEnabled ? "armed" : ""}`} type="button" aria-pressed={audioEnabled} onClick={audioEnabled ? disableAudio : enableAudio}>{audioEnabled ? "🔇 Disable funny sounds" : "🎉 Enable & test funny sounds"}</button><button className={`host-wake-lock ${wakeLockActive ? "armed" : ""}`} type="button" aria-pressed={wakeLockActive} disabled={wakeLockSupported === false} onClick={() => wakeLockActive ? void releaseScreenWakeLock() : void requestScreenWakeLock()}>{wakeLockActive ? "🔒 Screen staying awake · tap to release" : wakeLockSupported === false ? "⚠️ Screen wake lock unavailable" : "☀️ Keep this screen awake"}</button><button className="host-skip" type="button" disabled={busy || !party.currentTrack} onClick={() => void control("skip")}>⏭️ Skip to next song →</button><button className="host-end" type="button" disabled={busy} onClick={() => setEndConfirmOpen(true)}>🏁 End party & freeze scores</button><p className={`host-wake-status ${wakeLockActive ? "active" : ""}`}>{wakeLockStatus}</p><details className="host-wake-guide"><summary>🛟 Screen-awake help · detected {hostDeviceName}</summary><ul><li className={hostDevice === "ios" ? "current" : ""}><strong>🍎 iPhone / iPad</strong><span>Try the button first. If unavailable, use Settings → Display &amp; Brightness → Auto-Lock and choose Never or the longest available time.</span></li><li className={hostDevice === "android" ? "current" : ""}><strong>🤖 Android</strong><span>Try the button first. Otherwise increase Display → Screen timeout, or enable Developer options → Stay awake while charging.</span></li><li className={hostDevice === "computer" ? "current" : ""}><strong>💻 Computer</strong><span>Keep this tab visible. If needed, temporarily disable display sleep in the computer’s power or display settings.</span></li></ul></details><p className="host-hint">🔊 Reaction sounds play only from this host device. Keep this page open and its volume up.</p></section>}
+      {party.status === "ended" ? <section className="host-controls-card host-controls-retired"><div className="card-title-row"><h2>🧊 CONTROLS FROZEN</h2><span>FINAL</span></div><div className="host-retired-mark">🏁</div><h3>The buttons have left the building.</h3><p>Playback, reactions, invitations, passcodes, queue rules, funny sounds, and screen wake lock are finished for this room.</p><a href="/">Start fresh with a new party →</a></section> : <section className="host-controls-card"><div className="card-title-row"><h2>🎛️ CONTROLS</h2><span>📱 HOST DEVICE</span></div><button className={`host-audio ${audioEnabled ? "armed" : ""}`} type="button" aria-pressed={audioEnabled} onClick={audioEnabled ? disableAudio : enableAudio}>{audioEnabled ? "🔇 Disable funny sounds" : "🎉 Enable & test funny sounds"}</button><button className={`host-wake-lock ${wakeLockActive ? "armed" : ""}`} type="button" aria-pressed={wakeLockActive} disabled={wakeLockSupported === false} onClick={() => wakeLockActive ? void releaseScreenWakeLock() : void requestScreenWakeLock()}>{wakeLockActive ? "🔒 Screen staying awake · tap to release" : wakeLockSupported === false ? "⚠️ Screen wake lock unavailable" : "☀️ Keep this screen awake"}</button><button className="host-skip" type="button" disabled={busy || !party.currentTrack} onClick={() => void control("skip")}>⏭️ Skip to next song →</button><button className="host-end" type="button" disabled={busy} onClick={() => setEndConfirmOpen(true)}>🏁 End party & freeze scores</button><p className={`host-wake-status ${wakeLockActive ? "active" : ""}`}>{wakeLockStatus}</p><details className="host-wake-guide"><summary>🛟 Screen-awake help · detected {hostDeviceName}</summary><ul><li className={hostDevice === "ios" ? "current" : ""}><strong>🍎 iPhone / iPad</strong><span>Try the button first. If unavailable, use Settings → Display &amp; Brightness → Auto-Lock and choose Never or the longest available time.</span></li><li className={hostDevice === "android" ? "current" : ""}><strong>🤖 Android</strong><span>Try the button first. Otherwise increase Display → Screen timeout, or enable Developer options → Stay awake while charging.</span></li><li className={hostDevice === "computer" ? "current" : ""}><strong>💻 Computer</strong><span>Keep this tab visible. If needed, temporarily disable display sleep in the computer’s power or display settings.</span></li></ul></details><p className="host-hint">🔊 Reaction sounds play only from this host device. Keep this page open and its volume up.</p><details className="host-rare-tools"><summary>🧰 Rare host moves</summary><div><p>Need a new device or a less exhausted DJ? Initiate one highly regulated coup.</p><button type="button" onClick={() => { setHandoffInvite(null); setHandoffOpen(true); }}>🎚️ Pass the aux cable →</button><small>One-use link · chosen human only · 10 minutes</small></div></details></section>}
     </div>
     <section className="host-queue-card"><div className="card-title-row"><h2>{party.status === "ended" ? "📦 UNPLAYED AT CLOSING" : "🎶 WAITING IN THE QUEUE"}</h2><span>{party.status === "ended" ? "ARCHIVE" : "🤫"} {party.queuedTracks.length} {party.queuedTracks.length === 1 ? "SONG" : "SONGS"}</span></div>{party.status !== "ended" && <fieldset className="queue-mode-picker"><legend>HOW SHOULD THE NEXT SONG BE PICKED?</legend><div>{queueModes.map((mode) => <button className={party.queueMode === mode.id ? "active" : ""} type="button" aria-pressed={party.queueMode === mode.id} disabled={busy} onClick={() => void changeQueueMode(mode.id)} key={mode.id}><span className="queue-mode-icon">{mode.icon}</span><span className="queue-mode-copy"><strong>{mode.title}</strong><small>{mode.copy}</small></span><span className="queue-mode-state">{party.queueMode === mode.id ? "✓ ACTIVE" : "SELECT"}</span></button>)}</div></fieldset>}{party.queuedTracks.length ? <><p className="queue-order-note">{party.status === "ended" ? "📼 These songs were still waiting when the final bell rang." : party.queueMode === "ordered" ? "📍 The numbered list below is the exact play order." : party.queueMode === "random" ? "🎲 These songs are the chaos pool. The next one is chosen only when it’s time." : "⚖️ These songs are the fair-play pool. HackMusic balances people first, then rolls the dice."}</p><ol className="host-queue-list">{party.queuedTracks.map((track, index) => <li key={track.queueId}><span className="queue-position">{party.status === "ended" ? String(index + 1).padStart(2, "0") : party.queueMode === "ordered" ? String(index + 1).padStart(2, "0") : party.queueMode === "random" ? "🎲" : "⚖️"}</span><span className={`queue-art ${track.color}`}>🎵</span><div className="queue-track-copy"><strong dir="auto">{track.title}</strong><span dir="auto">🎤 {track.artist}{track.duration ? ` · ${track.duration}` : ""}</span></div><div className="queue-submitter"><span className={`avatar ${track.color}`}>{track.submitterInitials}</span><small>Added by</small><strong>{track.submittedBy}</strong></div></li>)}</ol></> : <div className="host-queue-empty"><span>{party.status === "ended" ? "✅" : "🪹"}</span><div><strong>{party.status === "ended" ? "Nothing was left behind." : "The queue is gloriously empty."}</strong><p>{party.status === "ended" ? "Every queued song got its moment, or met a strategically timed skip." : "Share the room code and let somebody make a questionable musical decision."}</p></div></div>}</section>
     <section className="host-history-card"><div className="card-title-row"><h2>📊 SONG OUTCOMES</h2><span>{party.songHistory.length} {party.songHistory.length === 1 ? "SONG" : "SONGS"}</span></div>{party.songHistory.length ? <ol>{party.songHistory.map((track) => { const outcome = hostSongOutcome(track); return <li key={track.queueId}><span className={`queue-art ${track.color}`}>🎵</span><div className="history-track-copy"><strong dir="auto">{track.title}</strong><span dir="auto">🎤 {track.artist}{track.duration ? ` · ${track.duration}` : ""}</span><small>Added by {track.submittedBy}</small></div><b className={`song-outcome ${outcome.tone}`}>{outcome.label}</b></li>; })}</ol> : <div className="host-history-empty"><span>🧪</span><div><strong>No outcomes yet.</strong><p>Completed songs and dramatic boo-skips will become permanent evidence here.</p></div></div>}</section>
     <section className="leaderboard-card"><div className="card-title-row"><h2>{party.status === "ended" ? "🏆 FINAL SCOREBOARD" : party.status === "lobby" ? "🌙 LOBBY ROSTER" : "⚡ LIVE SCOREBOARD"}</h2><span>🎉 {party.people.length} PLAYERS</span></div><ol>{[...party.people].sort((a, b) => b.score - a.score).map((person, index) => <li key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><b>{party.status === "lobby" ? index + 1 : index === 0 ? "👑" : index + 1}</b><strong>{person.name}</strong><span>{person.score} pts</span></li>)}</ol></section>
 
     {message && <div className="toast host-toast" role="status">{message}</div>}
+    {party.status !== "ended" && handoffOpen && <div className="modal-backdrop host-transfer-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setHandoffOpen(false)}><section className="host-transfer-card" role="dialog" aria-modal="true" aria-labelledby="host-transfer-title"><div className="host-transfer-handle" aria-hidden="true" /><div className="modal-topline"><div><p className="eyebrow">🎚️ HIGHLY CONTROLLED MUTINY</p><h2 id="host-transfer-title">Pass the aux.</h2></div><button ref={closeHandoffRef} className="close-button" type="button" onClick={() => setHandoffOpen(false)} aria-label="Close host handoff">×</button></div>{handoffInvite ? <div className="host-transfer-ready"><div className="host-transfer-ticket"><span>ONE-USE HOST LINK FOR</span><strong>{handoffInvite.targetName}</strong><small>Expires at {new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(handoffInvite.expiresAt))}</small></div><p>Send this only to the chosen human. When they accept, this browser loses host control and disconnects from DJ duty.</p><code>{handoffInvite.url}</code><div className="host-transfer-actions"><button type="button" onClick={() => void copyHandoff()}>📋 Copy handoff</button><button type="button" onClick={() => void shareHandoff()}>🚀 Share privately</button></div><button className="host-transfer-cancel" type="button" disabled={handoffBusy} onClick={() => void cancelHandoff()}>{handoffBusy ? "Cancelling…" : "🧯 Cancel this tiny coup"}</button></div> : <><p className="host-transfer-intro">Choose one joined human. They get a targeted link that works once, for 10 minutes. No permanent master password wandering around the internet.</p><div className="host-transfer-warning"><strong>🔊 The speaker stays with the device, not the crown.</strong><span>The new host must connect Spotify on their device and press Start speaker. When they accept, this host tab retires automatically.</span></div><div className="host-transfer-people" role="group" aria-label="Humans eligible to become host">{party.people.filter((person) => person.name !== "You").map((person) => <button type="button" disabled={handoffBusy} onClick={() => void prepareHandoff(person.id)} key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><span><strong>{person.name}</strong><small>{handoffBusy ? "Preparing the paperwork…" : "Make this human the next host"}</small></span><b>→</b></button>)}</div>{party.people.length <= 1 && <div className="host-transfer-empty"><strong>🦗 No eligible humans yet.</strong><span>Invite someone into the room first. Transferring control to yourself is just refreshing with extra paperwork.</span></div>}<small className="host-transfer-footnote">🔐 The raw handoff secret lives only in the link. HackMusic stores a one-way hash until it expires.</small></>}</section></div>}
     {party.status !== "ended" && endConfirmOpen && <div className="modal-backdrop end-confirm-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setEndConfirmOpen(false)}><section className="end-confirm-card" role="dialog" aria-modal="true" aria-labelledby="end-confirm-title" aria-describedby="end-confirm-description"><p className="eyebrow">🚨 POINT OF NO RETURN</p><h2 id="end-confirm-title">End the party? 🥲</h2><p id="end-confirm-description">This freezes every score and closes the room for new songs and votes. There is no undo.</p><div className="end-confirm-actions"><button ref={cancelEndRef} className="keep-partying" type="button" onClick={() => setEndConfirmOpen(false)}>🎉 Nope, keep partying</button><button className="really-end-party" type="button" disabled={busy} onClick={() => { setEndConfirmOpen(false); void control("end"); }}>{busy ? "⏳ Ending…" : "🏁 Yes, end it forever"}</button></div><small>Press Escape or tap outside to cancel.</small></section></div>}
   </main>;
 }

@@ -32,6 +32,12 @@ export default function PartyRoom({ code }: { code: string }) {
 
   useEffect(() => {
     const saved = window.localStorage.getItem(`hackmusic:${code}:participant`) ?? "";
+    const pendingHandoff = window.sessionStorage.getItem(`hackmusic:${code}:handoff`) ?? "";
+    if (saved && pendingHandoff) {
+      window.sessionStorage.removeItem(`hackmusic:${code}:handoff`);
+      window.location.replace(`/e/${code}/host#handoff=${encodeURIComponent(pendingHandoff)}`);
+      return;
+    }
     if (saved) queueMicrotask(() => setParticipantId(saved));
     fetch(`/api/party?code=${encodeURIComponent(code)}`)
       .then(async (response) => {
@@ -93,6 +99,12 @@ export default function PartyRoom({ code }: { code: string }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Could not join.");
       window.localStorage.setItem(`hackmusic:${code}:participant`, id);
+      const pendingHandoff = window.sessionStorage.getItem(`hackmusic:${code}:handoff`) ?? "";
+      if (pendingHandoff) {
+        window.sessionStorage.removeItem(`hackmusic:${code}:handoff`);
+        window.location.assign(`/e/${code}/host#handoff=${encodeURIComponent(pendingHandoff)}`);
+        return;
+      }
       setParticipantId(id);
       setParty((current) => ({ ...data.party, activity: current?.activity ?? [] }));
       setNotice(`🥳 You’re in, ${joinName.trim()}!`);

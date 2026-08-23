@@ -99,7 +99,7 @@ const sections = [
     title: "Retention & security",
     content: <>
       <p>Website analytics records older than 90 days are automatically deleted when analytics collection or owner reporting runs. The browser-tab analytics identifier ends with the tab session, and its server-side one-way form changes daily. Event records currently may remain in our hosted database until they are manually deleted, deleted during operational cleanup, or removed after a valid request. We do not promise a fixed automatic deletion date for event records. Spotify cookies expire as described above or can be removed by disconnecting or clearing site data.</p>
-      <p>We use reasonable measures such as HTTPS, randomized room and participant identifiers, salted passcode hashes, request throttling based on one-way network-derived keys, device-held host keys, encrypted HTTP-only Spotify cookies, limited data collection, and restricted host controls. No online service is perfectly secure. Keep room links and passcodes private, do not reuse sensitive information as a display name, and protect the host device.</p>
+      <p>We use reasonable measures such as HTTPS, randomized room and participant identifiers, salted passcode hashes, one-way hashes for short-lived host-handoff links, request throttling based on one-way network-derived keys, device-held host keys, encrypted HTTP-only Spotify cookies, limited data collection, and restricted host controls. No online service is perfectly secure. Keep room links, passcodes, and host-handoff links private, do not reuse sensitive information as a display name, and protect the host device.</p>
     </>,
   },
   {

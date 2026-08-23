@@ -127,6 +127,62 @@ test("party API rejects cross-origin writes and malformed request bodies", async
   assert.match((await malformed.json()).error, /not valid JSON/i);
 });
 
+test("a targeted one-use handoff rotates the host key and retires the previous browser", async () => {
+  const room = await createRoom(db, { title: "Host Handoff Party" });
+  const chosen = await joinRoom(db, room, "Chosen Human");
+  const bystander = await joinRoom(db, room, "Suspicious Bystander");
+  assert.equal(chosen.response.status, 200, JSON.stringify(chosen.data));
+  assert.equal(bystander.response.status, 200, JSON.stringify(bystander.data));
+
+  const prepared = await action(db, {
+    action: "prepareHostTransfer",
+    code: room.code,
+    participantId: room.participantId,
+    pin: room.hostKey,
+    targetParticipantId: chosen.data.party.viewer.id,
+  });
+  assert.equal(prepared.response.status, 200, JSON.stringify(prepared.data));
+  assert.equal(prepared.data.transfer.targetName, "Chosen Human");
+  assert.match(prepared.data.transfer.token, /^[A-Za-z0-9_-]{43}$/);
+
+  const stolen = await action(db, {
+    action: "claimHost",
+    code: room.code,
+    participantId: bystander.participantId,
+    transferToken: prepared.data.transfer.token,
+  });
+  assert.equal(stolen.response.status, 401);
+  assert.match(stolen.data.error, /another human/i);
+
+  const claimed = await action(db, {
+    action: "claimHost",
+    code: room.code,
+    participantId: chosen.participantId,
+    transferToken: prepared.data.transfer.token,
+  });
+  assert.equal(claimed.response.status, 200, JSON.stringify(claimed.data));
+  assert.notEqual(claimed.data.hostKey, room.hostKey);
+  assert.equal(claimed.data.party.viewer.name, "You");
+  assert.ok(Array.isArray(claimed.data.party.queuedTracks));
+
+  const retired = await action(db, { action: "queueMode", code: room.code, participantId: room.participantId, pin: room.hostKey, queueMode: "random" });
+  assert.equal(retired.response.status, 403);
+  assert.match(retired.data.error, /current host browser|belong/i);
+
+  const reused = await action(db, {
+    action: "claimHost",
+    code: room.code,
+    participantId: chosen.participantId,
+    transferToken: prepared.data.transfer.token,
+  });
+  assert.equal(reused.response.status, 401);
+  assert.match(reused.data.error, /already used/i);
+
+  const newHostControl = await action(db, { action: "queueMode", code: room.code, participantId: chosen.participantId, pin: claimed.data.hostKey, queueMode: "fair" });
+  assert.equal(newHostControl.response.status, 200, JSON.stringify(newHostControl.data));
+  assert.equal(newHostControl.data.party.queueMode, "fair");
+});
+
 test("a room rejects participant 101 without corrupting existing membership", async () => {
   const room = await createRoom(db, { title: "Capacity Test Party" });
   const event = db.first("SELECT id FROM events WHERE code = ?", room.code);

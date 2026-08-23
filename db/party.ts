@@ -38,6 +38,22 @@ type CreateRoomOptions = {
   scheduledFor?: string;
 };
 
+const HOST_TRANSFER_TTL_MS = 10 * 60 * 1000;
+
+function randomHostKey() {
+  return `host-${crypto.randomUUID()}-${crypto.randomUUID()}`;
+}
+
+function randomTransferToken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+
+async function hashTransferToken(token: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`hackmusic-host-handoff-v1|${token}`));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export async function createRoom(
   titleInput: string,
   hostNameInput: string,
@@ -70,7 +86,7 @@ export async function createRoom(
 
   const eventId = `event-${crypto.randomUUID()}`;
   const participantId = `p-${crypto.randomUUID()}`;
-  const hostKey = `host-${crypto.randomUUID()}-${crypto.randomUUID()}`;
+  const hostKey = randomHostKey();
   const hostPublicId = `person-${crypto.randomUUID()}`;
   const passcode = await hashRoomPasscode(options.passcode ?? "");
   const profile = profileForName(hostName);
@@ -95,6 +111,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
   const event = await loadEvent(codeInput);
   if (!event) throw new PublicError("Room not found. Check the six-character code and try again.", 404);
   const d1 = getD1();
+  if (hostKey && hostKey !== event.host_pin) throw new PublicError("The aux cable moved to another host. This browser is audience now—democracy survives.", 403);
   const isHost = Boolean(hostKey && hostKey === event.host_pin);
   const revealScores = event.status === "ended" || isHost;
   const current = event.current_submission_id
@@ -326,6 +343,66 @@ export async function setRoomPasscode(code: string, hostKey: string, passcodeInp
   const passcode = await hashRoomPasscode(passcodeInput);
   await getD1().prepare("UPDATE events SET join_passcode_hash = ?, join_passcode_salt = ? WHERE id = ?")
     .bind(passcode.hash, passcode.salt, event.id).run();
+}
+
+export async function prepareHostTransfer(code: string, participantId: string, hostKey: string, targetPublicId: string) {
+  const event = await loadEvent(code);
+  if (!event || event.host_pin !== hostKey) throw new PublicError("Host controls belong to the current host browser.", 403);
+  if (event.status === "ended") throw new PublicError("This party has ended. The aux cable is enjoying retirement.");
+  if (!participantId) throw new PublicError("This host browser is missing its party identity. Reopen the participant room and try again.", 401);
+  if (!targetPublicId || targetPublicId.length > 80) throw new PublicError("Choose a joined human to receive the host controls.");
+  const d1 = getD1();
+  const currentHost = await d1.prepare("SELECT id FROM participants WHERE id = ? AND event_id = ?")
+    .bind(participantId, event.id).first<{ id: string }>();
+  if (!currentHost) throw new PublicError("This host browser is no longer joined to the room.", 401);
+  const target = await d1.prepare("SELECT id, display_name FROM participants WHERE public_id = ? AND event_id = ?")
+    .bind(targetPublicId, event.id).first<{ id: string; display_name: string }>();
+  if (!target) throw new PublicError("That human is no longer in this room. Refresh the host page and choose again.", 404);
+  if (target.id === participantId) throw new PublicError("You already have the aux cable. Pick a different human for this tiny coup.");
+
+  const token = randomTransferToken();
+  const tokenHash = await hashTransferToken(token);
+  const now = Date.now();
+  const expiresAt = now + HOST_TRANSFER_TTL_MS;
+  await d1.batch([
+    d1.prepare("DELETE FROM host_transfers WHERE expires_at <= ?").bind(now),
+    d1.prepare(`INSERT INTO host_transfers (event_id, target_participant_id, token_hash, expires_at, created_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(event_id) DO UPDATE SET target_participant_id = excluded.target_participant_id,
+        token_hash = excluded.token_hash, expires_at = excluded.expires_at, created_at = excluded.created_at`)
+      .bind(event.id, target.id, tokenHash, expiresAt, new Date(now).toISOString()),
+  ]);
+  return { token, targetName: target.display_name, expiresAt: new Date(expiresAt).toISOString() };
+}
+
+export async function cancelHostTransfer(code: string, hostKey: string) {
+  const event = await loadEvent(code);
+  if (!event || event.host_pin !== hostKey) throw new PublicError("Host controls belong to the current host browser.", 403);
+  await getD1().prepare("DELETE FROM host_transfers WHERE event_id = ?").bind(event.id).run();
+}
+
+export async function claimHostTransfer(code: string, participantId: string, transferToken: string) {
+  const event = await loadEvent(code);
+  if (!event) throw new PublicError("Room not found. Check the handoff link and try again.", 404);
+  if (event.status === "ended") throw new PublicError("This party already ended. The host controls have been laminated for history.");
+  if (!participantId) throw new PublicError("Join this room on this browser before accepting host controls.", 401);
+  if (!/^[A-Za-z0-9_-]{40,64}$/.test(transferToken)) throw new PublicError("That handoff link is incomplete. Ask the host for a fresh one.", 401);
+  const d1 = getD1();
+  const tokenHash = await hashTransferToken(transferToken);
+  const nextHostKey = randomHostKey();
+  const now = Date.now();
+  const claimed = await d1.prepare(`UPDATE events SET host_pin = ?
+    WHERE id = ? AND EXISTS (
+      SELECT 1 FROM host_transfers
+      WHERE event_id = ? AND target_participant_id = ? AND token_hash = ? AND expires_at > ?
+    )`)
+    .bind(nextHostKey, event.id, event.id, participantId, tokenHash, now).run();
+  if (!claimed.meta.changes) {
+    await d1.prepare("DELETE FROM host_transfers WHERE event_id = ? AND expires_at <= ?").bind(event.id, now).run();
+    throw new PublicError("That one-use handoff link is expired, already used, or belongs to another human. Ask the current host for a fresh link.", 401);
+  }
+  await d1.prepare("DELETE FROM host_transfers WHERE event_id = ?").bind(event.id).run();
+  return nextHostKey;
 }
 
 export async function reactToCurrent(code: string, participantId: string, kind: "up" | "down") {

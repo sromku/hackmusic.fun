@@ -99,8 +99,9 @@ test("exports all durable D1 tables only for the allowlisted ChatGPT owner", asy
   assert.equal(backup.tables.events[0].title, "Backup Test Party");
   assert.ok(backup.tables.events[0].host_pin);
   assert.ok(backup.tables.events[0].join_passcode_hash);
-  assert.deepEqual(backup.privacy.excludedTables, ["room_creation_limits"]);
+  assert.deepEqual(backup.privacy.excludedTables, ["room_creation_limits", "host_transfers"]);
   assert.equal("room_creation_limits" in backup.tables, false);
+  assert.equal("host_transfers" in backup.tables, false);
   assert.doesNotMatch(JSON.stringify(backup), /temporary-client-key/);
   db.close();
 });

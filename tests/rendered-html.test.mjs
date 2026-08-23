@@ -331,6 +331,16 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /Developer options → Stay awake/);
   assert.match(source, /Computer/);
   assert.doesNotMatch(source, /Android auto-lock is blocked|stop Android from auto-locking/);
+  assert.match(source, /Rare host moves/);
+  assert.match(source, /Pass the aux cable/);
+  assert.match(source, /HIGHLY CONTROLLED MUTINY/);
+  assert.match(source, /action: "prepareHostTransfer"/);
+  assert.match(source, /action: "cancelHostTransfer"/);
+  assert.match(source, /action: "claimHost"/);
+  assert.match(source, /#handoff=/);
+  assert.match(source, /window\.localStorage\.setItem\(`hackmusic:\$\{code\}:host`/);
+  assert.match(source, /window\.localStorage\.removeItem\(`hackmusic:\$\{code\}:host`/);
+  assert.match(source, /Spotify cannot teleport/);
   assert.match(source, /PRE-PARTY LOBBY IS OPEN/);
   assert.match(source, /Start the party now/);
   assert.match(source, /Let the queue marinate/);

@@ -77,6 +77,13 @@ async function initializePartySchema() {
       kind TEXT NOT NULL,
       created_at TEXT NOT NULL
     )`),
+    d1.prepare(`CREATE TABLE IF NOT EXISTS host_transfers (
+      event_id TEXT PRIMARY KEY,
+      target_participant_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    )`),
     d1.prepare(`CREATE TABLE IF NOT EXISTS room_creation_limits (
       client_key TEXT NOT NULL,
       window_kind TEXT NOT NULL,
@@ -100,6 +107,7 @@ async function initializePartySchema() {
     d1.prepare("CREATE INDEX IF NOT EXISTS participants_event_idx ON participants(event_id)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS submissions_event_participant_status_idx ON submissions(event_id, participant_id, status)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS activity_events_event_created_idx ON activity_events(event_id, created_at, id)"),
+    d1.prepare("CREATE INDEX IF NOT EXISTS host_transfers_expires_idx ON host_transfers(expires_at)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS room_creation_limits_expires_idx ON room_creation_limits(expires_at)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS analytics_pageviews_day_idx ON analytics_pageviews(day)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS analytics_pageviews_day_path_idx ON analytics_pageviews(day, path)"),

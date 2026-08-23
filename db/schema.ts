@@ -67,6 +67,16 @@ export const activityEvents = sqliteTable("activity_events", {
   index("activity_events_event_created_idx").on(table.eventId, table.createdAt, table.id),
 ]);
 
+export const hostTransfers = sqliteTable("host_transfers", {
+  eventId: text("event_id").primaryKey(),
+  targetParticipantId: text("target_participant_id").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: integer("expires_at").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  index("host_transfers_expires_idx").on(table.expiresAt),
+]);
+
 export const roomCreationLimits = sqliteTable("room_creation_limits", {
   clientKey: text("client_key").notNull(),
   windowKind: text("window_kind").notNull(),

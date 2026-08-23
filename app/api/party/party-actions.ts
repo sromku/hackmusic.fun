@@ -1,10 +1,13 @@
 import {
   assertPartyParticipant,
+  cancelHostTransfer,
+  claimHostTransfer,
   createRoom,
   hostControl,
   joinParty,
   reactToCurrent,
   readParty,
+  prepareHostTransfer,
   recordBooSkipProgress,
   removePendingTrack,
   setParticipantAvatar,
@@ -25,6 +28,9 @@ export function partyActionFallback(action?: PartyAction) {
   if (action === "remove") return "We could not remove that song. Refresh your list and try again.";
   if (action === "avatar") return "Your party face did not change. Try another emoji.";
   if (action === "passcode") return "We could not update the room passcode. Try again—the current passcode is still active.";
+  if (action === "prepareHostTransfer") return "We could not prepare the host handoff. The current host still has control.";
+  if (action === "cancelHostTransfer") return "We could not cancel the host handoff. Create a new handoff link to replace it.";
+  if (action === "claimHost") return "That host handoff could not be accepted. Ask the current host for a fresh link.";
   if (action === "queueMode") return "We could not change the queue mode. Refresh the host page and try again.";
   return "That host action did not finish. Refresh the host page and try again.";
 }
@@ -103,6 +109,23 @@ export async function executePartyAction(request: Request, input: PartyRequest):
       await protectPartyAction(request, input.action, code);
       await setRoomPasscode(code, input.pin, input.passcode);
       break;
+    case "prepareHostTransfer": {
+      if (!input.pin || !input.targetParticipantId) invalidAction();
+      await protectPartyAction(request, input.action, code);
+      const transfer = await prepareHostTransfer(code, participantId, input.pin, input.targetParticipantId);
+      return { body: { party: await readParty(code, participantId, input.pin), transfer } };
+    }
+    case "cancelHostTransfer":
+      if (!input.pin) invalidAction();
+      await protectPartyAction(request, input.action, code);
+      await cancelHostTransfer(code, input.pin);
+      break;
+    case "claimHost": {
+      if (!input.transferToken) invalidAction();
+      await protectPartyAction(request, input.action, code, participantId);
+      const nextHostKey = await claimHostTransfer(code, participantId, input.transferToken);
+      return { body: { party: await readParty(code, participantId, nextHostKey), hostKey: nextHostKey } };
+    }
     case "skipProgress":
       if (!input.trackId || typeof input.skipPercent !== "number" || !input.pin) invalidAction();
       await protectPartyAction(request, input.action, code);

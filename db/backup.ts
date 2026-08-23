@@ -53,7 +53,7 @@ export async function readPortableBackup() {
     privacy: {
       containsSecrets: true,
       note: "Contains room host keys, hashed join passcodes, participant data, and party history. Keep the encrypted file and passphrase private.",
-      excludedTables: ["room_creation_limits"],
+      excludedTables: ["room_creation_limits", "host_transfers"],
     },
     counts: Object.fromEntries(Object.entries(tables).map(([table, rows]) => [table, rows.length])),
     tables,

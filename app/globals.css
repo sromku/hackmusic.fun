@@ -1179,6 +1179,53 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .host-wake-guide li.current { border-left-color: var(--coral); background: var(--sun); }
 .host-wake-guide strong { font-size: 10px; }
 .host-wake-guide span { color: #5d5951; font-size: 9px; font-weight: 750; line-height: 1.4; }
+.host-rare-tools { margin-top: 14px; border: 2px solid var(--ink); background: var(--paper); }
+.host-rare-tools summary { padding: 10px; cursor: pointer; font-size: 9px; font-weight: 950; letter-spacing: .06em; }
+.host-rare-tools > div { display: grid; gap: 9px; border-top: 2px solid var(--ink); padding: 11px; }
+.host-rare-tools p, .host-rare-tools small { margin: 0; color: #5d5951; font-size: 9px; font-weight: 750; line-height: 1.4; }
+.host-rare-tools button { min-height: 42px; border: 2px solid var(--ink); background: var(--mint); box-shadow: 3px 3px 0 var(--ink); cursor: pointer; font-weight: 950; }
+.host-transfer-backdrop { z-index: 60; }
+.host-transfer-card { width: min(720px, 100%); max-height: min(820px, calc(100dvh - 44px)); overflow-y: auto; border: 2px solid var(--ink); background: var(--paper); box-shadow: 11px 11px 0 var(--ink); padding: 28px; }
+.host-transfer-handle { display: none; }
+.host-transfer-card .modal-topline h2 { font-size: clamp(46px, 8vw, 76px); line-height: .88; }
+.host-transfer-intro { max-width: 600px; margin: 22px 0 16px; font-size: 14px; font-weight: 780; line-height: 1.5; }
+.host-transfer-warning { display: grid; gap: 5px; border: 2px solid var(--ink); background: var(--sun); box-shadow: 5px 5px 0 var(--ink); padding: 15px; }
+.host-transfer-warning strong { font-size: 14px; }
+.host-transfer-warning span { font-size: 11px; font-weight: 750; line-height: 1.45; }
+.host-transfer-people { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 22px; }
+.host-transfer-people > button { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 11px; align-items: center; min-height: 76px; border: 2px solid var(--ink); background: var(--white); box-shadow: 4px 4px 0 var(--ink); padding: 10px; cursor: pointer; text-align: left; transition: transform .18s cubic-bezier(.2, .8, .25, 1.2), box-shadow .18s ease, background .18s ease; }
+.host-transfer-people > button:hover { transform: translate(-2px, -2px) rotate(-.4deg); background: var(--mint); box-shadow: 6px 6px 0 var(--ink); }
+.host-transfer-people > button:disabled { cursor: wait; opacity: .62; }
+.host-transfer-people .avatar { display: grid; width: 42px; height: 42px; place-items: center; border: 2px solid var(--ink); border-radius: 50%; font-size: 20px; }
+.host-transfer-people > button > span:nth-child(2) { display: grid; gap: 3px; min-width: 0; }
+.host-transfer-people strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.host-transfer-people small { color: #6a655c; font-size: 9px; font-weight: 750; }
+.host-transfer-people b { font-size: 21px; }
+.host-transfer-footnote { display: block; margin-top: 20px; color: #6a655c; font-size: 9px; font-weight: 800; text-align: center; }
+.host-transfer-empty { display: grid; gap: 5px; margin-top: 22px; border: 2px dashed var(--ink); padding: 22px; text-align: center; }
+.host-transfer-empty span { font-size: 11px; font-weight: 750; line-height: 1.45; }
+.host-transfer-ready { display: grid; gap: 15px; margin-top: 24px; }
+.host-transfer-ticket { display: grid; gap: 5px; transform: rotate(-1deg); border: 2px solid var(--ink); background: var(--coral); box-shadow: 7px 7px 0 var(--ink); padding: 18px; }
+.host-transfer-ticket span, .host-transfer-ticket small { font-size: 9px; font-weight: 950; letter-spacing: .1em; }
+.host-transfer-ticket strong { font-size: clamp(30px, 6vw, 52px); line-height: .95; letter-spacing: -.05em; }
+.host-transfer-ready > p { margin: 5px 0 0; font-size: 12px; font-weight: 780; line-height: 1.45; }
+.host-transfer-ready code { overflow-wrap: anywhere; border: 2px solid var(--ink); background: var(--white); padding: 12px; font: 700 10px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.host-transfer-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.host-transfer-actions button, .host-transfer-cancel { min-height: 50px; border: 2px solid var(--ink); cursor: pointer; font-weight: 950; }
+.host-transfer-actions button { background: var(--blue); box-shadow: 4px 4px 0 var(--ink); }
+.host-transfer-actions button:nth-child(2) { background: var(--mint); }
+.host-transfer-cancel { background: var(--white); }
+.host-claim-shell { display: grid; min-height: 100dvh; place-items: center; background: radial-gradient(circle at 15% 18%, color-mix(in srgb, var(--blue) 25%, transparent) 0 9%, transparent 9.5%), radial-gradient(circle at 88% 82%, color-mix(in srgb, var(--coral) 28%, transparent) 0 10%, transparent 10.5%), var(--paper); padding: 24px; }
+.host-claim-card { width: min(760px, 100%); transform: rotate(.35deg); border: 3px solid var(--ink); background: var(--sun); box-shadow: 13px 13px 0 var(--ink); padding: clamp(24px, 6vw, 54px); }
+.host-claim-card h1 { max-width: 650px; margin: 20px 0 16px; font-size: clamp(58px, 10vw, 108px); line-height: .8; letter-spacing: -.085em; }
+.host-claim-intro { max-width: 620px; margin: 0; font-size: 17px; font-weight: 800; line-height: 1.45; }
+.host-claim-truth, .host-claim-join { display: grid; gap: 5px; margin: 24px 0; border: 2px solid var(--ink); background: var(--white); box-shadow: 5px 5px 0 var(--ink); padding: 16px; }
+.host-claim-truth strong, .host-claim-join strong { font-size: 15px; }
+.host-claim-truth span, .host-claim-join span { font-size: 11px; font-weight: 750; line-height: 1.45; }
+.host-claim-card > button, .host-claim-link { display: grid; width: 100%; min-height: 58px; place-items: center; border: 2px solid var(--ink); background: var(--blue); box-shadow: 6px 6px 0 var(--ink); color: var(--ink); cursor: pointer; font-size: 14px; font-weight: 950; text-align: center; text-decoration: none; }
+.host-claim-card > button:disabled { cursor: wait; opacity: .68; }
+.host-claim-card > small { display: block; margin-top: 19px; font-size: 9px; font-weight: 900; letter-spacing: .07em; text-align: center; }
+.host-claim-error { margin: 20px 0 0; border: 2px solid var(--ink); background: var(--coral); padding: 12px; font-size: 11px; font-weight: 850; }
 .host-queue-card { margin-top: 24px; padding: 22px; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .host-queue-card > .card-title-row h2 { font-size: 17px; }
 .host-queue-card > .card-title-row > span { border: 2px solid var(--ink); background: var(--sun); padding: 6px 8px; }
@@ -1291,6 +1338,13 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
   .queue-submitter strong { overflow: visible; white-space: normal; }
   .leaderboard-card { margin-top: 18px; }
   .host-reaction-counts > div { padding: 14px 16px; }
+  .host-transfer-card { width: 100%; max-height: 88dvh; border-width: 3px 0 0; box-shadow: none; padding: 14px 18px 30px; }
+  .host-transfer-handle { display: block; width: 54px; height: 5px; margin: 0 auto 17px; border-radius: 99px; background: var(--ink); }
+  .host-transfer-people { grid-template-columns: 1fr; }
+  .host-transfer-actions { grid-template-columns: 1fr; }
+  .host-claim-shell { align-items: end; padding: 0; }
+  .host-claim-card { width: 100%; transform: none; border-width: 3px 0 0; box-shadow: none; padding: 28px 18px 38px; }
+  .host-claim-card h1 { font-size: clamp(52px, 17vw, 78px); }
 }
 
 @media (max-width: 480px) {
