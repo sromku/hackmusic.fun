@@ -19,6 +19,7 @@ type HostParty = {
   queueMode: "ordered" | "random" | "fair";
   queuedTracks: Array<{ queueId: string; id: string; title: string; artist: string; duration: string; color: string; submittedBy: string; submitterInitials: string }>;
   songHistory: Array<{ queueId: string; id: string; title: string; artist: string; duration: string; color: string; status: "played" | "skipped"; skipReason: "boos" | "host" | null; skipPercent: number | null; startedAt: string | null; submittedBy: string; submitterInitials: string }>;
+  activity?: Array<{ id: string; tone: "up" | "down" | "song"; createdAt: string }>;
 };
 
 const queueModes = [
@@ -64,7 +65,7 @@ type SpotifyPlayer = {
 };
 
 const REACTION_DUCK_VOLUME = 0.16;
-const REACTION_SOUND_VERSION = "2026-08-23-3";
+const REACTION_SOUND_VERSION = "2026-08-23-4";
 const waitForAudioFade = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
 
 function formatPlaybackTime(milliseconds: number) {
@@ -134,13 +135,15 @@ export default function HostRoom({ code }: { code: string }) {
   const audioEnabledRef = useRef(false);
   const cheerAudioRef = useRef<HTMLAudioElement | null>(null);
   const booAudioRef = useRef<HTMLAudioElement | null>(null);
-  const knownReactions = useRef<Set<string> | null>(null);
+  const knownSoundActivityRef = useRef<Set<string> | null>(null);
+  const soundActivityCursorRef = useRef("");
   const cancelEndRef = useRef<HTMLButtonElement | null>(null);
   const spotifyPlayerRef = useRef<SpotifyPlayer | null>(null);
   const spotifyVolumeBeforeDuckRef = useRef<number | null>(null);
   const spotifyPausedForReactionRef = useRef(false);
   const reactionSoundTokenRef = useRef(0);
   const reactionRestoreTimerRef = useRef<number | null>(null);
+  const activeReactionAudioRef = useRef<Set<HTMLAudioElement>>(new Set());
   const lastSpotifyTrackRef = useRef("");
   const previousPartyTrackRef = useRef("");
   const lastPlaybackStateRef = useRef<SpotifyPlaybackState | null>(null);
@@ -203,25 +206,30 @@ export default function HostRoom({ code }: { code: string }) {
 
   const playReactionSound = useCallback((kind: "up" | "down") => {
     if (!audioEnabledRef.current) return;
-    const sound = kind === "up" ? cheerAudioRef.current : booAudioRef.current;
-    if (!sound) return;
+    const template = kind === "up" ? cheerAudioRef.current : booAudioRef.current;
+    if (!template) return;
+    const sound = template.cloneNode(true) as HTMLAudioElement;
+    sound.preload = "auto";
+    sound.volume = 1;
+    activeReactionAudioRef.current.add(sound);
 
-    const token = ++reactionSoundTokenRef.current;
+    reactionSoundTokenRef.current += 1;
     if (reactionRestoreTimerRef.current) {
       window.clearTimeout(reactionRestoreTimerRef.current);
       reactionRestoreTimerRef.current = null;
     }
-    cheerAudioRef.current?.pause();
-    booAudioRef.current?.pause();
-    sound.currentTime = 0;
-    sound.volume = 1;
 
+    let finished = false;
     const restoreMusic = () => {
-      if (token !== reactionSoundTokenRef.current) return;
+      if (finished) return;
+      finished = true;
+      activeReactionAudioRef.current.delete(sound);
+      if (activeReactionAudioRef.current.size) return;
       if (reactionRestoreTimerRef.current) {
         window.clearTimeout(reactionRestoreTimerRef.current);
         reactionRestoreTimerRef.current = null;
       }
+      const restoreToken = reactionSoundTokenRef.current;
       const player = spotifyPlayerRef.current;
       if (spotifyPausedForReactionRef.current) {
         spotifyPausedForReactionRef.current = false;
@@ -234,12 +242,12 @@ export default function HostRoom({ code }: { code: string }) {
         const duckedVolume = Math.min(originalVolume, REACTION_DUCK_VOLUME);
         const steps = 6;
         for (let step = 1; step <= steps; step += 1) {
-          if (token !== reactionSoundTokenRef.current || player !== spotifyPlayerRef.current) return;
+          if (restoreToken !== reactionSoundTokenRef.current || player !== spotifyPlayerRef.current) return;
           const volume = duckedVolume + ((originalVolume - duckedVolume) * step / steps);
           await player.setVolume(volume).catch(() => undefined);
           if (step < steps) await waitForAudioFade(80);
         }
-        if (token === reactionSoundTokenRef.current) spotifyVolumeBeforeDuckRef.current = null;
+        if (restoreToken === reactionSoundTokenRef.current) spotifyVolumeBeforeDuckRef.current = null;
       })();
     };
 
@@ -255,17 +263,15 @@ export default function HostRoom({ code }: { code: string }) {
           let originalVolume = spotifyVolumeBeforeDuckRef.current;
           if (originalVolume === null) {
             originalVolume = await player.getVolume().catch(() => 0.8);
-            if (token !== reactionSoundTokenRef.current || player !== spotifyPlayerRef.current) return;
             spotifyVolumeBeforeDuckRef.current = originalVolume;
             const firstDip = originalVolume + ((Math.min(originalVolume, REACTION_DUCK_VOLUME) - originalVolume) * 0.65);
             await player.setVolume(firstDip).catch(() => undefined);
             await waitForAudioFade(45);
           }
-          if (token !== reactionSoundTokenRef.current || player !== spotifyPlayerRef.current) return;
+          if (player !== spotifyPlayerRef.current) return;
           await player.setVolume(Math.min(originalVolume, REACTION_DUCK_VOLUME)).catch(() => undefined);
         }
       }
-      if (token !== reactionSoundTokenRef.current) return;
       sound.onended = restoreMusic;
       sound.onerror = restoreMusic;
       await sound.play();
@@ -314,6 +320,7 @@ export default function HostRoom({ code }: { code: string }) {
   }, [requestScreenWakeLock]);
 
   useEffect(() => {
+    const activeReactionAudio = activeReactionAudioRef.current;
     const cheerSound = new Audio(`/sounds/woohoo-crowd.wav?v=${REACTION_SOUND_VERSION}`);
     const booSound = new Audio(`/sounds/boo.mp3?v=${REACTION_SOUND_VERSION}`);
     cheerSound.preload = "auto";
@@ -326,6 +333,8 @@ export default function HostRoom({ code }: { code: string }) {
       reactionSoundTokenRef.current += 1;
       spotifyPausedForReactionRef.current = false;
       if (reactionRestoreTimerRef.current) window.clearTimeout(reactionRestoreTimerRef.current);
+      activeReactionAudio.forEach((sound) => sound.pause());
+      activeReactionAudio.clear();
       cheerSound.pause();
       booSound.pause();
       cheerAudioRef.current = null;
@@ -354,16 +363,22 @@ export default function HostRoom({ code }: { code: string }) {
   useEffect(() => {
     if (!participantId || !hostKey || partyStatus === "ended") return;
     let active = true;
-    const refresh = () => fetch(`/api/party?code=${encodeURIComponent(code)}`, { headers: { "x-hackmusic-participant": participantId, "x-hackmusic-host-key": hostKey } })
+    const refresh = () => fetch(`/api/party?code=${encodeURIComponent(code)}&activityAfter=${encodeURIComponent(soundActivityCursorRef.current)}`, { headers: { "x-hackmusic-participant": participantId, "x-hackmusic-host-key": hostKey } })
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error ?? "Could not load the room.");
         if (!active) return;
-        const nextIds = new Set<string>(data.party.reactions.map((reaction: { id: string }) => reaction.id));
-        if (knownReactions.current) {
-          data.party.reactions.filter((reaction: { id: string }) => !knownReactions.current?.has(reaction.id)).reverse().forEach((reaction: { tone: "up" | "down" }) => playReactionSound(reaction.tone));
+        const incomingActivity = (data.party.activity ?? []) as Array<{ id: string; tone: "up" | "down" | "song"; createdAt: string }>;
+        if (knownSoundActivityRef.current) {
+          incomingActivity
+            .filter((item) => item.tone !== "song" && !knownSoundActivityRef.current?.has(item.id))
+            .forEach((item) => playReactionSound(item.tone as "up" | "down"));
         }
-        knownReactions.current = nextIds;
+        const knownIds = knownSoundActivityRef.current ?? new Set<string>();
+        incomingActivity.forEach((item) => knownIds.add(item.id));
+        knownSoundActivityRef.current = knownIds;
+        const lastActivity = incomingActivity[incomingActivity.length - 1];
+        if (lastActivity) soundActivityCursorRef.current = `${lastActivity.createdAt}|${lastActivity.id}`;
         setParty(data.party);
       })
       .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "Could not load the room."); });
@@ -642,6 +657,8 @@ export default function HostRoom({ code }: { code: string }) {
     }
     cheerAudioRef.current?.pause();
     booAudioRef.current?.pause();
+    activeReactionAudioRef.current.forEach((sound) => sound.pause());
+    activeReactionAudioRef.current.clear();
     if (cheerAudioRef.current) cheerAudioRef.current.currentTime = 0;
     if (booAudioRef.current) booAudioRef.current.currentTime = 0;
     const player = spotifyPlayerRef.current;

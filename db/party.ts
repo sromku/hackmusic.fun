@@ -89,6 +89,7 @@ type ReactionRow = {
 
 type ActivityRow = {
   id: string;
+  submission_id: string;
   participant_id: string | null;
   kind: string;
   created_at: string;
@@ -96,6 +97,20 @@ type ActivityRow = {
   initials: string | null;
   title: string;
 };
+
+function collapseLegacyReactionActivity(rows: ActivityRow[]) {
+  const songStarts: ActivityRow[] = [];
+  const latestReaction = new Map<string, ActivityRow>();
+  for (const row of rows) {
+    if (row.kind === "song_start") {
+      songStarts.push(row);
+      continue;
+    }
+    latestReaction.set(`${row.submission_id}|${row.participant_id ?? "anonymous"}`, row);
+  }
+  return [...songStarts, ...latestReaction.values()].sort((left, right) =>
+    left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id));
+}
 
 const roomAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const colors = ["sun", "coral", "blue", "mint"];
@@ -251,14 +266,14 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
     const separator = activityAfter.lastIndexOf("|");
     const cursorAt = separator > 0 ? activityAfter.slice(0, separator) : "";
     activityResult = cursorAt
-      ? await d1.prepare(`SELECT a.id, a.participant_id, a.kind, a.created_at, p.display_name, p.initials, s.title
+      ? await d1.prepare(`SELECT a.id, a.submission_id, a.participant_id, a.kind, a.created_at, p.display_name, p.initials, s.title
           FROM activity_events a
           LEFT JOIN participants p ON p.id = a.participant_id
           JOIN submissions s ON s.id = a.submission_id
           WHERE a.event_id = ? AND a.created_at >= ?
           ORDER BY a.created_at ASC, a.id ASC`)
         .bind(event.id, cursorAt).all<ActivityRow>()
-      : await d1.prepare(`SELECT a.id, a.participant_id, a.kind, a.created_at, p.display_name, p.initials, s.title
+      : await d1.prepare(`SELECT a.id, a.submission_id, a.participant_id, a.kind, a.created_at, p.display_name, p.initials, s.title
           FROM activity_events a
           LEFT JOIN participants p ON p.id = a.participant_id
           JOIN submissions s ON s.id = a.submission_id
@@ -314,7 +329,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
     }),
     pendingCount: pending?.count ?? 0,
     queueCount: queue?.count ?? 0,
-    ...(activityResult ? { activity: activityResult.results.map((item) => item.kind === "song_start" ? {
+    ...(activityResult ? { activity: collapseLegacyReactionActivity(activityResult.results).map((item) => item.kind === "song_start" ? {
       id: item.id,
       tone: "song",
       avatar: "🎵",
@@ -481,18 +496,10 @@ export async function reactToCurrent(code: string, participantId: string, kind: 
 
   const existing = await d1.prepare("SELECT id, kind FROM reactions WHERE submission_id = ? AND participant_id = ?")
     .bind(current.id, participantId).first<{ id: string; kind: string }>();
-  if (existing?.kind === kind) return { skipped: false };
-  const oldEffect = existing ? (existing.kind === "up" ? 3 : -3) : 0;
+  if (existing) throw new PublicError("Your reaction is already locked for this song. One human, one vote—no remixes.", 409);
   const newEffect = kind === "up" ? 3 : -3;
   const now = new Date().toISOString();
-  if (existing) {
-    await d1.batch([
-      d1.prepare("UPDATE reactions SET kind = ?, created_at = ? WHERE id = ?").bind(kind, now, existing.id),
-      d1.prepare("UPDATE participants SET score = score + ? WHERE id = ?").bind(newEffect - oldEffect, current.participant_id),
-      d1.prepare("INSERT INTO activity_events (id, event_id, submission_id, participant_id, kind, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-        .bind(`activity-${crypto.randomUUID()}`, event.id, current.id, participantId, kind, now),
-    ]);
-  } else {
+  try {
     await d1.batch([
       d1.prepare("INSERT INTO reactions (id, event_id, submission_id, participant_id, kind, created_at) VALUES (?, ?, ?, ?, ?, ?)")
         .bind(crypto.randomUUID(), event.id, current.id, participantId, kind, now),
@@ -500,6 +507,11 @@ export async function reactToCurrent(code: string, participantId: string, kind: 
       d1.prepare("INSERT INTO activity_events (id, event_id, submission_id, participant_id, kind, created_at) VALUES (?, ?, ?, ?, ?, ?)")
         .bind(`activity-${crypto.randomUUID()}`, event.id, current.id, participantId, kind, now),
     ]);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("UNIQUE")) {
+      throw new PublicError("Your reaction is already locked for this song. One human, one vote—no remixes.", 409);
+    }
+    throw error;
   }
   const booCount = await d1.prepare("SELECT COUNT(*) AS count FROM reactions WHERE submission_id = ? AND kind = 'down'")
     .bind(current.id).first<{ count: number }>();

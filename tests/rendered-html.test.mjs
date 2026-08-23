@@ -183,8 +183,9 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /Scroll inside Room Noise/);
   assert.match(source, /item\.tone === "up" \? "🎉" : "👻"/);
   assert.match(source, /🦗 It’s suspiciously quiet/);
-  assert.match(source, /Changed your mind\? Tap the other reaction/);
-  assert.match(source, /Vote changed to Cheer/);
+  assert.match(source, /Vote locked for this song\. No take-backs/);
+  assert.match(source, /disabled=\{busy \|\| Boolean\(myReaction\)\}/);
+  assert.doesNotMatch(source, /tap to switch|Vote changed to Cheer|Changed your mind/);
   assert.match(source, /your-vote-badge/);
   assert.match(source, /Add to my Spotify/);
   assert.match(source, /MAX_PENDING_TRACKS_PER_PERSON - party\.pendingCount/);
@@ -216,9 +217,9 @@ test("renders a code-specific participant room", async () => {
   assert.match(partySource, /name: "Someone"/);
   assert.match(partySource, /revealScores = event\.status === "ended"/);
   assert.match(partySource, /score: revealScores \? person\.score : null/);
-  assert.match(partySource, /UPDATE reactions SET kind/);
+  assert.doesNotMatch(partySource, /UPDATE reactions SET kind/);
   assert.match(partySource, /createdAt: event\.created_at/);
-  assert.match(partySource, /newEffect - oldEffect/);
+  assert.match(partySource, /INSERT INTO reactions/);
   assert.match(partySource, /current\.artist === "Spotify"/);
   assert.match(partySource, /pending\?\.count \?\? 0\) >= MAX_PENDING_TRACKS_PER_PERSON/);
   assert.match(partySource, /event\.status === "lobby" \|\| event\.current_submission_id/);
@@ -329,7 +330,11 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /JOIN PASSCODE/);
   assert.match(source, /\/sounds\/woohoo-crowd\.wav/);
   assert.match(source, /\/sounds\/boo\.mp3/);
-  assert.match(source, /REACTION_SOUND_VERSION = "2026-08-23-3"/);
+  assert.match(source, /REACTION_SOUND_VERSION = "2026-08-23-4"/);
+  assert.match(source, /activityAfter=\$\{encodeURIComponent\(soundActivityCursorRef\.current\)\}/);
+  assert.match(source, /knownSoundActivityRef/);
+  assert.match(source, /template\.cloneNode\(true\)/);
+  assert.match(source, /activeReactionAudioRef/);
   assert.match(source, /REACTION_DUCK_VOLUME = 0\.16/);
   assert.match(source, /player\.getVolume\(\)/);
   assert.match(source, /player\.setVolume\(volume\)/);
@@ -377,6 +382,9 @@ test("renders a code-specific host control surface", async () => {
   assert.match(partySource, /export async function setQueueMode/);
   assert.match(partySource, /INSERT INTO activity_events/);
   assert.match(partySource, /activityAfter !== undefined/);
+  assert.match(partySource, /collapseLegacyReactionActivity/);
+  assert.match(partySource, /reaction is already locked for this song/);
+  assert.doesNotMatch(partySource, /UPDATE reactions SET kind/);
   assert.match(partySource, /tone: "song"/);
   assert.match(partySource, /skip_reason = 'boos'/);
   assert.match(partySource, /export async function recordBooSkipProgress/);

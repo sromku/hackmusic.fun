@@ -372,9 +372,10 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 .reaction-button:first-child { border-right: 2px solid var(--ink); }
 .reaction-button.cheer { background: var(--sun); }
 .reaction-button.boo { background: var(--coral); }
-.reaction-button:hover .reaction-icon { transform: scale(1.14) rotate(-6deg); }
-.reaction-button:disabled { cursor: wait; }
-.reaction-button.selected { z-index: 1; box-shadow: inset 0 -7px 0 rgba(255, 254, 249, .72); }
+.reaction-button:not(:disabled):hover .reaction-icon { transform: scale(1.14) rotate(-6deg); }
+.reaction-button:disabled { cursor: default; }
+.reaction-button.selected { z-index: 1; }
+.reaction-button:disabled:not(.selected) { filter: saturate(.55); opacity: .72; }
 .reaction-button.selected .reaction-icon { transform: scale(1.1) rotate(-5deg); }
 .your-vote-badge { position: absolute; top: 8px; right: 8px; border: 2px solid var(--ink); background: var(--white); box-shadow: 2px 2px 0 var(--ink); padding: 4px 6px; font-size: 8px; letter-spacing: .08em; transform: rotate(1.5deg); }
 .reaction-icon { font-size: 44px; transition: transform .16s ease; }
