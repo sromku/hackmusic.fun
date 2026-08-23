@@ -171,7 +171,7 @@ export default function Home() {
           <p className="landing-lede">Create a room, invite the humans, and hand everyone a tiny amount of power over the speaker.</p>
           <div className="landing-energy" aria-label="Made for six to thirty people sharing one speaker">
             <span className="energy-orb" aria-hidden="true">🪩</span>
-            <div><strong>6–30 HUMANS · ONE SPEAKER</strong><small>Zero playlist dictators.</small></div>
+            <div><strong>SOME HUMANS · ONE SPEAKER</strong><small>Zero playlist dictators.</small></div>
             <span className="energy-bars" aria-hidden="true"><i /><i /><i /><i /><i /></span>
           </div>
           <section className="landing-how" aria-labelledby="how-it-works-title">
