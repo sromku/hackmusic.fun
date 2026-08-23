@@ -83,7 +83,8 @@ test("renders the create and join landing page", async () => {
   assert.doesNotMatch(html, /6–30 HUMANS/);
   assert.match(html, /Scrambled by/);
   assert.match(html, /https:\/\/sromku\.com/);
-  assert.match(html, /Common sense still in beta/);
+  assert.match(html, /AGI unlocked\. Common sense still in beta/);
+  assert.doesNotMatch(html, /SOTA unlocked/);
   assert.match(html, /href="\/privacy"/);
   assert.match(html, /href="\/terms"/);
   assert.match(html, /href="\/go-bigger"/);
