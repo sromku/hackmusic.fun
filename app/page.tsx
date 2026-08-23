@@ -215,7 +215,7 @@ export default function Home() {
         <div className="hosted-room-grid">{hostedRooms.slice(0, visibleHostedRooms).map((room) => <article className="hosted-room-card" key={room.code}><div className="hosted-room-topline"><span className={`hosted-room-status ${room.status}`}>{room.status === "lobby" ? "🌙 LOBBY" : room.status === "live" ? "⚡ LIVE" : room.status === "ended" ? "🏁 ENDED" : "📼 SAVED"}</span><span>{hostedRoomDate(room.createdAt)}</span></div><h3>{room.title}</h3><strong className="hosted-room-code">{room.code}</strong><div className="hosted-room-actions"><a href={`/e/${room.code}/host`} onClick={() => rememberRoomOpened(room.code)}>🎛️ Host controls →</a><a href={`/e/${room.code}`} onClick={() => rememberRoomOpened(room.code)}>Guest view</a></div></article>)}</div>
       </section>}
       <footer className="landing-footer">
-        <span>Chaos-ed by <a href="https://sromku.com" target="_blank" rel="noreferrer">@sromku ↗</a> and an AI Codex agent.</span>
+        <span>Scrambled by <a href="https://sromku.com" target="_blank" rel="noreferrer">@sromku</a> + AI Codex agent</span>
         <nav aria-label="Legal links"><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
         <span>SOTA unlocked. Common sense still in beta.</span>
       </footer>
