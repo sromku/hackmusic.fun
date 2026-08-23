@@ -60,14 +60,6 @@ export async function generateMetadata(): Promise<Metadata> {
         "max-video-preview": -1,
       },
     },
-    icons: {
-      icon: [
-        { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
-        { url: "/favicon.png", sizes: "64x64", type: "image/png" },
-      ],
-      shortcut: "/favicon.png",
-      apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
-    },
     openGraph: {
       title: SITE_TITLE,
       description: SITE_DESCRIPTION,
@@ -132,6 +124,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+        <link rel="icon" href="/favicon.png" sizes="64x64" type="image/png" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }}

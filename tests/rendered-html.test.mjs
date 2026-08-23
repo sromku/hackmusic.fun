@@ -252,6 +252,7 @@ test("ships product metadata and removes starter artifacts", async () => {
   await access(new URL("public/llms-full.txt", projectRoot));
   await access(new URL("public/favicon.png", projectRoot));
   await access(new URL("public/favicon-32.png", projectRoot));
+  await access(new URL("public/favicon.ico", projectRoot));
   await access(new URL("public/apple-touch-icon.png", projectRoot));
   await access(new URL("public/sounds/cheer.wav", projectRoot));
   await access(new URL("public/sounds/boo.wav", projectRoot));
