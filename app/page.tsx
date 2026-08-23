@@ -201,7 +201,7 @@ export default function Home() {
           <form className="entry-card join-room-card" onSubmit={joinRoom}>
             <div><p className="eyebrow">🎟️ GOT A CODE?</p><h2>Join the room</h2></div>
             <label className="sr-only" htmlFor="room-code">Room code</label><input id="room-code" value={roomCode} onChange={(event) => setRoomCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} maxLength={6} placeholder="ABC123" required />
-            <button type="submit" disabled={busy}>🚪 Join →</button>
+            <button type="submit" disabled={busy}>Join →</button>
           </form>
           {message && <p className="landing-message" role="alert">{message}</p>}
           <p className="entry-legal-note">By creating or joining a room, you agree to the <a href="/terms">Terms</a> and acknowledge the <a href="/privacy">Privacy Policy</a>.</p>

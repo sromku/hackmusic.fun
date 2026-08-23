@@ -49,6 +49,8 @@ test("renders the create and join landing page", async () => {
   assert.match(html, /Let the room pick the vibe/);
   assert.match(html, /Create a room/);
   assert.match(html, /Join the room/);
+  assert.match(html, />Join →<\/button>/);
+  assert.doesNotMatch(html, /🚪 Join/);
   assert.match(html, /THREE MOVES\. MAXIMUM DRAMA/);
   assert.match(html, /Drop a secret song/);
   assert.match(html, /React out loud/);
