@@ -24,7 +24,7 @@ function date(value: string | null) {
 }
 
 async function requestAdmin<T>(search = "") {
-  const response = await fetch(`/api/admin${search}`, { cache: "no-store" });
+  const response = await fetch(`/api/backstage-retired-slug${search}`, { cache: "no-store" });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error ?? "Could not read HackMusic data.");
   return data as T;

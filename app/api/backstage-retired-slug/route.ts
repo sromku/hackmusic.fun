@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   if (!user) return json({ error: "Sign in with ChatGPT to continue." }, 401);
   const access = adminAccessForEmail(user.email);
   if (!access.configured) return json({ error: "The admin owner allowlist is not configured." }, 503);
-  if (!access.allowed) return json({ error: "This ChatGPT account is not allowed to access HackMusic admin." }, 403);
+  if (!access.allowed) return json({ error: "This ChatGPT account is not allowed to access the HackMusic owner dashboard." }, 403);
 
   try {
     const code = new URL(request.url).searchParams.get("code")?.trim();

@@ -166,7 +166,7 @@ test("publishes crawler, sitemap, and install metadata without exposing private 
   assert.match(robots, /Disallow: \/api\//);
   assert.match(robots, /Disallow: \/e\//);
   assert.match(robots, /Disallow: \/host/);
-  assert.match(robots, /Disallow: \/admin/);
+  assert.doesNotMatch(robots, /admin|backstage-hm/i);
   assert.match(robots, /Sitemap: https:\/\/hackmusic\.fun\/sitemap\.xml/);
 
   const sitemapResponse = await render("/sitemap.xml");
@@ -273,7 +273,7 @@ test("starts Spotify PKCE without exposing a client secret", async () => {
 });
 
 test("protects the hosted read-only admin with ChatGPT identity and an owner allowlist", async () => {
-  const routeSource = await readFile(new URL("app/api/admin/route.ts", projectRoot), "utf8");
+  const routeSource = await readFile(new URL("app/api/backstage-retired-slug/route.ts", projectRoot), "utf8");
   assert.match(routeSource, /getChatGPTUser/);
   assert.match(routeSource, /adminAccessForEmail/);
   assert.doesNotMatch(routeSource, /authorization|ADMIN_API_KEY|Bearer/);
@@ -286,18 +286,20 @@ test("protects the hosted read-only admin with ChatGPT identity and an owner all
   assert.deepEqual(allowlist.adminAllowlistAccess(" OWNER@Example.com ", "other@example.com, owner@example.COM"), { configured: true, allowed: true });
   assert.deepEqual(allowlist.adminAllowlistAccess("stranger@example.com", "owner@example.com"), { configured: true, allowed: false });
   assert.deepEqual(allowlist.adminAllowlistAccess("owner@example.com", ""), { configured: false, allowed: false });
-  const pageSource = await readFile(new URL("app/admin/page.tsx", projectRoot), "utf8");
-  assert.match(pageSource, /requireChatGPTUser\("\/admin"\)/);
+  const pageSource = await readFile(new URL("app/backstage-retired-slug/page.tsx", projectRoot), "utf8");
+  assert.match(pageSource, /requireChatGPTUser\("\/backstage-retired-slug"\)/);
   assert.match(pageSource, /OWNER ACCESS ONLY/);
   assert.match(pageSource, /robots: \{ index: false/);
-  const dashboardSource = await readFile(new URL("app/admin/admin-dashboard.tsx", projectRoot), "utf8");
+  const dashboardSource = await readFile(new URL("app/backstage-retired-slug/admin-dashboard.tsx", projectRoot), "utf8");
   assert.match(dashboardSource, /Owner only\. Read only/);
-  assert.match(dashboardSource, /\/api\/admin/);
+  assert.match(dashboardSource, /\/api\/backstage-retired-slug/);
   assert.match(dashboardSource, /No host keys/);
   const adminSource = await readFile(new URL("db/admin.ts", projectRoot), "utf8");
   assert.doesNotMatch(adminSource, /host_pin/);
   assert.match(adminSource, /Anonymous boo/);
   await assert.rejects(access(new URL("tools/admin/server.mjs", projectRoot)));
+  await assert.rejects(access(new URL("app/admin/page.tsx", projectRoot)));
+  await assert.rejects(access(new URL("app/api/admin/route.ts", projectRoot)));
 
 });
 

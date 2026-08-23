@@ -96,7 +96,7 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 - `npm run db:generate`: generate Drizzle migrations after schema changes
 ## Hosted Admin Dashboard
 
-The read-only dashboard lives at `/admin`. Sites requires ChatGPT sign-in before rendering it, and the server checks the signed-in email against the `ADMIN_ALLOWED_EMAILS` hosted secret before returning any database data. Separate multiple owner emails with commas.
+The read-only dashboard lives at `/backstage-retired-slug`. Sites requires ChatGPT sign-in before rendering it, and the server checks the signed-in email against the `ADMIN_ALLOWED_EMAILS` hosted secret before returning any database data. Separate multiple owner emails with commas.
 
 The dashboard never returns host control keys and keeps boo identities anonymous. It is excluded from search indexing and has no link from the public navigation.
 
