@@ -92,7 +92,21 @@ actions tied to the current ChatGPT user. Leave public content anonymous.
 - `npm run dev`: start local development
 - `npm run build`: verify the vinext build output
 - `npm test`: build the starter and verify its rendered loading skeleton
+- `npm run deploy:prepare`: validate and package a committed OpenAI Sites release
 - `npm run db:generate`: generate Drizzle migrations after schema changes
+
+## Deploy to OpenAI Sites
+
+Sites deployment uses short-lived credentials supplied by Codex, so the release
+script never saves an OpenAI token. Commit your changes, then run:
+
+```bash
+npm run deploy:prepare
+```
+
+The script requires a clean Git worktree, runs tests and lint, scans Git history
+with Gitleaks, and creates an ignored archive under `outputs/sites/`. It finishes
+by printing the exact request to give Codex for the authenticated deployment.
 
 ## Learn More
 
