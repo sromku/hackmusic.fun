@@ -190,7 +190,7 @@ test("renders a code-specific participant room", async () => {
   assert.match(roomGuardMigration, /room_creation_limits_expires_idx/);
   const partyRulesSource = await readFile(new URL("lib/party-rules.ts", projectRoot), "utf8");
   assert.match(partyRulesSource, /MAX_PENDING_TRACKS_PER_PERSON = 100/);
-  assert.match(partyRulesSource, /MAX_PARTICIPANTS_PER_ROOM = 200/);
+  assert.match(partyRulesSource, /MAX_PARTICIPANTS_PER_ROOM = 100/);
   const securityMigration = await readFile(new URL("drizzle/0005_swift_manta.sql", projectRoot), "utf8");
   assert.match(securityMigration, /join_passcode_hash/);
   assert.match(securityMigration, /randomblob\(12\)/);
