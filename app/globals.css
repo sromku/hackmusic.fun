@@ -874,6 +874,16 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .host-status.live { background: var(--mint); }
 .host-status.lobby { background: var(--blue); }
 .host-status.ended { background: var(--coral); }
+.host-ended-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(210px, auto); gap: 28px; align-items: center; margin-top: 32px; border: 2px solid var(--ink); background: var(--coral); box-shadow: 7px 7px 0 var(--ink); padding: 24px; animation: card-arrive .58s cubic-bezier(.2, .75, .25, 1) both; }
+.host-ended-summary h2 { margin: 3px 0 9px; font-size: clamp(38px, 6vw, 62px); line-height: .9; letter-spacing: -.06em; }
+.host-ended-summary p:not(.eyebrow) { max-width: 530px; margin: 0; font-size: 12px; font-weight: 750; line-height: 1.45; }
+.host-ended-summary-stats { display: flex; gap: 10px; }
+.host-ended-summary-stats span { display: grid; min-width: 90px; place-items: center; border: 2px solid var(--ink); background: var(--white); box-shadow: 4px 4px 0 var(--ink); padding: 12px; font-size: 9px; font-weight: 900; text-transform: uppercase; }
+.host-ended-summary-stats strong { display: block; margin-bottom: 2px; font-size: 28px; line-height: 1; }
+.host-ended-summary-actions { display: grid; gap: 10px; }
+.host-ended-summary-actions a, .host-controls-retired > a { display: grid; min-height: 46px; place-items: center; border: 2px solid var(--ink); background: var(--blue); box-shadow: 4px 4px 0 var(--ink); padding: 0 14px; color: var(--ink); font-size: 10px; font-weight: 950; text-align: center; text-decoration: none; transition: transform .2s cubic-bezier(.2, .8, .25, 1.2), box-shadow .2s ease; }
+.host-ended-summary-actions a:last-child { background: var(--white); }
+.host-ended-summary-actions a:hover, .host-controls-retired > a:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--ink); }
 .share-room-card { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-top: 32px; border: 2px solid var(--ink); background: var(--sun); box-shadow: 7px 7px 0 var(--ink); padding: 22px 24px; animation: card-arrive .58s cubic-bezier(.2, .75, .25, 1) both; }
 .share-code > span { display: block; font-size: 10px; font-weight: 900; letter-spacing: .12em; }
 .share-code > strong { display: block; margin-top: 4px; font-size: clamp(46px, 7vw, 82px); line-height: .9; letter-spacing: .08em; }
@@ -955,6 +965,12 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .host-cheers { background: var(--sun); } .host-boos { background: var(--coral); }
 .host-reaction-counts strong { font-size: 36px; } .host-reaction-counts span { font-size: 10px; font-weight: 900; letter-spacing: .1em; }
 .host-controls-card { padding: 20px; }
+.host-controls-retired { display: grid; align-content: start; background: var(--mint); }
+.host-controls-retired .card-title-row > span { border: 2px solid var(--ink); background: var(--white); padding: 5px 7px; font-size: 8px; font-weight: 950; letter-spacing: .1em; }
+.host-retired-mark { display: grid; width: 72px; height: 72px; margin: 26px auto 18px; place-items: center; border: 2px solid var(--ink); border-radius: 50%; background: var(--sun); box-shadow: 5px 5px 0 var(--ink); font-size: 34px; }
+.host-controls-retired h3 { margin: 0; font-size: 25px; line-height: 1; letter-spacing: -.04em; text-align: center; }
+.host-controls-retired > p { margin: 12px 0 22px; color: #514d46; font-size: 11px; font-weight: 750; line-height: 1.45; text-align: center; }
+.host-controls-retired > a { margin-top: auto; background: var(--sun); }
 .host-pin { display: grid; gap: 8px; margin: 20px 0; }
 .host-pin span { font-size: 10px; font-weight: 900; letter-spacing: .1em; }
 .host-pin input { min-height: 48px; border: 2px solid var(--ink); background: var(--paper); padding: 0 12px; font-size: 18px; }
@@ -1036,6 +1052,9 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
   .host-heading { align-items: flex-start; flex-direction: column; gap: 14px; }
   .host-heading h1 { font-size: clamp(46px, 14vw, 64px); }
   .participant-link { font-size: 10px; }
+  .host-ended-summary { grid-template-columns: 1fr; gap: 20px; margin-top: 22px; padding: 18px; box-shadow: 5px 5px 0 var(--ink); }
+  .host-ended-summary-stats { flex-wrap: wrap; }
+  .host-ended-summary-stats span { flex: 1 1 100px; }
   .share-room-card { align-items: flex-start; margin-top: 22px; padding: 18px; }
   .share-room-card img { width: 132px; height: 132px; }
   .spotify-connect-card { margin-top: 22px; padding: 18px; }

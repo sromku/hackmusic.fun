@@ -292,6 +292,12 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /There is no undo/);
   assert.match(source, /className="toast host-toast"/);
   assert.doesNotMatch(source, /className="host-message"/);
+  assert.match(source, /THE AUX CABLE HAS BEEN RETIRED/);
+  assert.match(source, /CONTROLS FROZEN/);
+  assert.match(source, /UNPLAYED AT CLOSING/);
+  assert.match(source, /!partyStatus \|\| partyStatus === "ended"/);
+  assert.match(source, /party\.status !== "ended" && <section className=\{`spotify-connect-card/);
+  assert.match(source, /party\.status !== "ended" && endConfirmOpen/);
   assert.match(source, /🙌 CHEERS/);
   assert.match(source, /👻 BOOS/);
   assert.match(source, /x-hackmusic-host-key/);
