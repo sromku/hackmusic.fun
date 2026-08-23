@@ -1,121 +1,81 @@
-# vinext-starter
+# HackMusic
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+HackMusic turns one speaker and a room full of opinions into a private music party game. A host connects Spotify Premium, guests secretly queue tracks, and each person gets one cheer or anonymous boo per song. Three boos skip the track; scores are revealed when the party ends.
 
-## Prerequisites
+The production site is [hackmusic.fun](https://hackmusic.fun).
 
-- Node.js `>=22.13.0`
+## Local development
 
-## Quick Start
+Requirements: Node.js `>=22.13.0`.
 
 ```bash
 npm install
 npm run dev
+```
+
+Useful checks:
+
+```bash
+npm run lint
+npm test
 npm run build
 ```
 
-This starter does not use `wrangler.jsonc`.
+`npm test` builds the real worker before running tests. This catches routing and bundling failures as well as domain behavior.
 
-## Included Shape
+## Architecture
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+The code follows a thin-route, explicit-domain-boundary shape:
 
-## Workspace Auth Headers
+- `app/` contains pages, client components, and HTTP route shells.
+- `app/api/party/route.ts` owns HTTP parsing and response/error translation only.
+- `app/api/party/party-actions.ts` validates and dispatches party commands.
+- `db/party.ts` owns party use cases and persistence orchestration.
+- `db/party-model.ts` owns database row models and shared normalization/load helpers.
+- `db/party-queue.ts` owns ordered, random, and fair-ish queue selection.
+- `lib/party-contract.ts` is the shared API/UI contract source of truth.
+- `lib/party-format.ts` contains pure display and duration helpers.
+- `app/e/[code]/host/use-reaction-sounds.ts` owns reaction audio mixing and Spotify volume ducking.
+- `app/e/[code]/host/use-screen-wake-lock.ts` owns screen wake-lock lifecycle behavior.
+- `app/e/[code]/host/spotify-sdk.ts` isolates the third-party SDK surface.
 
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
+Keep platform concerns at the edges. UI components should consume shared contracts rather than re-declaring response shapes, API routes should delegate domain work, and queue policy should not leak into rendering code.
 
-The user ID is stable for the same user on the same Site and different across Sites. Email and name are intended for display or contact purposes.
+## Important product invariants
 
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
+These rules are enforced on the server, not merely hidden in the UI:
 
-Treat the full name as optional and fall back to email when it is absent:
+- A host key is required for host-only controls.
+- A room passcode is required to join.
+- A room accepts at most 100 participants.
+- A participant may keep at most 100 pending songs.
+- A track may appear only once in an event.
+- A participant gets one immutable reaction per played song.
+- A participant cannot react to their own song.
+- Boo identities are never revealed to participants or the admin dashboard.
+- Scores stay hidden until the event is ended.
+- Three distinct boos skip the current song.
 
-```tsx
-import { headers } from "next/headers";
+## Testing approach
 
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
+`tests/party-api-flow.test.mjs` sends requests through the built worker and uses an in-memory SQLite-backed D1 adapter. It verifies complete flows and state transitions: protected joins, score visibility, reaction locking, owner-vote rejection, boo anonymity, three-boo advancement, skip statistics, room ending, malformed/cross-origin writes, and participant capacity.
 
-  const displayName = fullName ?? email;
-  // ...
-}
-```
+`tests/rendered-html.test.mjs` covers public/private route metadata, legal pages, Spotify PKCE, admin protection, essential UI affordances, and pure formatting/security helpers. Source assertions are intentionally limited to architecture or platform integration seams that cannot be exercised in Node.
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+When adding a feature, prefer one meaningful flow or edge-case test over implementation-specific line matching.
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
+## Data and secrets
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
+Cloudflare D1 is exposed to the worker as the `DB` binding declared in `.openai/hosting.json`. Spotify and admin secrets belong in hosted secrets or ignored local environment files. Never commit client secrets, session encryption keys, host keys, passcodes, production database exports, or `.env*` files other than `.env.example`.
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
+The read-only owner dashboard lives at its intentionally unlinked backstage route. It requires ChatGPT sign-in and an email present in `ADMIN_ALLOWED_EMAILS`. It never returns host keys or boo identities.
 
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
+## Deployment
 
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Useful Commands
-
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run deploy:prepare`: validate and package a committed OpenAI Sites release
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-## Hosted Admin Dashboard
-
-The read-only dashboard lives at `/backstage-retired-slug`. Sites requires ChatGPT sign-in before rendering it, and the server checks the signed-in email against the `ADMIN_ALLOWED_EMAILS` hosted secret before returning any database data. Separate multiple owner emails with commas.
-
-The dashboard never returns host control keys and keeps boo identities anonymous. It is excluded from search indexing and has no link from the public navigation.
-
-The dashboard also includes first-party website analytics for the latest 30 days. Public pages send cookie-free page views to `/api/analytics`; normalized D1 records older than 90 days are pruned during collection and reporting. Analytics stores page categories, daily-rotating visit hashes, referrer hostnames, broad device classes, and provider country codes. It does not store raw IP addresses, full user-agent strings, query strings, or private room codes, and it honors Do Not Track and Global Privacy Control.
-
-## Deploy to OpenAI Sites
-
-Sites deployment uses short-lived credentials supplied by Codex, so the release
-script never saves an OpenAI token. Commit your changes, then run:
+OpenAI Sites deployment uses short-lived credentials supplied by Codex; no deployment token is written to the repository.
 
 ```bash
 npm run deploy:prepare
 ```
 
-The script requires a clean Git worktree, runs tests and lint, scans Git history
-with Gitleaks, and creates an ignored archive under `outputs/sites/`. It finishes
-by printing the exact request to give Codex for the authenticated deployment.
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+The release preparation script requires a clean worktree, runs tests and lint, scans Git history with Gitleaks, and creates an ignored archive under `outputs/sites/`.

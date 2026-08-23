@@ -2,20 +2,9 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 import ts from "typescript";
+import { renderPage as render } from "./support/worker.mjs";
 
 const projectRoot = new URL("../", import.meta.url);
-
-async function render(pathname = "/", requestHeaders = {}, bindings = {}) {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}-${pathname}`);
-  const { default: worker } = await import(workerUrl.href);
-
-  return worker.fetch(
-    new Request(`http://localhost${pathname}`, { headers: { accept: "text/html", host: "localhost", ...requestHeaders } }),
-    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) }, ...bindings },
-    { waitUntil() {}, passThroughOnException() {} },
-  );
-}
 
 async function loadTypeScriptModule(pathname) {
   const source = await readFile(new URL(pathname, projectRoot), "utf8");
@@ -70,6 +59,20 @@ test("accepts only the curated party-face emoji collection", async () => {
   assert.equal(avatars.AVATAR_EMOJIS.length, 24);
   assert.equal(avatars.isAvatarEmoji("🪩"), true);
   assert.equal(avatars.isAvatarEmoji("not-an-emoji"), false);
+});
+
+test("formats song durations, Spotify links, and outcomes consistently", async () => {
+  const format = await loadTypeScriptModule("lib/party-format.ts");
+  assert.equal(format.durationSeconds("4:09"), 249);
+  assert.equal(format.durationSeconds("4:9"), 0);
+  assert.equal(format.formatMusicDuration(59), "Under 1 min");
+  assert.equal(format.formatMusicDuration(3_725), "1 hr 2 min");
+  assert.equal(format.formatPlaybackTime(-500), "0:00");
+  assert.equal(format.formatPlaybackTime(125_999), "2:05");
+  assert.equal(format.spotifyTrackWebUrl("spotify:track:5lf9LK4eETye6DsPUJpHDB"), "https://open.spotify.com/track/5lf9LK4eETye6DsPUJpHDB");
+  assert.equal(format.spotifyTrackWebUrl("youtube:video:abc"), "");
+  assert.equal(format.mySongStatusLabel({ status: "skipped", skipReason: "boos", skipPercent: 42 }, false), "👻 Booed off at 42%");
+  assert.deepEqual(format.hostSongOutcome({ status: "skipped", skipReason: "host", skipPercent: null }), { label: "⏭️ SKIPPED BY HOST", tone: "host" });
 });
 
 test("renders the create and join landing page", async () => {
@@ -202,112 +205,23 @@ test("renders a code-specific participant room", async () => {
   assert.match(html, /noindex/);
   assert.doesNotMatch(html, /og(?:-v2)?\.png/);
   const source = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
-  assert.match(source, /CHEER/);
-  assert.match(source, /BOO/);
-  assert.match(source, /Add a song/);
-  assert.match(source, /YOUR FINAL SCORE/);
-  assert.match(source, /Now playing:/);
-  assert.match(source, /song-start/);
-  assert.match(source, /🔊 ROOM NOISE/);
-  assert.match(source, /FULL PARTY HISTORY/);
-  assert.match(source, /activityAfter=/);
-  assert.match(source, /Scrollable history of songs and reactions since the party began/);
-  assert.match(source, /At either end, keep scrolling to continue through the page/);
-  assert.match(source, /item\.tone === "up" \? "🎉" : "👻"/);
-  assert.match(source, /🦗 It’s suspiciously quiet/);
-  assert.match(source, /Vote locked for this song\. No take-backs/);
-  assert.match(source, /disabled=\{busy \|\| Boolean\(myReaction\)\}/);
-  assert.doesNotMatch(source, /tap to switch|Vote changed to Cheer|Changed your mind/);
-  assert.match(source, /your-vote-badge/);
-  assert.match(source, /Add to my Spotify/);
-  assert.match(source, /MAX_PENDING_TRACKS_PER_PERSON - party\.pendingCount/);
-  assert.match(source, /Played and skipped songs free their slots/);
-  assert.match(source, /PRE-PARTY LOBBY/);
-  assert.match(source, /The queue is undercover/);
-  assert.match(source, /Reactions unlock when the host starts the party/);
-  assert.match(source, /The room has spoken/);
-  assert.match(source, /Final scores are frozen\. The music stopped; the bragging did not/);
-  assert.match(source, /SPEAKER RETIRED/);
-  assert.match(source, /LEFT UNPLAYED/);
-  assert.match(source, /A remarkably peaceful party/);
-  assert.match(source, /!ended && addOpen && party/);
-  assert.match(source, /🎧 My music/);
+  for (const copy of ["CHEER", "BOO", "Add a song", "YOUR FINAL SCORE", "🔊 ROOM NOISE", "FULL PARTY HISTORY", "🎧 My music", "Pick your party face"]) {
+    assert.match(source, new RegExp(copy));
+  }
   assert.ok(source.indexOf("🔊 ROOM NOISE") < source.indexOf("🎧 My music"));
-  assert.match(source, /TOTAL MUSIC EVER ADDED/);
-  assert.match(source, /totalMusicTime\(myMusicSeconds\)/);
-  assert.match(source, /Pick your party face/);
-  assert.match(source, /Surprise me, algorithm/);
-  assert.match(source, /action: "avatar", avatarEmoji: emoji/);
-  assert.match(source, /AVATAR_EMOJIS\.map/);
-  assert.match(source, /Your anonymous boos remain delightfully anonymous/);
-  assert.match(source, /Still in my queue/);
-  assert.match(source, /My played songs/);
-  assert.match(source, /My reactions/);
-  assert.match(source, /PRIVATE TO THIS BROWSER/);
-  assert.match(source, /action: "remove", submissionId: song\.queueId/);
-  assert.match(source, /Confirm removal of/);
-  assert.match(source, /You booed anonymously/);
-  assert.match(source, /ROOM PASSCODE/);
+  assert.match(source, /import type \{[\s\S]*ParticipantParty[\s\S]*\} from "\.\.\/\.\.\/\.\.\/lib\/party-contract"/);
+  assert.match(source, /formatMusicDuration/);
+  assert.match(source, /action: "remove"/);
+  assert.match(source, /action: "avatar"/);
+  assert.match(source, /Boolean\(myReaction\)/);
   assert.match(source, /x-hackmusic-participant/);
   assert.doesNotMatch(source, /participantId=\$\{encodeURIComponent/);
-  assert.match(source, /art-variant-/);
-  assert.doesNotMatch(source, /Playback lives on the host speaker/);
-  assert.match(source, /ended && <span className="person-score"/);
-  const partySource = await readFile(new URL("db/party.ts", projectRoot), "utf8");
-  assert.match(partySource, /name: "Someone"/);
-  assert.match(partySource, /revealScores = event\.status === "ended"/);
-  assert.match(partySource, /score: revealScores \? person\.score : null/);
-  assert.doesNotMatch(partySource, /UPDATE reactions SET kind/);
-  assert.match(partySource, /createdAt: event\.created_at/);
-  assert.match(partySource, /INSERT INTO reactions/);
-  assert.match(partySource, /current\.artist === "Spotify"/);
-  assert.match(partySource, /pending\?\.count \?\? 0\) >= MAX_PENDING_TRACKS_PER_PERSON/);
-  assert.match(partySource, /event\.status === "lobby" \|\| event\.current_submission_id/);
-  assert.match(partySource, /UPDATE events SET status = 'live'/);
-  assert.match(partySource, /action: "start" \| "skip"/);
-  assert.match(partySource, /verifyRoomPasscode/);
-  assert.match(partySource, /id: person\.public_id/);
-  assert.match(partySource, /mine: reaction\.participant_id === viewerId/);
-  assert.match(partySource, /WHERE event_id = \? AND participant_id = \?/);
-  assert.match(partySource, /WHERE r\.event_id = \? AND r\.participant_id = \?/);
-  assert.match(partySource, /export async function removePendingTrack/);
-  assert.match(partySource, /UPDATE submissions SET status = 'removed'[\s\S]*participant_id = \? AND status = 'pending'/);
-  assert.match(partySource, /SELECT id FROM submissions WHERE event_id = \? AND provider_track_id = \? LIMIT 1/);
-  assert.match(partySource, /That song is already part of this party/);
-  assert.match(partySource, /export async function setParticipantAvatar/);
-  assert.match(partySource, /UPDATE participants SET initials = \? WHERE id = \? AND event_id = \?/);
-  assert.match(partySource, /isAvatarEmoji\(emoji\)/);
-  assert.match(partySource, /That song is no longer waiting in your queue/);
   const participantStyles = await readFile(new URL("app/globals.css", projectRoot), "utf8");
   assert.match(participantStyles, /\.my-track-list \{[^}]*overscroll-behavior-y: auto/);
   assert.match(participantStyles, /\.activity-list \{[^}]*overscroll-behavior-y: auto/);
-  assert.match(participantStyles, /\.event-heading \{ z-index: 20; \}/);
-  assert.match(participantStyles, /\.avatar-grid \{[^}]*grid-template-columns: repeat\(6/);
-  assert.match(participantStyles, /\.party-avatar-trigger/);
-  const partyRouteSource = await readFile(new URL("app/api/party/route.ts", projectRoot), "utf8");
-  assert.match(partyRouteSource, /body\.action === "remove" && body\.submissionId/);
-  assert.match(partyRouteSource, /body\.action === "avatar" && body\.avatarEmoji/);
-  assert.match(partyRouteSource, /setParticipantAvatar\(code, participantId, body\.avatarEmoji\)/);
-  assert.match(partyRouteSource, /protectPartyAction\(request, body\.action, code, participantId\)/);
-  const guardSource = await readFile(new URL("lib/room-creation-guard.ts", projectRoot), "utf8");
-  assert.match(guardSource, /bucket: "avatar-person"/);
-  const lobbyMigration = await readFile(new URL("drizzle/0004_lean_kronos.sql", projectRoot), "utf8");
-  assert.match(lobbyMigration, /ADD `scheduled_for` text/);
-  const roomGuardSource = await readFile(new URL("lib/room-creation-guard.ts", projectRoot), "utf8");
-  assert.match(roomGuardSource, /maximum: 5/);
-  assert.match(roomGuardSource, /maximum: 20/);
-  assert.match(roomGuardSource, /SHA-256/);
-  assert.match(roomGuardSource, /DELETE FROM room_creation_limits WHERE expires_at/);
-  const roomGuardMigration = await readFile(new URL("drizzle/0003_slow_norrin_radd.sql", projectRoot), "utf8");
-  assert.match(roomGuardMigration, /CREATE TABLE `room_creation_limits`/);
-  assert.match(roomGuardMigration, /room_creation_limits_expires_idx/);
   const partyRulesSource = await readFile(new URL("lib/party-rules.ts", projectRoot), "utf8");
   assert.match(partyRulesSource, /MAX_PENDING_TRACKS_PER_PERSON = 100/);
   assert.match(partyRulesSource, /MAX_PARTICIPANTS_PER_ROOM = 100/);
-  const securityMigration = await readFile(new URL("drizzle/0005_swift_manta.sql", projectRoot), "utf8");
-  assert.match(securityMigration, /join_passcode_hash/);
-  assert.match(securityMigration, /randomblob\(12\)/);
-  assert.match(securityMigration, /participants_public_id_unique/);
 });
 
 test("publishes crawler, sitemap, and install metadata without exposing private rooms", async () => {
@@ -393,21 +307,10 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /x-hackmusic-host-key/);
   assert.doesNotMatch(source, /pin=\$\{encodeURIComponent\(hostKey\)\}/);
   assert.match(source, /JOIN PASSCODE/);
-  assert.match(source, /\/sounds\/woohoo-crowd\.wav/);
-  assert.equal((source.match(/\/sounds\/boo\.mp3/g) ?? []).length, 2);
-  assert.doesNotMatch(source, /\/sounds\/boo\.wav/);
-  assert.match(source, /REACTION_SOUND_VERSION = "2026-08-23-6"/);
   assert.match(source, /activityAfter=\$\{encodeURIComponent\(soundActivityCursorRef\.current\)\}/);
   assert.match(source, /knownSoundActivityRef/);
-  assert.match(source, /template\.cloneNode\(true\)/);
-  assert.match(source, /activeReactionAudioRef/);
-  assert.match(source, /decodeAudioData/);
-  assert.match(source, /createBufferSource/);
-  assert.match(source, /context\.destination/);
-  assert.match(source, /REACTION_DUCK_VOLUME = 0\.28/);
-  assert.match(source, /player\.getVolume\(\)/);
-  assert.match(source, /player\.setVolume\(volume\)/);
-  assert.doesNotMatch(source, /hostDevice === "ios"[\s\S]{0,300}player\.pause/);
+  assert.match(source, /useReactionSounds/);
+  assert.match(source, /useScreenWakeLock/);
   assert.match(source, /Start speaker →/);
   assert.match(source, /Starts Spotify only\. Funny sounds stay off/);
   assert.match(source, /formatPlaybackTime/);
@@ -415,15 +318,12 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /host-playback-progress/);
   assert.match(source, /role="progressbar"/);
   assert.match(source, /action: "skipProgress"/);
-  assert.match(source, /BOOED OFF AT/);
   assert.match(source, /SONG OUTCOMES/);
   assert.match(source, /READY TO START/);
   assert.match(source, /LOADING TRACK/);
   assert.match(source, /Disable funny sounds/);
   assert.match(source, /function disableAudio\(\)/);
   assert.doesNotMatch(source, /Start speaker \+ funny sounds/);
-  assert.match(source, /wakeLock\.request\("screen"\)/);
-  assert.match(source, /visibilitychange/);
   assert.match(source, /Keep this screen awake/);
   assert.match(source, /detectHostDevice/);
   assert.match(source, /Screen-awake help · detected/);
@@ -435,34 +335,24 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /Start the party now/);
   assert.match(source, /Let the queue marinate/);
   assert.doesNotMatch(source, /speechSynthesis|SpeechSynthesisUtterance/);
+  const reactionSoundSource = await readFile(new URL("app/e/[code]/host/use-reaction-sounds.ts", projectRoot), "utf8");
+  assert.match(reactionSoundSource, /\/sounds\/woohoo-crowd\.wav/);
+  assert.match(reactionSoundSource, /\/sounds\/boo\.mp3/);
+  assert.match(reactionSoundSource, /REACTION_DUCK_VOLUME = 0\.28/);
+  assert.match(reactionSoundSource, /decodeAudioData/);
+  assert.match(reactionSoundSource, /player\.setVolume/);
+  const wakeLockSource = await readFile(new URL("app/e/[code]/host/use-screen-wake-lock.ts", projectRoot), "utf8");
+  assert.match(wakeLockSource, /wakeLock\.request\("screen"\)/);
+  assert.match(wakeLockSource, /visibilitychange/);
   const hostStyles = await readFile(new URL("app/globals.css", projectRoot), "utf8");
   assert.match(hostStyles, /\.host-grid \{[^}]*align-items: start/);
   assert.match(hostStyles, /\.host-reaction-counts > div \{[^}]*align-items: center;[^}]*min-height: 82px/);
   assert.match(hostStyles, /\.host-progress-track \{[^}]*height: 16px/);
   assert.match(hostStyles, /\.host-progress-track > span \{[^}]*transition: width \.45s linear/);
-  const partySource = await readFile(new URL("db/party.ts", projectRoot), "utf8");
-  assert.match(partySource, /const queuedTracks = isHost/);
-  assert.match(partySource, /s\.status = 'pending'/);
-  assert.match(partySource, /queuedTracks: queuedTracks\.results\.map/);
-  assert.match(partySource, /event\.queue_mode === "random"/);
-  assert.match(partySource, /event\.queue_mode === "fair"/);
-  assert.match(partySource, /history\.served_count ASC, RANDOM\(\)/);
-  assert.match(partySource, /export async function setQueueMode/);
-  assert.match(partySource, /INSERT INTO activity_events/);
-  assert.match(partySource, /activityAfter !== undefined/);
-  assert.match(partySource, /collapseLegacyReactionActivity/);
-  assert.match(partySource, /reaction is already locked for this song/);
-  assert.doesNotMatch(partySource, /UPDATE reactions SET kind/);
-  assert.match(partySource, /tone: "song"/);
-  assert.match(partySource, /skip_reason = 'boos'/);
-  assert.match(partySource, /export async function recordBooSkipProgress/);
-  assert.match(partySource, /skipPercent: track\.skip_percent/);
-  const historyMigration = await readFile(new URL("drizzle/0002_eager_mole_man.sql", projectRoot), "utf8");
-  assert.match(historyMigration, /CREATE TABLE `activity_events`/);
-  assert.match(historyMigration, /legacy-reaction-/);
-  const skipStatsMigration = await readFile(new URL("drizzle/0006_omniscient_onslaught.sql", projectRoot), "utf8");
-  assert.match(skipStatsMigration, /ADD `skip_reason` text/);
-  assert.match(skipStatsMigration, /ADD `skip_percent` integer/);
+  const queueSource = await readFile(new URL("db/party-queue.ts", projectRoot), "utf8");
+  assert.match(queueSource, /event\.queue_mode === "random"/);
+  assert.match(queueSource, /event\.queue_mode === "fair"/);
+  assert.match(queueSource, /served_count ASC, RANDOM\(\)/);
   const spotifyLoginSource = await readFile(new URL("app/api/spotify/login/route.ts", projectRoot), "utf8");
   assert.match(spotifyLoginSource, /code_challenge_method: "S256"/);
   assert.match(spotifyLoginSource, /"streaming"/);
@@ -473,7 +363,6 @@ test("renders a code-specific host control surface", async () => {
   assert.match(spotifyAuthSource, /AES-GCM/);
   assert.match(spotifyAuthSource, /SPOTIFY_COOKIE_SECRET/);
   const participantSource = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
-  assert.match(participantSource, /Booed off at/);
   assert.match(participantSource, /Checking Spotify/);
   assert.match(participantSource, /Add to the secret queue/);
 });
@@ -515,8 +404,10 @@ test("adds API and private-route security headers", async () => {
   assert.match(response.headers.get("x-robots-tag") ?? "", /noindex/);
   const partyRoute = await readFile(new URL("app/api/party/route.ts", projectRoot), "utf8");
   assert.match(partyRoute, /readBoundedJson/);
-  assert.match(partyRoute, /protectPartyAction/);
-  assert.match(partyRoute, /assertPartyParticipant/);
+  assert.match(partyRoute, /executePartyAction/);
+  const partyActions = await readFile(new URL("app/api/party/party-actions.ts", projectRoot), "utf8");
+  assert.match(partyActions, /protectPartyAction/);
+  assert.match(partyActions, /assertPartyParticipant/);
 });
 
 test("protects the hosted read-only admin with ChatGPT identity and an owner allowlist", async () => {

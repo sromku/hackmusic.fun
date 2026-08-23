@@ -2,68 +2,17 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { AVATAR_EMOJIS } from "../../../lib/avatar-emojis";
+import { artworkVariant, durationSeconds, formatActivityTime, formatMusicDuration, formatPartyStart, mySongStatusLabel, spotifyTrackWebUrl } from "../../../lib/party-format";
 import { MAX_PENDING_TRACKS_PER_PERSON } from "../../../lib/party-rules";
+import type { MySong, ParticipantParty, PartyActivity, PartyColor, PartyTrack, RoomSummary } from "../../../lib/party-contract";
 
-type Color = "coral" | "sun" | "blue" | "mint";
-type Person = { id: string; initials: string; name: string; score: number | null; color: Color };
-type Reaction = { id: string; mine: boolean; avatar: string; name: string; message: string; icon: "▲" | "▼"; tone: "up" | "down"; createdAt?: string };
-type Activity = { id: string; mine?: boolean; avatar: string; name: string; message: string; icon: string; tone: "up" | "down" | "song"; trackTitle: string; createdAt: string };
-type Track = { id: string; title: string; artist: string; duration: string; color: Color };
-type MySong = Track & { queueId: string; status: "pending" | "playing" | "played" | "skipped" | "removed"; skipReason: "boos" | "host" | null; skipPercent: number | null; submittedAt: string };
-type MyReactionHistory = { reactionId: string; id: string; title: string; artist: string; tone: "up" | "down"; songStatus: MySong["status"]; skipReason: MySong["skipReason"]; skipPercent: number | null; reactedAt: string };
-type PartyState = { code: string; title: string; viewer: Person; people: Person[]; currentTrack: Track | null; reactions: Reaction[]; activity?: Activity[]; mySongs: MySong[]; myReactionHistory: MyReactionHistory[]; pendingCount: number; queueCount: number; status: "lobby" | "live" | "ended"; scheduledFor: string | null };
-type RoomSummary = { code: string; title: string; status: "lobby" | "live" | "ended"; scheduledFor: string | null; requiresPasscode: boolean };
-
-function artworkVariant(seed: string) {
-  return [...seed].reduce((value, character) => ((value * 31) + character.charCodeAt(0)) >>> 0, 7) % 5;
-}
-
-function spotifyTrackUrl(value: string) {
-  const trackId = value.match(/spotify:track:([A-Za-z0-9]{22})/)?.[1];
-  return trackId ? `https://open.spotify.com/track/${trackId}` : "";
-}
-
-function activityTime(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
-}
-
-function partyStartTime(value: string | null) {
-  if (!value) return "when the host is ready";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "when the host is ready" : new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(date);
-}
-
-function durationSeconds(value: string) {
-  const match = value.match(/^(\d+):(\d{2})$/);
-  return match ? Number(match[1]) * 60 + Number(match[2]) : 0;
-}
-
-function totalMusicTime(totalSeconds: number) {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  if (hours) return `${hours} hr ${minutes} min`;
-  if (minutes) return `${minutes} min`;
-  return totalSeconds ? "Under 1 min" : "0 min";
-}
-
-function songStatusLabel(song: Pick<MySong, "status" | "skipReason" | "skipPercent">, ended: boolean) {
-  if (song.status === "playing") return "⚡ Playing now";
-  if (song.status === "played") return "✅ Played";
-  if (song.status === "skipped" && song.skipReason === "boos") return song.skipPercent === null ? "👻 Booed off" : `👻 Booed off at ${song.skipPercent}%`;
-  if (song.status === "skipped" && song.skipReason === "host") return "⏭️ Skipped by host";
-  if (song.status === "skipped") return "⏭️ Skipped";
-  if (song.status === "removed") return "🫥 Removed by you";
-  return ended ? "📦 Left unplayed" : "🤫 Still waiting";
-}
-
-function Artwork({ tone, seed }: { tone: Color; seed: string }) {
+function Artwork({ tone, seed }: { tone: PartyColor; seed: string }) {
   return <div className={`album-art ${tone} art-variant-${artworkVariant(seed)}`} role="img" aria-label="Animated geometric artwork generated for this song"><span className="album-circle" /><span className="album-stair" /><span className="album-star">✦</span><span className="album-chaos-dot" /><span className="album-chaos-pill" /><span className="album-chaos-ring" /></div>;
 }
 
 export default function PartyRoom({ code }: { code: string }) {
   const [room, setRoom] = useState<RoomSummary | null>(null);
-  const [party, setParty] = useState<PartyState | null>(null);
+  const [party, setParty] = useState<ParticipantParty | null>(null);
   const [participantId, setParticipantId] = useState("");
   const [joinName, setJoinName] = useState("");
   const [joinPasscode, setJoinPasscode] = useState("");
@@ -96,14 +45,14 @@ export default function PartyRoom({ code }: { code: string }) {
   useEffect(() => {
     if (!participantId) return;
     let active = true;
-    let activityHistory: Activity[] = [];
+    let activityHistory: PartyActivity[] = [];
     let activityCursor = "";
     const refresh = () => fetch(`/api/party?code=${encodeURIComponent(code)}&activityAfter=${encodeURIComponent(activityCursor)}`, { headers: { "x-hackmusic-participant": participantId } })
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error ?? "Could not load the room.");
         if (active) {
-          const incoming = (data.party.activity ?? []) as Activity[];
+          const incoming = (data.party.activity ?? []) as PartyActivity[];
           if (incoming.length) {
             const known = new Set(activityHistory.map((item) => item.id));
             activityHistory = [...activityHistory, ...incoming.filter((item) => !known.has(item.id))];
@@ -131,7 +80,7 @@ export default function PartyRoom({ code }: { code: string }) {
     const response = await fetch("/api/party", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code, participantId, ...payload }) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error ?? "That did not work.");
-    return data as { party: PartyState; skipped?: boolean; submittedTrack?: Track };
+    return data as { party: ParticipantParty; skipped?: boolean; submittedTrack?: PartyTrack };
   }
 
   async function join(event: FormEvent<HTMLFormElement>) {
@@ -218,7 +167,7 @@ export default function PartyRoom({ code }: { code: string }) {
 
   if (error) return <main className="missing-room"><span className="brand-mark">HM</span><p className="eyebrow">ROOM LOST</p><h1>{error}</h1><a href="/">Try another code →</a></main>;
   if (!room) return <main className="loading-room"><span className="brand-mark">HM</span><p>Finding room {code}…</p></main>;
-  const currentSpotifyUrl = party?.currentTrack ? spotifyTrackUrl(party.currentTrack.id) : "";
+  const currentSpotifyUrl = party?.currentTrack ? spotifyTrackWebUrl(party.currentTrack.id) : "";
   const waitingSongs = party?.mySongs.filter((song) => song.status === "pending") ?? [];
   const submittedHistory = party?.mySongs.filter((song) => song.status !== "pending" && song.status !== "removed") ?? [];
   const myMusicSeconds = party?.mySongs.reduce((total, song) => total + durationSeconds(song.duration), 0) ?? 0;
@@ -236,7 +185,7 @@ export default function PartyRoom({ code }: { code: string }) {
       </section>
 
       {party && ended && <section className="ended-banner"><strong>🏁 THAT’S A WRAP.</strong><span>🏆 No more votes. Bragging may continue indefinitely.</span></section>}
-      {party && lobby && <section className="lobby-banner"><div><p className="eyebrow">🌙 PRE-PARTY LOBBY</p><strong>Build the secret queue before the speakers wake up.</strong><span>Expected start: {partyStartTime(party.scheduledFor)}. The host decides the exact moment.</span></div><div className="lobby-count"><strong>{party.queueCount}</strong><span>{party.queueCount === 1 ? "SECRET SONG" : "SECRET SONGS"}</span></div></section>}
+      {party && lobby && <section className="lobby-banner"><div><p className="eyebrow">🌙 PRE-PARTY LOBBY</p><strong>Build the secret queue before the speakers wake up.</strong><span>Expected start: {formatPartyStart(party.scheduledFor)}. The host decides the exact moment.</span></div><div className="lobby-count"><strong>{party.queueCount}</strong><span>{party.queueCount === 1 ? "SECRET SONG" : "SECRET SONGS"}</span></div></section>}
 
       {party && <div className="party-grid">
         <section className={`now-playing ${!party.currentTrack ? "empty-player" : ""}`} aria-labelledby="playing-title">
@@ -255,31 +204,31 @@ export default function PartyRoom({ code }: { code: string }) {
         </aside>
       </div>}
 
-      {party && <section className="activity-card"><div className="card-title-row"><h2>🔊 ROOM NOISE</h2><span>📜 FULL PARTY HISTORY</span></div><div className="activity-list" role="log" aria-live="polite" aria-label="Scrollable history of songs and reactions since the party began">{[...(party.activity ?? [])].reverse().map((item) => <div className={`activity-row ${item.tone}${item.tone === "song" ? " song-start" : ""}`} key={item.id}><span className="activity-avatar">{item.avatar}</span>{item.tone === "song" ? <p><strong>🎶 Now playing:</strong> <span dir="auto">{item.trackTitle}</span></p> : <p><span className="activity-emoji" aria-hidden="true">{item.tone === "up" ? "🎉" : "👻"}</span> <strong>{item.name}</strong> {item.message} <b dir="auto">“{item.trackTitle}”</b></p>}<span className="activity-icon" aria-hidden="true">{item.icon}</span><time dateTime={item.createdAt}>{activityTime(item.createdAt)}</time></div>)}{!(party.activity ?? []).length && <p className="quiet-feed">{ended ? "📼 A remarkably peaceful party. No songs or reactions made the history book." : "🦗 It’s suspiciously quiet in here… The full story will appear here."}</p>}</div><p className="activity-scroll-hint">↕️ Scroll through the history. At either end, keep scrolling to continue through the page.</p></section>}
+      {party && <section className="activity-card"><div className="card-title-row"><h2>🔊 ROOM NOISE</h2><span>📜 FULL PARTY HISTORY</span></div><div className="activity-list" role="log" aria-live="polite" aria-label="Scrollable history of songs and reactions since the party began">{[...(party.activity ?? [])].reverse().map((item) => <div className={`activity-row ${item.tone}${item.tone === "song" ? " song-start" : ""}`} key={item.id}><span className="activity-avatar">{item.avatar}</span>{item.tone === "song" ? <p><strong>🎶 Now playing:</strong> <span dir="auto">{item.trackTitle}</span></p> : <p><span className="activity-emoji" aria-hidden="true">{item.tone === "up" ? "🎉" : "👻"}</span> <strong>{item.name}</strong> {item.message} <b dir="auto">“{item.trackTitle}”</b></p>}<span className="activity-icon" aria-hidden="true">{item.icon}</span><time dateTime={item.createdAt}>{formatActivityTime(item.createdAt)}</time></div>)}{!(party.activity ?? []).length && <p className="quiet-feed">{ended ? "📼 A remarkably peaceful party. No songs or reactions made the history book." : "🦗 It’s suspiciously quiet in here… The full story will appear here."}</p>}</div><p className="activity-scroll-hint">↕️ Scroll through the history. At either end, keep scrolling to continue through the page.</p></section>}
 
       {party && <section className="my-music-card" aria-labelledby="my-music-title">
-        <div className="my-music-heading"><div><p className="eyebrow">🔐 PRIVATE TO THIS BROWSER</p><h2 id="my-music-title">🎧 My music</h2></div><div className="my-music-heading-copy"><p>Your picks and your reactions. Nobody else gets this backstage pass.</p><strong className="my-music-total"><span>⏱️ TOTAL MUSIC EVER ADDED</span>{totalMusicTime(myMusicSeconds)}</strong></div></div>
+        <div className="my-music-heading"><div><p className="eyebrow">🔐 PRIVATE TO THIS BROWSER</p><h2 id="my-music-title">🎧 My music</h2></div><div className="my-music-heading-copy"><p>Your picks and your reactions. Nobody else gets this backstage pass.</p><strong className="my-music-total"><span>⏱️ TOTAL MUSIC EVER ADDED</span>{formatMusicDuration(myMusicSeconds)}</strong></div></div>
         <div className="my-music-grid">
           <article className="my-music-column my-queue-column">
             <div className="my-column-title"><div><span>{ended ? "📦" : "🤫"}</span><div><h3>{ended ? "Left in my queue" : "Still in my queue"}</h3><p>{ended ? "The party ended before these escaped." : "The room still hides when they’ll play."}</p></div></div><b>{waitingSongs.length}</b></div>
             <div className="my-track-list">{waitingSongs.map((song) => <div className="my-track-row" key={song.queueId}>
               <span className={`my-track-art ${song.color}`} aria-hidden="true">♪</span>
-              <div className="my-track-copy"><strong dir="auto">{song.title}</strong><span dir="auto">{song.artist} · {song.duration}</span><small>{songStatusLabel(song, ended)}</small></div>
+              <div className="my-track-copy"><strong dir="auto">{song.title}</strong><span dir="auto">{song.artist} · {song.duration}</span><small>{mySongStatusLabel(song, ended)}</small></div>
               {!ended && (removeConfirmId === song.queueId ? <div className="remove-confirm" aria-label={`Confirm removal of ${song.title}`}><button type="button" onClick={() => setRemoveConfirmId("")} disabled={busy}>Keep</button><button className="remove-now" type="button" onClick={() => void removeSong(song)} disabled={busy}>{busy ? "Removing…" : "Remove"}</button></div> : <button className="remove-song-button" type="button" onClick={() => setRemoveConfirmId(song.queueId)} disabled={busy} aria-label={`Remove ${song.title} from your queue`}>Remove</button>)}
             </div>)}{waitingSongs.length === 0 && <p className="my-music-empty">{ended ? "📭 Nothing was stranded. Clean exit." : "🕳️ No secret picks waiting. Suspicious."}</p>}</div>
           </article>
 
           <article className="my-music-column">
             <div className="my-column-title"><div><span>📼</span><div><h3>My played songs</h3><p>What happened to the songs you smuggled in.</p></div></div><b>{submittedHistory.length}</b></div>
-            <div className="my-track-list">{submittedHistory.map((song) => <a className="my-track-row my-track-link" href={spotifyTrackUrl(song.id)} target="_blank" rel="noreferrer" key={song.queueId}>
-              <span className={`my-track-art ${song.color}`} aria-hidden="true">♪</span><span className="my-track-copy"><strong dir="auto">{song.title}</strong><span dir="auto">{song.artist} · {song.duration}</span><small>{songStatusLabel(song, ended)}</small></span><span className="my-track-arrow" aria-hidden="true">↗</span>
+            <div className="my-track-list">{submittedHistory.map((song) => <a className="my-track-row my-track-link" href={spotifyTrackWebUrl(song.id)} target="_blank" rel="noreferrer" key={song.queueId}>
+              <span className={`my-track-art ${song.color}`} aria-hidden="true">♪</span><span className="my-track-copy"><strong dir="auto">{song.title}</strong><span dir="auto">{song.artist} · {song.duration}</span><small>{mySongStatusLabel(song, ended)}</small></span><span className="my-track-arrow" aria-hidden="true">↗</span>
             </a>)}{submittedHistory.length === 0 && <p className="my-music-empty">🎚️ Your songs have not reached the speaker yet.</p>}</div>
           </article>
 
           <article className="my-music-column my-reactions-column">
             <div className="my-column-title"><div><span>🫣</span><div><h3>My reactions</h3><p>Your cheers—and your privately remembered boos.</p></div></div><b>{party.myReactionHistory.length}</b></div>
-            <div className="my-track-list">{party.myReactionHistory.map((reaction) => <a className={`my-track-row my-track-link my-reaction-history ${reaction.tone}`} href={spotifyTrackUrl(reaction.id)} target="_blank" rel="noreferrer" key={reaction.reactionId}>
-              <span className="my-reaction-mark" aria-hidden="true">{reaction.tone === "up" ? "🙌" : "👻"}</span><span className="my-track-copy"><strong dir="auto">{reaction.title}</strong><span dir="auto">{reaction.artist}</span><small>{reaction.tone === "up" ? "You cheered" : "You booed anonymously"} · {songStatusLabel({ status: reaction.songStatus, skipReason: reaction.skipReason, skipPercent: reaction.skipPercent }, ended)}</small></span><span className="my-track-arrow" aria-hidden="true">↗</span>
+            <div className="my-track-list">{party.myReactionHistory.map((reaction) => <a className={`my-track-row my-track-link my-reaction-history ${reaction.tone}`} href={spotifyTrackWebUrl(reaction.id)} target="_blank" rel="noreferrer" key={reaction.reactionId}>
+              <span className="my-reaction-mark" aria-hidden="true">{reaction.tone === "up" ? "🙌" : "👻"}</span><span className="my-track-copy"><strong dir="auto">{reaction.title}</strong><span dir="auto">{reaction.artist}</span><small>{reaction.tone === "up" ? "You cheered" : "You booed anonymously"} · {mySongStatusLabel({ status: reaction.songStatus, skipReason: reaction.skipReason, skipPercent: reaction.skipPercent }, ended)}</small></span><span className="my-track-arrow" aria-hidden="true">↗</span>
             </a>)}{party.myReactionHistory.length === 0 && <p className="my-music-empty">🧘 No opinions recorded. Astonishing restraint.</p>}</div>
           </article>
         </div>

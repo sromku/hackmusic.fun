@@ -4,111 +4,18 @@ import Image from "next/image";
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { detectHostDevice, type HostDevice } from "../../../../lib/host-device";
+import { formatPartyStart, formatPlaybackTime, durationMilliseconds as trackDurationMilliseconds, hostSongOutcome } from "../../../../lib/party-format";
+import type { HostParty } from "../../../../lib/party-contract";
 import { extractSpotifyTrackId } from "../../../../lib/spotify-track";
-
-type HostParty = {
-  code: string;
-  title: string;
-  status: "lobby" | "live" | "ended";
-  scheduledFor: string | null;
-  requiresPasscode: boolean;
-  currentTrack: { id: string; title: string; artist: string; duration: string; color: string } | null;
-  people: Array<{ id: string; name: string; score: number; initials: string; color: string }>;
-  reactions: Array<{ id: string; tone: "up" | "down" }>;
-  queueCount: number;
-  queueMode: "ordered" | "random" | "fair";
-  queuedTracks: Array<{ queueId: string; id: string; title: string; artist: string; duration: string; color: string; submittedBy: string; submitterInitials: string }>;
-  songHistory: Array<{ queueId: string; id: string; title: string; artist: string; duration: string; color: string; status: "played" | "skipped"; skipReason: "boos" | "host" | null; skipPercent: number | null; startedAt: string | null; submittedBy: string; submitterInitials: string }>;
-  activity?: Array<{ id: string; tone: "up" | "down" | "song"; createdAt: string }>;
-};
+import type { SpotifyPlaybackState, SpotifyPlayer, SpotifyProgress } from "./spotify-sdk";
+import { useReactionSounds } from "./use-reaction-sounds";
+import { useScreenWakeLock } from "./use-screen-wake-lock";
 
 const queueModes = [
   { id: "ordered", icon: "📬", title: "Submitted order", copy: "First submitted, first played. Predictable and tidy." },
   { id: "random", icon: "🎲", title: "Pure chaos", copy: "Every waiting song has an equal shot at being next." },
   { id: "fair", icon: "⚖️", title: "Fair-ish shuffle", copy: "People heard least go first; ties stay delightfully random." },
 ] as const;
-
-function partyStartTime(value: string | null) {
-  if (!value) return "Whenever you say go";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Whenever you say go" : new Intl.DateTimeFormat(undefined, { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(date);
-}
-
-type SpotifyPlaybackState = {
-  paused: boolean;
-  position: number;
-  duration: number;
-  track_window: { current_track: { uri: string } };
-};
-
-type SpotifyProgress = {
-  position: number;
-  duration: number;
-  paused: boolean;
-  trackUri: string;
-};
-
-type SpotifyPlayer = {
-  connect: () => Promise<boolean>;
-  disconnect: () => void;
-  activateElement: () => Promise<void>;
-  getVolume: () => Promise<number>;
-  setVolume: (volume: number) => Promise<void>;
-  pause: () => Promise<void>;
-  resume: () => Promise<void>;
-  addListener: {
-    (event: "ready" | "not_ready", callback: (payload: { device_id: string }) => void): boolean;
-    (event: "player_state_changed", callback: (state: SpotifyPlaybackState | null) => void): boolean;
-    (event: "autoplay_failed", callback: () => void): boolean;
-    (event: "initialization_error" | "authentication_error" | "account_error" | "playback_error", callback: (payload: { message: string }) => void): boolean;
-  };
-};
-
-const REACTION_DUCK_VOLUME = 0.28;
-const REACTION_SOUND_VERSION = "2026-08-23-6";
-const waitForAudioFade = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
-
-function formatPlaybackTime(milliseconds: number) {
-  const safeSeconds = Math.max(0, Math.floor(milliseconds / 1_000));
-  return `${Math.floor(safeSeconds / 60)}:${String(safeSeconds % 60).padStart(2, "0")}`;
-}
-
-function trackDurationMilliseconds(value: string) {
-  const match = value.match(/^(\d+):(\d{2})$/);
-  return match ? (Number(match[1]) * 60 + Number(match[2])) * 1_000 : 0;
-}
-
-function songOutcome(track: HostParty["songHistory"][number]) {
-  if (track.status === "played") return { label: "✅ PLAYED TO THE END", tone: "played" };
-  if (track.skipReason === "boos") return { label: track.skipPercent === null ? "👻 BOOED OFF" : `👻 BOOED OFF AT ${track.skipPercent}%`, tone: "boos" };
-  if (track.skipReason === "host") return { label: "⏭️ SKIPPED BY HOST", tone: "host" };
-  return { label: "⏭️ SKIPPED", tone: "unknown" };
-}
-
-type SpotifyConstructor = new (options: {
-  name: string;
-  getOAuthToken: (callback: (token: string) => void) => void;
-  volume?: number;
-  enableMediaSession?: boolean;
-}) => SpotifyPlayer;
-
-type ScreenWakeLockSentinel = {
-  released: boolean;
-  release: () => Promise<void>;
-  addEventListener: (event: "release", listener: () => void) => void;
-};
-
-type NavigatorWithWakeLock = Navigator & {
-  wakeLock?: { request: (type: "screen") => Promise<ScreenWakeLockSentinel> };
-};
-
-declare global {
-  interface Window {
-    Spotify?: { Player: SpotifyConstructor };
-    onSpotifyWebPlaybackSDKReady?: () => void;
-    webkitAudioContext?: typeof AudioContext;
-  }
-}
 
 export default function HostRoom({ code }: { code: string }) {
   const [party, setParty] = useState<HostParty | null>(null);
@@ -123,7 +30,6 @@ export default function HostRoom({ code }: { code: string }) {
   const [syncProblem, setSyncProblem] = useState("");
   const [roomSyncing, setRoomSyncing] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [audioEnabled, setAudioEnabled] = useState(false);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const [spotifyClientId, setSpotifyClientId] = useState("");
   const [spotifyStatus, setSpotifyStatus] = useState<"checking" | "disconnected" | "loading" | "ready" | "error">("checking");
@@ -132,24 +38,11 @@ export default function HostRoom({ code }: { code: string }) {
   const [speakerStarting, setSpeakerStarting] = useState(false);
   const [spotifyProgress, setSpotifyProgress] = useState<SpotifyProgress>({ position: 0, duration: 0, paused: true, trackUri: "" });
   const [spotifyMessage, setSpotifyMessage] = useState("");
-  const [wakeLockSupported, setWakeLockSupported] = useState<boolean | null>(() => typeof navigator === "undefined" ? null : Boolean((navigator as NavigatorWithWakeLock).wakeLock));
-  const [wakeLockActive, setWakeLockActive] = useState(false);
   const [hostDevice, setHostDevice] = useState<HostDevice>("unknown");
-  const audioEnabledRef = useRef(false);
-  const cheerAudioRef = useRef<HTMLAudioElement | null>(null);
-  const booAudioRef = useRef<HTMLAudioElement | null>(null);
-  const reactionAudioContextRef = useRef<AudioContext | null>(null);
-  const reactionAudioBuffersRef = useRef<{ up: AudioBuffer; down: AudioBuffer } | null>(null);
-  const activeReactionSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
-  const activeReactionCountRef = useRef(0);
-  const reactionEffectTimersRef = useRef<Set<number>>(new Set());
   const knownSoundActivityRef = useRef<Set<string> | null>(null);
   const soundActivityCursorRef = useRef("");
   const cancelEndRef = useRef<HTMLButtonElement | null>(null);
   const spotifyPlayerRef = useRef<SpotifyPlayer | null>(null);
-  const spotifyVolumeBeforeDuckRef = useRef<number | null>(null);
-  const reactionSoundTokenRef = useRef(0);
-  const activeReactionAudioRef = useRef<Set<HTMLAudioElement>>(new Set());
   const lastSpotifyTrackRef = useRef("");
   const previousPartyTrackRef = useRef("");
   const lastPlaybackStateRef = useRef<SpotifyPlaybackState | null>(null);
@@ -157,164 +50,17 @@ export default function HostRoom({ code }: { code: string }) {
   const spotifyEndTimerRef = useRef<number | null>(null);
   const advancingTrackRef = useRef(false);
   const roomRefreshInFlightRef = useRef(false);
-  const wakeLockRef = useRef<ScreenWakeLockSentinel | null>(null);
-  const wakeLockWantedRef = useRef(false);
   const currentSpotifyId = party?.currentTrack ? extractSpotifyTrackId(party.currentTrack.id) : "";
   const partyStatus = party?.status;
   const partyEnded = partyStatus === "ended";
   const hostDeviceName = hostDevice === "ios" ? "iPhone / iPad" : hostDevice === "android" ? "Android device" : hostDevice === "computer" ? "computer" : "device";
+  const { enabled: audioEnabled, play: playReactionSound, enableAndTest: enableReactionAudio, disable: disableReactionAudio } = useReactionSounds(spotifyPlayerRef, setMessage);
+  const { supported: wakeLockSupported, active: wakeLockActive, request: requestScreenWakeLock, release: releaseScreenWakeLock } = useScreenWakeLock(hostDeviceName, setMessage);
   const wakeLockStatus = wakeLockActive
     ? `✅ This ${hostDeviceName} will stay awake while the host tab remains visible.`
     : wakeLockSupported === false
       ? `⚠️ Automatic wake lock is unavailable here. Open the ${hostDeviceName} fallback below.`
       : `💤 Keep this ${hostDeviceName} awake during the party.`;
-
-  const requestScreenWakeLock = useCallback(async (announce = true) => {
-    const wakeLock = (navigator as NavigatorWithWakeLock).wakeLock;
-    if (!wakeLock) {
-      setWakeLockSupported(false);
-      if (announce) setMessage(`⚠️ This browser cannot keep the ${hostDeviceName} awake automatically. Open the screen-awake help below.`);
-      return false;
-    }
-    setWakeLockSupported(true);
-    wakeLockWantedRef.current = true;
-    if (wakeLockRef.current && !wakeLockRef.current.released) {
-      setWakeLockActive(true);
-      return true;
-    }
-    try {
-      const sentinel = await wakeLock.request("screen");
-      wakeLockRef.current = sentinel;
-      setWakeLockActive(true);
-      sentinel.addEventListener("release", () => {
-        if (wakeLockRef.current === sentinel) {
-          wakeLockRef.current = null;
-          setWakeLockActive(false);
-        }
-      });
-      if (announce) setMessage(`🔒 Screen lock blocked on this ${hostDeviceName}. Keep the host tab visible.`);
-      return true;
-    } catch {
-      wakeLockWantedRef.current = false;
-      setWakeLockActive(false);
-      if (announce) setMessage("⚠️ The device rejected the wake lock. Check battery or power-saving settings and the fallback guide below.");
-      return false;
-    }
-  }, [hostDeviceName]);
-
-  const releaseScreenWakeLock = useCallback(async (announce = true) => {
-    wakeLockWantedRef.current = false;
-    const sentinel = wakeLockRef.current;
-    wakeLockRef.current = null;
-    setWakeLockActive(false);
-    if (sentinel && !sentinel.released) await sentinel.release().catch(() => undefined);
-    if (announce) setMessage(`💤 Screen wake lock released. This ${hostDeviceName} may sleep again.`);
-  }, [hostDeviceName]);
-
-  const prepareReactionAudio = useCallback(async () => {
-    const AudioContextConstructor = window.AudioContext ?? window.webkitAudioContext;
-    if (!AudioContextConstructor) throw new Error("This browser cannot create the reaction sound mixer.");
-    const context = reactionAudioContextRef.current ?? new AudioContextConstructor();
-    reactionAudioContextRef.current = context;
-    if (context.state === "suspended") await context.resume();
-    if (!reactionAudioBuffersRef.current) {
-      const [cheerResponse, booResponse] = await Promise.all([
-        fetch(`/sounds/woohoo-crowd.wav?v=${REACTION_SOUND_VERSION}`),
-        fetch(`/sounds/boo.mp3?v=${REACTION_SOUND_VERSION}`),
-      ]);
-      if (!cheerResponse.ok || !booResponse.ok) throw new Error("The funny sounds could not be loaded.");
-      const [cheerBytes, booBytes] = await Promise.all([cheerResponse.arrayBuffer(), booResponse.arrayBuffer()]);
-      const [up, down] = await Promise.all([context.decodeAudioData(cheerBytes), context.decodeAudioData(booBytes)]);
-      reactionAudioBuffersRef.current = { up, down };
-    }
-    return context;
-  }, []);
-
-  const playReactionSound = useCallback((kind: "up" | "down") => {
-    if (!audioEnabledRef.current) return;
-    const template = kind === "up" ? cheerAudioRef.current : booAudioRef.current;
-    const context = reactionAudioContextRef.current;
-    const buffer = reactionAudioBuffersRef.current?.[kind];
-    if ((!context || !buffer) && !template) return;
-
-    reactionSoundTokenRef.current += 1;
-    const firstActiveReaction = activeReactionCountRef.current === 0;
-    activeReactionCountRef.current += 1;
-    let sound: HTMLAudioElement | null = null;
-    let source: AudioBufferSourceNode | null = null;
-    let effectTimer = 0;
-    let finished = false;
-    const restoreMusic = () => {
-      if (finished) return;
-      finished = true;
-      if (effectTimer) {
-        window.clearTimeout(effectTimer);
-        reactionEffectTimersRef.current.delete(effectTimer);
-      }
-      if (sound) activeReactionAudioRef.current.delete(sound);
-      if (source) activeReactionSourcesRef.current.delete(source);
-      activeReactionCountRef.current = Math.max(0, activeReactionCountRef.current - 1);
-      if (activeReactionCountRef.current) return;
-      const restoreToken = reactionSoundTokenRef.current;
-      const player = spotifyPlayerRef.current;
-      const originalVolume = spotifyVolumeBeforeDuckRef.current;
-      if (!player || originalVolume === null) return;
-      void (async () => {
-        const duckedVolume = Math.min(originalVolume, REACTION_DUCK_VOLUME);
-        const steps = 6;
-        for (let step = 1; step <= steps; step += 1) {
-          if (restoreToken !== reactionSoundTokenRef.current || player !== spotifyPlayerRef.current) return;
-          const volume = duckedVolume + ((originalVolume - duckedVolume) * step / steps);
-          await player.setVolume(volume).catch(() => undefined);
-          if (step < steps) await waitForAudioFade(80);
-        }
-        if (restoreToken === reactionSoundTokenRef.current) spotifyVolumeBeforeDuckRef.current = null;
-      })();
-    };
-
-    const playOverDuckedMusic = async () => {
-      const player = spotifyPlayerRef.current;
-      if (player && firstActiveReaction) {
-        let originalVolume = spotifyVolumeBeforeDuckRef.current;
-        if (originalVolume === null) {
-          originalVolume = await player.getVolume().catch(() => 0.8);
-          spotifyVolumeBeforeDuckRef.current = originalVolume;
-          const firstDip = originalVolume + ((Math.min(originalVolume, REACTION_DUCK_VOLUME) - originalVolume) * 0.65);
-          await player.setVolume(firstDip).catch(() => undefined);
-          await waitForAudioFade(45);
-        }
-        if (player === spotifyPlayerRef.current) {
-          await player.setVolume(Math.min(originalVolume, REACTION_DUCK_VOLUME)).catch(() => undefined);
-        }
-      }
-      if (context && buffer) {
-        if (context.state === "suspended") await context.resume();
-        source = context.createBufferSource();
-        source.buffer = buffer;
-        source.connect(context.destination);
-        source.onended = restoreMusic;
-        activeReactionSourcesRef.current.add(source);
-        source.start(0);
-        effectTimer = window.setTimeout(restoreMusic, buffer.duration * 1_000 + 500);
-      } else if (template) {
-        sound = template.cloneNode(true) as HTMLAudioElement;
-        sound.preload = "auto";
-        sound.volume = 1;
-        sound.onended = restoreMusic;
-        sound.onerror = restoreMusic;
-        activeReactionAudioRef.current.add(sound);
-        await sound.play();
-        const fallbackDuration = Number.isFinite(sound.duration) ? sound.duration * 1_000 + 500 : 4_000;
-        effectTimer = window.setTimeout(restoreMusic, fallbackDuration);
-      }
-      if (effectTimer) reactionEffectTimersRef.current.add(effectTimer);
-    };
-
-    void playOverDuckedMusic().catch(() => {
-      restoreMusic();
-      setMessage("The phone blocked reaction audio. Tap Enable & test funny sounds again.");
-    });
-  }, []);
 
   useEffect(() => {
     const participant = window.localStorage.getItem(`hackmusic:${code}:participant`) ?? "";
@@ -333,53 +79,6 @@ export default function HostRoom({ code }: { code: string }) {
     });
     QRCode.toDataURL(url, { width: 220, margin: 1, color: { dark: "#151515", light: "#fffef9" } }).then(setQrUrl).catch(() => undefined);
   }, [code]);
-
-  useEffect(() => {
-    const restoreWhenVisible = () => {
-      if (document.visibilityState === "visible" && wakeLockWantedRef.current && !wakeLockRef.current) {
-        void requestScreenWakeLock(false);
-      }
-    };
-    document.addEventListener("visibilitychange", restoreWhenVisible);
-    return () => {
-      document.removeEventListener("visibilitychange", restoreWhenVisible);
-      wakeLockWantedRef.current = false;
-      const sentinel = wakeLockRef.current;
-      wakeLockRef.current = null;
-      if (sentinel && !sentinel.released) void sentinel.release();
-    };
-  }, [requestScreenWakeLock]);
-
-  useEffect(() => {
-    const activeReactionAudio = activeReactionAudioRef.current;
-    const activeReactionSources = activeReactionSourcesRef.current;
-    const reactionEffectTimers = reactionEffectTimersRef.current;
-    const cheerSound = new Audio(`/sounds/woohoo-crowd.wav?v=${REACTION_SOUND_VERSION}`);
-    const booSound = new Audio(`/sounds/boo.mp3?v=${REACTION_SOUND_VERSION}`);
-    cheerSound.preload = "auto";
-    booSound.preload = "auto";
-    cheerSound.load();
-    booSound.load();
-    cheerAudioRef.current = cheerSound;
-    booAudioRef.current = booSound;
-    return () => {
-      reactionSoundTokenRef.current += 1;
-      reactionEffectTimers.forEach((timer) => window.clearTimeout(timer));
-      reactionEffectTimers.clear();
-      activeReactionSources.forEach((source) => { try { source.stop(); } catch { /* already stopped */ } });
-      activeReactionSources.clear();
-      activeReactionAudio.forEach((sound) => sound.pause());
-      activeReactionAudio.clear();
-      activeReactionCountRef.current = 0;
-      void reactionAudioContextRef.current?.close().catch(() => undefined);
-      reactionAudioContextRef.current = null;
-      reactionAudioBuffersRef.current = null;
-      cheerSound.pause();
-      booSound.pause();
-      cheerAudioRef.current = null;
-      booAudioRef.current = null;
-    };
-  }, []);
 
   useEffect(() => {
     const updateProgress = () => {
@@ -710,15 +409,9 @@ export default function HostRoom({ code }: { code: string }) {
     setBusy(true);
     setMessage("🎛️ Building the reaction sound mixer…");
     try {
-      await prepareReactionAudio();
-      audioEnabledRef.current = true;
-      setAudioEnabled(true);
+      await enableReactionAudio();
       setMessage("✅ Funny sounds are armed. You should hear a cheer and boo test now.");
-      playReactionSound("up");
-      window.setTimeout(() => playReactionSound("down"), 650);
     } catch (reason) {
-      audioEnabledRef.current = false;
-      setAudioEnabled(false);
       setMessage(reason instanceof Error ? reason.message : "The funny sounds could not be armed. Reload and try once more.");
     } finally {
       setBusy(false);
@@ -726,24 +419,7 @@ export default function HostRoom({ code }: { code: string }) {
   }
 
   function disableAudio() {
-    audioEnabledRef.current = false;
-    setAudioEnabled(false);
-    reactionSoundTokenRef.current += 1;
-    reactionEffectTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-    reactionEffectTimersRef.current.clear();
-    activeReactionSourcesRef.current.forEach((source) => { try { source.stop(); } catch { /* already stopped */ } });
-    activeReactionSourcesRef.current.clear();
-    cheerAudioRef.current?.pause();
-    booAudioRef.current?.pause();
-    activeReactionAudioRef.current.forEach((sound) => sound.pause());
-    activeReactionAudioRef.current.clear();
-    activeReactionCountRef.current = 0;
-    if (cheerAudioRef.current) cheerAudioRef.current.currentTime = 0;
-    if (booAudioRef.current) booAudioRef.current.currentTime = 0;
-    const player = spotifyPlayerRef.current;
-    const originalVolume = spotifyVolumeBeforeDuckRef.current;
-    spotifyVolumeBeforeDuckRef.current = null;
-    if (player && originalVolume !== null) void player.setVolume(originalVolume).catch(() => undefined);
+    disableReactionAudio();
     setMessage("🔇 Funny sounds are off. Spotify keeps playing normally.");
   }
 
@@ -865,7 +541,7 @@ export default function HostRoom({ code }: { code: string }) {
 
     {party.status === "ended" ? <section className="host-ended-summary"><div><p className="eyebrow">🏁 THE AUX CABLE HAS BEEN RETIRED</p><h2>That&apos;s a wrap.</h2><p>Scores are frozen, voting is closed, and the speaker can finally process what happened.</p></div><div className="host-ended-summary-stats"><span><strong>{party.people.length}</strong> humans</span><span><strong>{party.queuedTracks.length}</strong> unplayed</span></div><div className="host-ended-summary-actions"><a href={`/e/${code}`}>🏆 View final party page →</a><a href="/">🎉 Create another room</a></div></section> : <section className="share-room-card"><div className="share-code"><span>📱 ROOM CODE</span><strong>{party.code}</strong>{joinPasscode ? <div className="share-passcode"><span>🔐 JOIN PASSCODE</span><strong>{joinPasscode}</strong><small>Not included in the URL or QR code. Copy/Share sends both.</small></div> : <div className="share-passcode-warning"><strong>{party.requiresPasscode ? "🔐 Passcode hidden on this browser" : "🚨 Legacy room: no passcode yet"}</strong><span>{party.requiresPasscode ? "Set a new one below if the original is lost." : "Lock it before sharing the room."}</span></div>}<details className="replace-passcode"><summary>{joinPasscode ? "Rotate room passcode" : "Set a room passcode"}</summary><form onSubmit={replaceJoinPasscode}><label htmlFor="replacement-passcode">NEW PASSCODE</label><input id="replacement-passcode" value={replacementPasscode} onChange={(event) => setReplacementPasscode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} minLength={4} maxLength={12} autoComplete="new-password" placeholder="e.g. VIBE42" required /><button type="submit" disabled={busy}>🔐 Save new passcode</button></form></details><p>{shareUrl}</p><div><button type="button" onClick={() => void copyInvite()}>📋 Copy invite</button><button type="button" onClick={() => void shareInvite()}>🚀 Share</button></div></div>{qrUrl && <Image unoptimized src={qrUrl} width={180} height={180} alt={`QR code to join room ${party.code}`} />}</section>}
 
-    {party.status === "lobby" && <section className="host-lobby-card"><div><p className="eyebrow">🌙 PRE-PARTY LOBBY IS OPEN</p><h2>Let the queue marinate.</h2><p>Expected start: <strong>{partyStartTime(party.scheduledFor)}</strong></p><small>Guests can join and add songs now. Playback and reactions stay locked until you start.</small></div><div className="host-lobby-action"><span><strong>{party.people.length}</strong> humans · <strong>{party.queueCount}</strong> secret songs</span><button type="button" disabled={busy} onClick={() => void control("start")}>{busy ? "🚀 Starting…" : "🚀 Start the party now →"}</button><small>You control the exact start time. This cannot return to lobby mode.</small></div></section>}
+    {party.status === "lobby" && <section className="host-lobby-card"><div><p className="eyebrow">🌙 PRE-PARTY LOBBY IS OPEN</p><h2>Let the queue marinate.</h2><p>Expected start: <strong>{formatPartyStart(party.scheduledFor, "Whenever you say go")}</strong></p><small>Guests can join and add songs now. Playback and reactions stay locked until you start.</small></div><div className="host-lobby-action"><span><strong>{party.people.length}</strong> humans · <strong>{party.queueCount}</strong> secret songs</span><button type="button" disabled={busy} onClick={() => void control("start")}>{busy ? "🚀 Starting…" : "🚀 Start the party now →"}</button><small>You control the exact start time. This cannot return to lobby mode.</small></div></section>}
 
     {party.status !== "ended" && <section className={`spotify-connect-card spotify-${spotifyStatus}`}>
       <div className="spotify-connect-heading">
@@ -891,7 +567,7 @@ export default function HostRoom({ code }: { code: string }) {
       {party.status === "ended" ? <section className="host-controls-card host-controls-retired"><div className="card-title-row"><h2>🧊 CONTROLS FROZEN</h2><span>FINAL</span></div><div className="host-retired-mark">🏁</div><h3>The buttons have left the building.</h3><p>Playback, reactions, invitations, passcodes, queue rules, funny sounds, and screen wake lock are finished for this room.</p><a href="/">Start fresh with a new party →</a></section> : <section className="host-controls-card"><div className="card-title-row"><h2>🎛️ CONTROLS</h2><span>📱 HOST DEVICE</span></div><button className={`host-audio ${audioEnabled ? "armed" : ""}`} type="button" aria-pressed={audioEnabled} onClick={audioEnabled ? disableAudio : enableAudio}>{audioEnabled ? "🔇 Disable funny sounds" : "🎉 Enable & test funny sounds"}</button><button className={`host-wake-lock ${wakeLockActive ? "armed" : ""}`} type="button" aria-pressed={wakeLockActive} disabled={wakeLockSupported === false} onClick={() => wakeLockActive ? void releaseScreenWakeLock() : void requestScreenWakeLock()}>{wakeLockActive ? "🔒 Screen staying awake · tap to release" : wakeLockSupported === false ? "⚠️ Screen wake lock unavailable" : "☀️ Keep this screen awake"}</button><button className="host-skip" type="button" disabled={busy || !party.currentTrack} onClick={() => void control("skip")}>⏭️ Skip to next song →</button><button className="host-end" type="button" disabled={busy} onClick={() => setEndConfirmOpen(true)}>🏁 End party & freeze scores</button><p className={`host-wake-status ${wakeLockActive ? "active" : ""}`}>{wakeLockStatus}</p><details className="host-wake-guide"><summary>🛟 Screen-awake help · detected {hostDeviceName}</summary><ul><li className={hostDevice === "ios" ? "current" : ""}><strong>🍎 iPhone / iPad</strong><span>Try the button first. If unavailable, use Settings → Display &amp; Brightness → Auto-Lock and choose Never or the longest available time.</span></li><li className={hostDevice === "android" ? "current" : ""}><strong>🤖 Android</strong><span>Try the button first. Otherwise increase Display → Screen timeout, or enable Developer options → Stay awake while charging.</span></li><li className={hostDevice === "computer" ? "current" : ""}><strong>💻 Computer</strong><span>Keep this tab visible. If needed, temporarily disable display sleep in the computer’s power or display settings.</span></li></ul></details><p className="host-hint">🔊 Reaction sounds play only from this host device. Keep this page open and its volume up.</p></section>}
     </div>
     <section className="host-queue-card"><div className="card-title-row"><h2>{party.status === "ended" ? "📦 UNPLAYED AT CLOSING" : "🎶 WAITING IN THE QUEUE"}</h2><span>{party.status === "ended" ? "ARCHIVE" : "🤫"} {party.queuedTracks.length} {party.queuedTracks.length === 1 ? "SONG" : "SONGS"}</span></div>{party.status !== "ended" && <fieldset className="queue-mode-picker"><legend>HOW SHOULD THE NEXT SONG BE PICKED?</legend><div>{queueModes.map((mode) => <button className={party.queueMode === mode.id ? "active" : ""} type="button" aria-pressed={party.queueMode === mode.id} disabled={busy} onClick={() => void changeQueueMode(mode.id)} key={mode.id}><span className="queue-mode-icon">{mode.icon}</span><span className="queue-mode-copy"><strong>{mode.title}</strong><small>{mode.copy}</small></span><span className="queue-mode-state">{party.queueMode === mode.id ? "✓ ACTIVE" : "SELECT"}</span></button>)}</div></fieldset>}{party.queuedTracks.length ? <><p className="queue-order-note">{party.status === "ended" ? "📼 These songs were still waiting when the final bell rang." : party.queueMode === "ordered" ? "📍 The numbered list below is the exact play order." : party.queueMode === "random" ? "🎲 These songs are the chaos pool. The next one is chosen only when it’s time." : "⚖️ These songs are the fair-play pool. HackMusic balances people first, then rolls the dice."}</p><ol className="host-queue-list">{party.queuedTracks.map((track, index) => <li key={track.queueId}><span className="queue-position">{party.status === "ended" ? String(index + 1).padStart(2, "0") : party.queueMode === "ordered" ? String(index + 1).padStart(2, "0") : party.queueMode === "random" ? "🎲" : "⚖️"}</span><span className={`queue-art ${track.color}`}>🎵</span><div className="queue-track-copy"><strong dir="auto">{track.title}</strong><span dir="auto">🎤 {track.artist}{track.duration ? ` · ${track.duration}` : ""}</span></div><div className="queue-submitter"><span className={`avatar ${track.color}`}>{track.submitterInitials}</span><small>Added by</small><strong>{track.submittedBy}</strong></div></li>)}</ol></> : <div className="host-queue-empty"><span>{party.status === "ended" ? "✅" : "🪹"}</span><div><strong>{party.status === "ended" ? "Nothing was left behind." : "The queue is gloriously empty."}</strong><p>{party.status === "ended" ? "Every queued song got its moment, or met a strategically timed skip." : "Share the room code and let somebody make a questionable musical decision."}</p></div></div>}</section>
-    <section className="host-history-card"><div className="card-title-row"><h2>📊 SONG OUTCOMES</h2><span>{party.songHistory.length} {party.songHistory.length === 1 ? "SONG" : "SONGS"}</span></div>{party.songHistory.length ? <ol>{party.songHistory.map((track) => { const outcome = songOutcome(track); return <li key={track.queueId}><span className={`queue-art ${track.color}`}>🎵</span><div className="history-track-copy"><strong dir="auto">{track.title}</strong><span dir="auto">🎤 {track.artist}{track.duration ? ` · ${track.duration}` : ""}</span><small>Added by {track.submittedBy}</small></div><b className={`song-outcome ${outcome.tone}`}>{outcome.label}</b></li>; })}</ol> : <div className="host-history-empty"><span>🧪</span><div><strong>No outcomes yet.</strong><p>Completed songs and dramatic boo-skips will become permanent evidence here.</p></div></div>}</section>
+    <section className="host-history-card"><div className="card-title-row"><h2>📊 SONG OUTCOMES</h2><span>{party.songHistory.length} {party.songHistory.length === 1 ? "SONG" : "SONGS"}</span></div>{party.songHistory.length ? <ol>{party.songHistory.map((track) => { const outcome = hostSongOutcome(track); return <li key={track.queueId}><span className={`queue-art ${track.color}`}>🎵</span><div className="history-track-copy"><strong dir="auto">{track.title}</strong><span dir="auto">🎤 {track.artist}{track.duration ? ` · ${track.duration}` : ""}</span><small>Added by {track.submittedBy}</small></div><b className={`song-outcome ${outcome.tone}`}>{outcome.label}</b></li>; })}</ol> : <div className="host-history-empty"><span>🧪</span><div><strong>No outcomes yet.</strong><p>Completed songs and dramatic boo-skips will become permanent evidence here.</p></div></div>}</section>
     <section className="leaderboard-card"><div className="card-title-row"><h2>{party.status === "ended" ? "🏆 FINAL SCOREBOARD" : party.status === "lobby" ? "🌙 LOBBY ROSTER" : "⚡ LIVE SCOREBOARD"}</h2><span>🎉 {party.people.length} PLAYERS</span></div><ol>{[...party.people].sort((a, b) => b.score - a.score).map((person, index) => <li key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><b>{party.status === "lobby" ? index + 1 : index === 0 ? "👑" : index + 1}</b><strong>{person.name}</strong><span>{person.score} pts</span></li>)}</ol></section>
 
     {message && <div className="toast host-toast" role="status">{message}</div>}
