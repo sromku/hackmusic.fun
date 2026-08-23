@@ -5,6 +5,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 type AdminOverview = {
   generatedAt: string;
   totals: { rooms: number; liveRooms: number; participants: number; tracks: number; reactions: number };
+  partyPulse: {
+    periodDays: number;
+    timezone: string;
+    startDate: string;
+    endDate: string;
+    totals: { rooms: number; humans: number; tracks: number; songStarts: number; cheers: number; boos: number; reactions: number; activeRooms: number };
+    trend: PartyPulseDay[];
+  };
   analytics: {
     periodDays: number;
     retentionDays: number;
@@ -23,6 +31,7 @@ type AdminOverview = {
 };
 
 type AnalyticsBreakdownRow = { label: string; count: number; percent: number };
+type PartyPulseDay = { day: string; rooms: number; humans: number; tracks: number; songStarts: number; cheers: number; boos: number; reactions: number; activeRooms: number };
 
 type AdminRoom = {
   room: { code: string; title: string; status: string; queueMode: string; scheduledFor: string | null; createdAt: string };
@@ -58,6 +67,34 @@ function comparison(current: number, previous: number) {
   if (!previous) return current ? "New this period" : "No traffic yet";
   const change = Math.round(((current - previous) / previous) * 100);
   return `${change > 0 ? "+" : ""}${change}% vs prior 30d`;
+}
+
+function shortDay(day: string) {
+  return new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+function PartyPulseTrend({ rows }: { rows: PartyPulseDay[] }) {
+  const totals = rows.map((row) => row.rooms + row.humans + row.tracks + row.reactions);
+  const maximum = Math.max(1, ...totals);
+  return <section className="admin-panel admin-pulse-trend">
+    <div className="admin-panel-title"><h3>🫀 Daily party activity</h3><span>Rooms / humans / tracks / reactions</span></div>
+    <div className="admin-pulse-legend" aria-hidden="true"><span><i className="rooms" />Rooms</span><span><i className="humans" />Humans</span><span><i className="tracks" />Tracks</span><span><i className="reactions" />Reactions</span></div>
+    <div className="admin-pulse-bars">
+      {rows.map((row, index) => {
+        const total = totals[index];
+        return <div className="admin-pulse-day" key={row.day} title={`${row.day}: ${row.rooms} rooms, ${row.humans} humans, ${row.tracks} tracks, ${row.songStarts} song starts, ${row.cheers} cheers, ${row.boos} boos, ${row.activeRooms} active rooms`}>
+          <span className="admin-pulse-count">{total}</span>
+          <span className="admin-pulse-bar" style={{ height: `${total ? Math.max(4, Math.round((total / maximum) * 100)) : 2}%` }}>
+            {row.rooms > 0 && <i className="rooms" style={{ flexGrow: row.rooms }} />}
+            {row.humans > 0 && <i className="humans" style={{ flexGrow: row.humans }} />}
+            {row.tracks > 0 && <i className="tracks" style={{ flexGrow: row.tracks }} />}
+            {row.reactions > 0 && <i className="reactions" style={{ flexGrow: row.reactions }} />}
+          </span>
+          <time dateTime={row.day}>{shortDay(row.day)}</time>
+        </div>;
+      })}
+    </div>
+  </section>;
 }
 
 function TrafficTrend({ rows }: { rows: AdminOverview["analytics"]["trend"] }) {
@@ -127,6 +164,35 @@ export default function AdminDashboard({ ownerEmail, signOutPath }: { ownerEmail
     {!selected ? <>
       <section className="admin-toolbar"><label htmlFor="admin-search">FIND A ROOM</label><input id="admin-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Room code or event name" /><button type="button" disabled={loading} onClick={() => void loadOverview()}>{loading ? "Refreshing…" : "↻ Refresh data"}</button><span>{overview ? `Updated ${date(overview.generatedAt)}` : "Connecting…"}</span></section>
       {overview && <section className="admin-metrics" aria-label="Database totals">{[["Rooms", overview.totals.rooms], ["Live now", overview.totals.liveRooms], ["Humans", overview.totals.participants], ["Tracks", overview.totals.tracks], ["Reactions", overview.totals.reactions]].map(([label, value]) => <article key={label}><strong>{value}</strong><span>{label}</span></article>)}</section>}
+      {overview && <section className="admin-analytics admin-party-pulse" aria-labelledby="party-pulse-heading">
+        <div className="admin-analytics-heading"><div><p className="eyebrow">LIVE DATABASE · LAST {overview.partyPulse.periodDays} DAYS</p><h2 id="party-pulse-heading">🎛️ Site pulse</h2></div><p>What the parties actually did, grouped by UTC day from {shortDay(overview.partyPulse.startDate)} through {shortDay(overview.partyPulse.endDate)}. Counts are aggregate; participant names and room secrets stay out of this view.</p></div>
+        <section className="admin-metrics admin-pulse-metrics" aria-label={`HackMusic activity in the last ${overview.partyPulse.periodDays} days`}>
+          <article><strong>{number(overview.partyPulse.totals.activeRooms)}</strong><span>Active rooms</span><small>Unique rooms with any activity</small></article>
+          <article><strong>{number(overview.partyPulse.totals.rooms)}</strong><span>Rooms opened</span><small>Created in this window</small></article>
+          <article><strong>{number(overview.partyPulse.totals.humans)}</strong><span>Humans joined</span><small>Hosts included</small></article>
+          <article><strong>{number(overview.partyPulse.totals.tracks)}</strong><span>Tracks added</span><small>{number(overview.partyPulse.totals.humans ? overview.partyPulse.totals.tracks / overview.partyPulse.totals.humans : 0, 1)} per human</small></article>
+          <article><strong>{number(overview.partyPulse.totals.songStarts)}</strong><span>Songs started</span><small>Playback start events</small></article>
+          <article><strong>{number(overview.partyPulse.totals.reactions)}</strong><span>Reactions</span><small>{number(overview.partyPulse.totals.songStarts ? overview.partyPulse.totals.reactions / overview.partyPulse.totals.songStarts : 0, 1)} per song start</small></article>
+          <article><strong>{number(overview.partyPulse.totals.cheers)}</strong><span>Cheers</span><small>Public appreciation</small></article>
+          <article><strong>{number(overview.partyPulse.totals.boos)}</strong><span>Boos</span><small>Still anonymous, obviously</small></article>
+        </section>
+        <PartyPulseTrend rows={overview.partyPulse.trend} />
+        <section className="admin-panel admin-pulse-table">
+          <div className="admin-panel-title"><h3>📅 Day by day</h3><span>Newest first · {overview.partyPulse.timezone}</span></div>
+          <DataTable columns={[
+            { key: "day", label: "Day", format: (value) => shortDay(String(value)) },
+            { key: "activeRooms", label: "Active rooms" },
+            { key: "rooms", label: "New rooms" },
+            { key: "humans", label: "Humans" },
+            { key: "tracks", label: "Tracks" },
+            { key: "songStarts", label: "Song starts" },
+            { key: "reactions", label: "Reactions" },
+            { key: "cheers", label: "Cheers" },
+            { key: "boos", label: "Boos" },
+          ]} rows={[...overview.partyPulse.trend].reverse()} />
+          <p className="admin-metric-notes"><strong>Definitions:</strong> active room = a room created or touched by a join, track, reaction, or playback event that day · humans = participant rows, including hosts · reactions = cheers + boos · song starts = recorded playback starts.</p>
+        </section>
+      </section>}
       {overview && <section className="admin-analytics" aria-labelledby="traffic-heading">
         <div className="admin-analytics-heading"><div><p className="eyebrow">FIRST-PARTY · COOKIE-FREE</p><h2 id="traffic-heading">👀 Website traffic</h2></div><p>Normalized, aggregate analytics. No raw IPs, room codes, query strings, or persistent visitor profiles.</p></div>
         <section className="admin-metrics admin-analytics-metrics" aria-label={`Website traffic in the last ${overview.analytics.periodDays} days`}>
