@@ -953,10 +953,23 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .host-shell { position: relative; padding: 26px 0 80px; }
 .host-shell .topbar { margin-bottom: 36px; }
 .host-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
+.host-heading-actions { display: grid; justify-items: end; gap: 7px; }
+.host-heading-actions > small { color: #676158; font-size: 8px; font-weight: 850; letter-spacing: .05em; }
 .host-status { border: 2px solid var(--ink); padding: 10px 13px; font-size: 10px; font-weight: 900; letter-spacing: .1em; }
 .host-status.live { background: var(--mint); }
 .host-status.lobby { background: var(--blue); }
 .host-status.ended { background: var(--coral); }
+.host-soft-refresh { min-height: 34px; border: 2px solid var(--ink); background: var(--white); box-shadow: 3px 3px 0 var(--ink); padding: 0 10px; cursor: pointer; font-size: 8px; font-weight: 950; letter-spacing: .06em; }
+.host-soft-refresh:hover:not(:disabled) { background: var(--blue); transform: translate(-1px, -1px); }
+.host-soft-refresh:disabled { cursor: wait; opacity: .62; }
+.host-sync-banner { display: flex; justify-content: space-between; gap: 24px; align-items: center; margin-top: 24px; border: 2px solid var(--ink); background: var(--blue); box-shadow: 5px 5px 0 var(--ink); padding: 15px 17px; }
+.host-sync-banner.access { background: var(--coral); }
+.host-sync-banner > div { display: grid; gap: 3px; }
+.host-sync-banner strong { font-size: 12px; }
+.host-sync-banner span { font-size: 10px; font-weight: 800; }
+.host-sync-banner small { color: #4f4b45; font-size: 9px; font-weight: 750; }
+.host-sync-banner button, .host-reconnect-screen button { flex: none; min-height: 38px; border: 2px solid var(--ink); background: var(--white); box-shadow: 3px 3px 0 var(--ink); padding: 0 12px; cursor: pointer; font-size: 9px; font-weight: 950; }
+.host-reconnect-screen > p:not(.eyebrow) { max-width: 580px; font-weight: 750; line-height: 1.45; }
 .host-ended-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(210px, auto); gap: 28px; align-items: center; margin-top: 32px; border: 2px solid var(--ink); background: var(--coral); box-shadow: 7px 7px 0 var(--ink); padding: 24px; animation: card-arrive .58s cubic-bezier(.2, .75, .25, 1) both; }
 .host-ended-summary h2 { margin: 3px 0 9px; font-size: clamp(38px, 6vw, 62px); line-height: .9; letter-spacing: -.06em; }
 .host-ended-summary p:not(.eyebrow) { max-width: 530px; margin: 0; font-size: 12px; font-weight: 750; line-height: 1.45; }
@@ -1162,6 +1175,10 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
   .host-grid { grid-template-columns: 1fr; }
   .spotify-setup-grid { grid-template-columns: 1fr; }
   .host-heading { align-items: flex-start; flex-direction: column; gap: 14px; }
+  .host-heading-actions { width: 100%; grid-template-columns: auto 1fr; justify-items: start; align-items: center; }
+  .host-heading-actions > small { grid-column: 1 / -1; }
+  .host-sync-banner { align-items: stretch; flex-direction: column; gap: 12px; }
+  .host-sync-banner button { width: 100%; }
   .host-heading h1 { font-size: clamp(46px, 14vw, 64px); }
   .participant-link { font-size: 10px; }
   .host-ended-summary { grid-template-columns: 1fr; gap: 20px; margin-top: 22px; padding: 18px; box-shadow: 5px 5px 0 var(--ink); }

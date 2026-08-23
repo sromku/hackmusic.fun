@@ -120,6 +120,8 @@ export default function HostRoom({ code }: { code: string }) {
   const [qrUrl, setQrUrl] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [syncProblem, setSyncProblem] = useState("");
+  const [roomSyncing, setRoomSyncing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
@@ -154,6 +156,7 @@ export default function HostRoom({ code }: { code: string }) {
   const spotifyStateReceivedAtRef = useRef(0);
   const spotifyEndTimerRef = useRef<number | null>(null);
   const advancingTrackRef = useRef(false);
+  const roomRefreshInFlightRef = useRef(false);
   const wakeLockRef = useRef<ScreenWakeLockSentinel | null>(null);
   const wakeLockWantedRef = useRef(false);
   const currentSpotifyId = party?.currentTrack ? extractSpotifyTrackId(party.currentTrack.id) : "";
@@ -396,32 +399,69 @@ export default function HostRoom({ code }: { code: string }) {
     return () => window.clearInterval(timer);
   }, []);
 
+  const refreshParty = useCallback(async (announce = false) => {
+    if (!participantId || !hostKey || roomRefreshInFlightRef.current) return false;
+    roomRefreshInFlightRef.current = true;
+    if (announce) setRoomSyncing(true);
+    try {
+      const response = await fetch(`/api/party?code=${encodeURIComponent(code)}&activityAfter=${encodeURIComponent(soundActivityCursorRef.current)}`, { headers: { "x-hackmusic-participant": participantId, "x-hackmusic-host-key": hostKey } });
+      const data = await response.json().catch(() => null) as { error?: string; party?: HostParty & { activity?: Array<{ id: string; tone: "up" | "down" | "song"; createdAt: string }> } } | null;
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          setError(data?.error ?? "This browser no longer has access to the host controls.");
+          return false;
+        }
+        throw new Error(data?.error ?? "The party service is briefly unavailable.");
+      }
+      if (!data?.party || !Array.isArray(data.party.queuedTracks)) {
+        setError("This browser no longer has the host key for this room.");
+        return false;
+      }
+      const incomingActivity = data.party.activity ?? [];
+      if (knownSoundActivityRef.current) {
+        incomingActivity
+          .filter((item) => item.tone !== "song" && !knownSoundActivityRef.current?.has(item.id))
+          .forEach((item) => playReactionSound(item.tone as "up" | "down"));
+      }
+      const knownIds = knownSoundActivityRef.current ?? new Set<string>();
+      incomingActivity.forEach((item) => knownIds.add(item.id));
+      knownSoundActivityRef.current = knownIds;
+      const lastActivity = incomingActivity[incomingActivity.length - 1];
+      if (lastActivity) soundActivityCursorRef.current = `${lastActivity.createdAt}|${lastActivity.id}`;
+      setParty(data.party);
+      setError("");
+      setSyncProblem("");
+      if (announce) setMessage("✅ Room data refreshed. Spotify kept playing without interruption.");
+      return true;
+    } catch {
+      setSyncProblem("HackMusic briefly lost the party service. Spotify playback is untouched, and room data will retry automatically.");
+      if (announce) setMessage("⚠️ Still reconnecting to room data. Spotify keeps playing.");
+      return false;
+    } finally {
+      roomRefreshInFlightRef.current = false;
+      if (announce) setRoomSyncing(false);
+    }
+  }, [code, hostKey, participantId, playReactionSound]);
+
   useEffect(() => {
     if (!participantId || !hostKey || partyStatus === "ended") return;
-    let active = true;
-    const refresh = () => fetch(`/api/party?code=${encodeURIComponent(code)}&activityAfter=${encodeURIComponent(soundActivityCursorRef.current)}`, { headers: { "x-hackmusic-participant": participantId, "x-hackmusic-host-key": hostKey } })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error ?? "Could not load the room.");
-        if (!active) return;
-        const incomingActivity = (data.party.activity ?? []) as Array<{ id: string; tone: "up" | "down" | "song"; createdAt: string }>;
-        if (knownSoundActivityRef.current) {
-          incomingActivity
-            .filter((item) => item.tone !== "song" && !knownSoundActivityRef.current?.has(item.id))
-            .forEach((item) => playReactionSound(item.tone as "up" | "down"));
-        }
-        const knownIds = knownSoundActivityRef.current ?? new Set<string>();
-        incomingActivity.forEach((item) => knownIds.add(item.id));
-        knownSoundActivityRef.current = knownIds;
-        const lastActivity = incomingActivity[incomingActivity.length - 1];
-        if (lastActivity) soundActivityCursorRef.current = `${lastActivity.createdAt}|${lastActivity.id}`;
-        setParty(data.party);
-      })
-      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "Could not load the room."); });
-    void refresh();
-    const timer = window.setInterval(refresh, 2000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [code, hostKey, participantId, partyStatus, playReactionSound]);
+    const initialRefresh = window.setTimeout(() => { void refreshParty(); }, 0);
+    const timer = window.setInterval(() => { void refreshParty(); }, 2000);
+    return () => {
+      window.clearTimeout(initialRefresh);
+      window.clearInterval(timer);
+    };
+  }, [hostKey, participantId, partyStatus, refreshParty]);
+
+  useEffect(() => {
+    if (!speakerArmed || partyEnded) return;
+    const protectPlayback = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", protectPlayback);
+    return () => window.removeEventListener("beforeunload", protectPlayback);
+  }, [partyEnded, speakerArmed]);
 
   useEffect(() => {
     if (!endConfirmOpen) return;
@@ -805,7 +845,8 @@ export default function HostRoom({ code }: { code: string }) {
     }
   }
 
-  if (error) return <main className="missing-room"><span className="brand-mark">HM</span><p className="eyebrow">HOST KEY REQUIRED</p><h1>{error}</h1><a href={`/e/${code}`}>Open the participant room →</a><a href="/">Create a new room →</a></main>;
+  if (error && !party) return <main className="missing-room"><span className="brand-mark">HM</span><p className="eyebrow">HOST KEY REQUIRED</p><h1>{error}</h1><a href={`/e/${code}`}>Open the participant room →</a><a href="/">Create a new room →</a></main>;
+  if (syncProblem && !party) return <main className="missing-room host-reconnect-screen"><span className="brand-mark">HM</span><p className="eyebrow">📡 RECONNECTING THE DJ BOOTH</p><h1>Connection hiccup.</h1><p>{syncProblem}</p><button type="button" onClick={() => void refreshParty(true)} disabled={roomSyncing}>{roomSyncing ? "Trying again…" : "↻ Try room data again"}</button><a href={`/e/${code}`} target="_blank" rel="noreferrer">Open participant view safely ↗</a></main>;
   if (!party) return <main className="loading-room"><span className="brand-mark">HM</span><p>Warming up room {code}…</p></main>;
 
   const cheers = party.reactions.filter((reaction) => reaction.tone === "up").length;
@@ -817,8 +858,10 @@ export default function HostRoom({ code }: { code: string }) {
   const progressState = speakerStarting ? "STARTING" : speakerArmed && progressMatchesCurrent ? spotifyProgress.paused ? "PAUSED" : "PLAYING" : speakerArmed ? "LOADING" : "READY";
   const spotifyCallbackUrl = shareUrl ? new URL("/api/spotify/callback", shareUrl).toString() : "";
   return <main className="host-shell">
-    <header className="topbar"><a className="brand" href="/"><span className="brand-mark">HM</span><span>HackMusic Host</span></a><a className="participant-link" href={`/e/${code}`}>{party.status === "ended" ? "🏆 View final party page →" : "🎉 Open participant page →"}</a></header>
-    <div className="host-heading"><div><p className="eyebrow">🎛️ HOST CONTROL · ROOM {party.code}</p><h1>{party.title}</h1></div><span className={`host-status ${party.status}`}>{party.status === "ended" ? "🏁 PARTY ENDED" : party.status === "lobby" ? "🌙 LOBBY OPEN" : "⚡ LIVE"}</span></div>
+    <header className="topbar"><a className="brand" href="/"><span className="brand-mark">HM</span><span>HackMusic Host</span></a><a className="participant-link" href={`/e/${code}`} target="_blank" rel="noreferrer">{party.status === "ended" ? "🏆 View final party page ↗" : "🎉 Open participant page safely ↗"}</a></header>
+    <div className="host-heading"><div><p className="eyebrow">🎛️ HOST CONTROL · ROOM {party.code}</p><h1>{party.title}</h1></div><div className="host-heading-actions"><span className={`host-status ${party.status}`}>{party.status === "ended" ? "🏁 PARTY ENDED" : party.status === "lobby" ? "🌙 LOBBY OPEN" : "⚡ LIVE"}</span>{party.status !== "ended" && <><button className="host-soft-refresh" type="button" onClick={() => void refreshParty(true)} disabled={roomSyncing}>{roomSyncing ? "↻ SYNCING…" : "↻ REFRESH ROOM DATA"}</button><small>Safe refresh · music keeps playing</small></>}</div></div>
+
+    {(syncProblem || error) && <section className={`host-sync-banner ${error ? "access" : "offline"}`} role="status"><div><strong>{error ? "🔐 Host access needs attention" : "📡 Room data is reconnecting"}</strong><span>{error || syncProblem}</span><small>{error ? "Spotify may continue, but host controls need the creator browser." : "Do not reload. Automatic retries are running and Spotify is untouched."}</small></div><button type="button" onClick={() => void refreshParty(true)} disabled={roomSyncing}>{roomSyncing ? "Trying…" : "Try now →"}</button></section>}
 
     {party.status === "ended" ? <section className="host-ended-summary"><div><p className="eyebrow">🏁 THE AUX CABLE HAS BEEN RETIRED</p><h2>That&apos;s a wrap.</h2><p>Scores are frozen, voting is closed, and the speaker can finally process what happened.</p></div><div className="host-ended-summary-stats"><span><strong>{party.people.length}</strong> humans</span><span><strong>{party.queuedTracks.length}</strong> unplayed</span></div><div className="host-ended-summary-actions"><a href={`/e/${code}`}>🏆 View final party page →</a><a href="/">🎉 Create another room</a></div></section> : <section className="share-room-card"><div className="share-code"><span>📱 ROOM CODE</span><strong>{party.code}</strong>{joinPasscode ? <div className="share-passcode"><span>🔐 JOIN PASSCODE</span><strong>{joinPasscode}</strong><small>Not included in the URL or QR code. Copy/Share sends both.</small></div> : <div className="share-passcode-warning"><strong>{party.requiresPasscode ? "🔐 Passcode hidden on this browser" : "🚨 Legacy room: no passcode yet"}</strong><span>{party.requiresPasscode ? "Set a new one below if the original is lost." : "Lock it before sharing the room."}</span></div>}<details className="replace-passcode"><summary>{joinPasscode ? "Rotate room passcode" : "Set a room passcode"}</summary><form onSubmit={replaceJoinPasscode}><label htmlFor="replacement-passcode">NEW PASSCODE</label><input id="replacement-passcode" value={replacementPasscode} onChange={(event) => setReplacementPasscode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} minLength={4} maxLength={12} autoComplete="new-password" placeholder="e.g. VIBE42" required /><button type="submit" disabled={busy}>🔐 Save new passcode</button></form></details><p>{shareUrl}</p><div><button type="button" onClick={() => void copyInvite()}>📋 Copy invite</button><button type="button" onClick={() => void shareInvite()}>🚀 Share</button></div></div>{qrUrl && <Image unoptimized src={qrUrl} width={180} height={180} alt={`QR code to join room ${party.code}`} />}</section>}
 

@@ -349,6 +349,16 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /Yes, end it forever/);
   assert.match(source, /There is no undo/);
   assert.match(source, /className="toast host-toast"/);
+  assert.match(source, /REFRESH ROOM DATA/);
+  assert.match(source, /Safe refresh · music keeps playing/);
+  assert.match(source, /Spotify kept playing without interruption/);
+  assert.match(source, /setInterval\(\(\) => \{ void refreshParty\(\); \}, 2000\)/);
+  assert.match(source, /setSyncProblem\("HackMusic briefly lost the party service/);
+  assert.match(source, /beforeunload/);
+  assert.match(source, /event\.returnValue = ""/);
+  assert.match(source, /error && !party/);
+  assert.match(source, /Open participant page safely/);
+  assert.doesNotMatch(source, /catch\(\(reason\) => \{ if \(active\) setError/);
   assert.doesNotMatch(source, /className="host-message"/);
   assert.match(source, /THE AUX CABLE HAS BEEN RETIRED/);
   assert.match(source, /CONTROLS FROZEN/);
