@@ -69,8 +69,17 @@ export async function ensurePartySchema() {
       kind TEXT NOT NULL,
       created_at TEXT NOT NULL
     )`),
+    d1.prepare(`CREATE TABLE IF NOT EXISTS room_creation_limits (
+      client_key TEXT NOT NULL,
+      window_kind TEXT NOT NULL,
+      window_start INTEGER NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      expires_at INTEGER NOT NULL,
+      PRIMARY KEY (client_key, window_kind, window_start)
+    )`),
     d1.prepare("CREATE UNIQUE INDEX IF NOT EXISTS submissions_event_track_unique ON submissions(event_id, provider_track_id)"),
     d1.prepare("CREATE UNIQUE INDEX IF NOT EXISTS reactions_submission_participant_unique ON reactions(submission_id, participant_id)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS activity_events_event_created_idx ON activity_events(event_id, created_at, id)"),
+    d1.prepare("CREATE INDEX IF NOT EXISTS room_creation_limits_expires_idx ON room_creation_limits(expires_at)"),
   ]);
 }

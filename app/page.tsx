@@ -14,13 +14,14 @@ export default function Home() {
 
   async function createRoom(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = new FormData(event.currentTarget);
     setBusy(true);
     setMessage("");
     try {
       const response = await fetch("/api/party", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "create", title: eventName, name: hostName }),
+        body: JSON.stringify({ action: "create", title: eventName, name: hostName, website: String(form.get("website") ?? "") }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Could not create the room.");
@@ -84,6 +85,7 @@ export default function Home() {
             <div className="entry-card-top"><p className="eyebrow">⚡ START THE CHAOS</p><span>NO APP NEEDED</span></div><h2>Create a room</h2>
             <label htmlFor="event-name">EVENT NAME</label><input id="event-name" value={eventName} onChange={(event) => setEventName(event.target.value)} maxLength={60} placeholder="Friday night hackathon" required />
             <label htmlFor="host-name">YOUR NAME</label><input id="host-name" value={hostName} onChange={(event) => setHostName(event.target.value)} maxLength={24} placeholder="The brave host" required />
+            <div className="bot-trap" aria-hidden="true"><label htmlFor="website">Website</label><input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" /></div>
             <button type="submit" disabled={busy}>{busy ? "🛠️ Making room…" : "🎉 Create my room →"}</button>
           </form>
           <form className="entry-card join-room-card" onSubmit={joinRoom}>

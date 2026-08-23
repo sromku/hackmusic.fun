@@ -59,6 +59,7 @@ test("renders the create and join landing page", async () => {
   assert.match(html, /href="\/privacy"/);
   assert.match(html, /href="\/terms"/);
   assert.match(html, /By creating or joining a room/);
+  assert.match(html, /name="website"/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/);
 });
 
@@ -122,6 +123,14 @@ test("renders a code-specific participant room", async () => {
   assert.match(partySource, /newEffect - oldEffect/);
   assert.match(partySource, /current\.artist === "Spotify"/);
   assert.match(partySource, /pending\?\.count \?\? 0\) >= MAX_PENDING_TRACKS_PER_PERSON/);
+  const roomGuardSource = await readFile(new URL("lib/room-creation-guard.ts", projectRoot), "utf8");
+  assert.match(roomGuardSource, /maximum: 5/);
+  assert.match(roomGuardSource, /maximum: 20/);
+  assert.match(roomGuardSource, /SHA-256/);
+  assert.match(roomGuardSource, /DELETE FROM room_creation_limits WHERE expires_at/);
+  const roomGuardMigration = await readFile(new URL("drizzle/0003_slow_norrin_radd.sql", projectRoot), "utf8");
+  assert.match(roomGuardMigration, /CREATE TABLE `room_creation_limits`/);
+  assert.match(roomGuardMigration, /room_creation_limits_expires_idx/);
   const partyRulesSource = await readFile(new URL("lib/party-rules.ts", projectRoot), "utf8");
   assert.match(partyRulesSource, /MAX_PENDING_TRACKS_PER_PERSON = 100/);
 });

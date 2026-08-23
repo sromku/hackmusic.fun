@@ -81,6 +81,7 @@ body {
 .entry-card label { margin: 10px 0 7px; font-size: 10px; font-weight: 900; letter-spacing: .1em; }
 .entry-card input { min-width: 0; min-height: 50px; border: 2px solid var(--ink); border-radius: 0; background: var(--white); padding: 0 13px; color: var(--ink); font-size: 16px; outline: none; }
 .entry-card input:focus { box-shadow: 4px 4px 0 var(--blue); }
+.bot-trap { position: absolute !important; left: -10000px !important; top: auto !important; width: 1px !important; height: 1px !important; overflow: hidden !important; pointer-events: none !important; }
 .entry-card button { min-height: 52px; border: 2px solid var(--ink); background: var(--blue); cursor: pointer; font-weight: 900; }
 .create-card button { margin-top: 18px; box-shadow: 4px 4px 0 var(--ink); }
 .join-room-card { display: grid; grid-template-columns: 1fr 116px 88px; gap: 12px; align-items: end; background: var(--mint); padding: 20px; }

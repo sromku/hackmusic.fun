@@ -1,5 +1,6 @@
 import { createRoom, hostControl, joinParty, reactToCurrent, readParty, readRoomSummary, setQueueMode, submitTrack, type QueueMode } from "../../../db/party";
 import { resolveSpotifyTrack, type ResolvedSpotifyTrack } from "../../../lib/spotify-track";
+import { protectRoomCreation, RoomCreationGuardError } from "../../../lib/room-creation-guard";
 
 function messageFrom(error: unknown) {
   return error instanceof Error ? error.message : "Unexpected party error.";
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
       queueMode?: QueueMode;
       name?: string;
       title?: string;
+      website?: string;
       trackUrl?: string;
       track?: { id: string; title: string; artist: string; duration: string; color: string };
     };
@@ -40,6 +42,7 @@ export async function POST(request: Request) {
     let submittedTrack: ResolvedSpotifyTrack | undefined;
 
     if (body.action === "create" && body.title && body.name) {
+      await protectRoomCreation(request, body.website);
       return Response.json({ room: await createRoom(body.title, body.name) }, { status: 201 });
     } else if (body.action === "join" && body.name) {
       await joinParty(code, participantId, body.name);
@@ -58,6 +61,10 @@ export async function POST(request: Request) {
 
     return Response.json({ party: await readParty(code, participantId, body.pin), skipped, submittedTrack });
   } catch (error) {
+    if (error instanceof RoomCreationGuardError) {
+      const headers = error.retryAfter ? { "retry-after": String(error.retryAfter) } : undefined;
+      return Response.json({ error: error.message }, { status: error.status, headers });
+    }
     const message = messageFrom(error);
     const status = message.includes("not the host") ? 403 : message.includes("Room not found") ? 404 : message.includes("cannot") || message.includes("already") || message.includes("valid") || message.includes("Use a") || message.includes("Spotify") || message.includes("track link") || message.includes("ended") ? 400 : 500;
     return Response.json({ error: message }, { status });

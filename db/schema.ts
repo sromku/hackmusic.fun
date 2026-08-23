@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const events = sqliteTable("events", {
   id: text("id").primaryKey(),
@@ -56,4 +56,15 @@ export const activityEvents = sqliteTable("activity_events", {
   createdAt: text("created_at").notNull(),
 }, (table) => [
   index("activity_events_event_created_idx").on(table.eventId, table.createdAt, table.id),
+]);
+
+export const roomCreationLimits = sqliteTable("room_creation_limits", {
+  clientKey: text("client_key").notNull(),
+  windowKind: text("window_kind").notNull(),
+  windowStart: integer("window_start").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  expiresAt: integer("expires_at").notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.clientKey, table.windowKind, table.windowStart] }),
+  index("room_creation_limits_expires_idx").on(table.expiresAt),
 ]);
