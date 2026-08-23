@@ -54,7 +54,7 @@ type QueuedSubmissionRow = SubmissionRow & {
 };
 
 type MySubmissionRow = SubmissionRow & {
-  status: "pending" | "playing" | "played" | "skipped";
+  status: "pending" | "playing" | "played" | "skipped" | "removed";
   skip_reason: "boos" | "host" | null;
   skip_percent: number | null;
   submitted_at: string;
@@ -532,6 +532,9 @@ export async function submitTrack(code: string, participantId: string, track: Tr
     .bind(event.id, participantId).first<{ count: number }>();
   if ((pending?.count ?? 0) >= MAX_PENDING_TRACKS_PER_PERSON) throw new PublicError(`You already have ${MAX_PENDING_TRACKS_PER_PERSON} secret picks waiting. Wait for one to play before adding another.`);
   if (!track.title || !track.artist) throw new PublicError("Spotify did not return enough song information. Copy the track link again.");
+  const duplicate = await d1.prepare("SELECT id FROM submissions WHERE event_id = ? AND provider_track_id = ? LIMIT 1")
+    .bind(event.id, normalizedTrack.uri).first<{ id: string }>();
+  if (duplicate) throw new PublicError("That song is already part of this party. Pick another track and keep the queue mysterious.", 409);
 
   const submissionId = crypto.randomUUID();
   const status = event.status === "lobby" || event.current_submission_id ? "pending" : "playing";
@@ -552,7 +555,7 @@ export async function submitTrack(code: string, participantId: string, track: Tr
       if (refreshed?.status === "live" && !refreshed.current_submission_id) await advanceCurrent(refreshed, "played");
     }
   } catch (error) {
-    if (error instanceof Error && error.message.includes("UNIQUE")) throw new PublicError("That song is already hiding in this room’s queue.");
+    if (error instanceof Error && error.message.includes("UNIQUE")) throw new PublicError("That song is already part of this party. Pick another track and keep the queue mysterious.", 409);
     throw error;
   }
 }
@@ -563,7 +566,7 @@ export async function removePendingTrack(code: string, participantId: string, su
   if (event.status === "ended") throw new PublicError("This party has ended, so its queue is frozen.");
   if (!submissionId || submissionId.length > 80) throw new PublicError("That song could not be identified. Refresh the page and try again.");
   const d1 = getD1();
-  const result = await d1.prepare(`DELETE FROM submissions
+  const result = await d1.prepare(`UPDATE submissions SET status = 'removed'
     WHERE id = ? AND event_id = ? AND participant_id = ? AND status = 'pending'`)
     .bind(submissionId, event.id, participantId).run();
   if (!result.meta.changes) throw new PublicError("That song is no longer waiting in your queue. Refresh to see the latest mix.", 409);

@@ -8,7 +8,7 @@ type Person = { id: string; initials: string; name: string; score: number | null
 type Reaction = { id: string; mine: boolean; avatar: string; name: string; message: string; icon: "▲" | "▼"; tone: "up" | "down"; createdAt?: string };
 type Activity = { id: string; mine?: boolean; avatar: string; name: string; message: string; icon: string; tone: "up" | "down" | "song"; trackTitle: string; createdAt: string };
 type Track = { id: string; title: string; artist: string; duration: string; color: Color };
-type MySong = Track & { queueId: string; status: "pending" | "playing" | "played" | "skipped"; skipReason: "boos" | "host" | null; skipPercent: number | null; submittedAt: string };
+type MySong = Track & { queueId: string; status: "pending" | "playing" | "played" | "skipped" | "removed"; skipReason: "boos" | "host" | null; skipPercent: number | null; submittedAt: string };
 type MyReactionHistory = { reactionId: string; id: string; title: string; artist: string; tone: "up" | "down"; songStatus: MySong["status"]; skipReason: MySong["skipReason"]; skipPercent: number | null; reactedAt: string };
 type PartyState = { code: string; title: string; viewer: Person; people: Person[]; currentTrack: Track | null; reactions: Reaction[]; activity?: Activity[]; mySongs: MySong[]; myReactionHistory: MyReactionHistory[]; pendingCount: number; queueCount: number; status: "lobby" | "live" | "ended"; scheduledFor: string | null };
 type RoomSummary = { code: string; title: string; status: "lobby" | "live" | "ended"; scheduledFor: string | null; requiresPasscode: boolean };
@@ -33,12 +33,26 @@ function partyStartTime(value: string | null) {
   return Number.isNaN(date.getTime()) ? "when the host is ready" : new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(date);
 }
 
+function durationSeconds(value: string) {
+  const match = value.match(/^(\d+):(\d{2})$/);
+  return match ? Number(match[1]) * 60 + Number(match[2]) : 0;
+}
+
+function totalMusicTime(totalSeconds: number) {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  if (hours) return `${hours} hr ${minutes} min`;
+  if (minutes) return `${minutes} min`;
+  return totalSeconds ? "Under 1 min" : "0 min";
+}
+
 function songStatusLabel(song: Pick<MySong, "status" | "skipReason" | "skipPercent">, ended: boolean) {
   if (song.status === "playing") return "⚡ Playing now";
   if (song.status === "played") return "✅ Played";
   if (song.status === "skipped" && song.skipReason === "boos") return song.skipPercent === null ? "👻 Booed off" : `👻 Booed off at ${song.skipPercent}%`;
   if (song.status === "skipped" && song.skipReason === "host") return "⏭️ Skipped by host";
   if (song.status === "skipped") return "⏭️ Skipped";
+  if (song.status === "removed") return "🫥 Removed by you";
   return ended ? "📦 Left unplayed" : "🤫 Still waiting";
 }
 
@@ -183,7 +197,8 @@ export default function PartyRoom({ code }: { code: string }) {
   if (!room) return <main className="loading-room"><span className="brand-mark">HM</span><p>Finding room {code}…</p></main>;
   const currentSpotifyUrl = party?.currentTrack ? spotifyTrackUrl(party.currentTrack.id) : "";
   const waitingSongs = party?.mySongs.filter((song) => song.status === "pending") ?? [];
-  const submittedHistory = party?.mySongs.filter((song) => song.status !== "pending") ?? [];
+  const submittedHistory = party?.mySongs.filter((song) => song.status !== "pending" && song.status !== "removed") ?? [];
+  const myMusicSeconds = party?.mySongs.reduce((total, song) => total + durationSeconds(song.duration), 0) ?? 0;
 
   return (
     <main className="party-shell">
@@ -217,8 +232,10 @@ export default function PartyRoom({ code }: { code: string }) {
         </aside>
       </div>}
 
+      {party && <section className="activity-card"><div className="card-title-row"><h2>🔊 ROOM NOISE</h2><span>📜 FULL PARTY HISTORY</span></div><div className="activity-list" role="log" aria-live="polite" aria-label="Scrollable history of songs and reactions since the party began">{[...(party.activity ?? [])].reverse().map((item) => <div className={`activity-row ${item.tone}${item.tone === "song" ? " song-start" : ""}`} key={item.id}><span className="activity-avatar">{item.avatar}</span>{item.tone === "song" ? <p><strong>🎶 Now playing:</strong> <span dir="auto">{item.trackTitle}</span></p> : <p><span className="activity-emoji" aria-hidden="true">{item.tone === "up" ? "🎉" : "👻"}</span> <strong>{item.name}</strong> {item.message} <b dir="auto">“{item.trackTitle}”</b></p>}<span className="activity-icon" aria-hidden="true">{item.icon}</span><time dateTime={item.createdAt}>{activityTime(item.createdAt)}</time></div>)}{!(party.activity ?? []).length && <p className="quiet-feed">{ended ? "📼 A remarkably peaceful party. No songs or reactions made the history book." : "🦗 It’s suspiciously quiet in here… The full story will appear here."}</p>}</div><p className="activity-scroll-hint">↕️ Scroll through the history. At either end, keep scrolling to continue through the page.</p></section>}
+
       {party && <section className="my-music-card" aria-labelledby="my-music-title">
-        <div className="my-music-heading"><div><p className="eyebrow">🔐 PRIVATE TO THIS BROWSER</p><h2 id="my-music-title">🎧 My music</h2></div><p>Your picks and your reactions. Nobody else gets this backstage pass.</p></div>
+        <div className="my-music-heading"><div><p className="eyebrow">🔐 PRIVATE TO THIS BROWSER</p><h2 id="my-music-title">🎧 My music</h2></div><div className="my-music-heading-copy"><p>Your picks and your reactions. Nobody else gets this backstage pass.</p><strong className="my-music-total"><span>⏱️ TOTAL MUSIC EVER ADDED</span>{totalMusicTime(myMusicSeconds)}</strong></div></div>
         <div className="my-music-grid">
           <article className="my-music-column my-queue-column">
             <div className="my-column-title"><div><span>{ended ? "📦" : "🤫"}</span><div><h3>{ended ? "Left in my queue" : "Still in my queue"}</h3><p>{ended ? "The party ended before these escaped." : "The room still hides when they’ll play."}</p></div></div><b>{waitingSongs.length}</b></div>
@@ -244,8 +261,6 @@ export default function PartyRoom({ code }: { code: string }) {
           </article>
         </div>
       </section>}
-
-      {party && <section className="activity-card"><div className="card-title-row"><h2>🔊 ROOM NOISE</h2><span>📜 FULL PARTY HISTORY</span></div><div className="activity-list" role="log" aria-live="polite" aria-label="Scrollable history of songs and reactions since the party began">{[...(party.activity ?? [])].reverse().map((item) => <div className={`activity-row ${item.tone}${item.tone === "song" ? " song-start" : ""}`} key={item.id}><span className="activity-avatar">{item.avatar}</span>{item.tone === "song" ? <p><strong>🎶 Now playing:</strong> <span dir="auto">{item.trackTitle}</span></p> : <p><span className="activity-emoji" aria-hidden="true">{item.tone === "up" ? "🎉" : "👻"}</span> <strong>{item.name}</strong> {item.message} <b dir="auto">“{item.trackTitle}”</b></p>}<span className="activity-icon" aria-hidden="true">{item.icon}</span><time dateTime={item.createdAt}>{activityTime(item.createdAt)}</time></div>)}{!(party.activity ?? []).length && <p className="quiet-feed">{ended ? "📼 A remarkably peaceful party. No songs or reactions made the history book." : "🦗 It’s suspiciously quiet in here… The full story will appear here."}</p>}</div><p className="activity-scroll-hint">↕️ Scroll inside Room Noise to travel all the way back to the party’s first song.</p></section>}
 
       {!ended && addOpen && party && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setAddOpen(false)}><section className="song-modal spotify-song-modal" role="dialog" aria-modal="true" aria-labelledby="add-song-title"><div className="modal-topline"><div><p className="eyebrow">🤫 SECRET WEAPON</p><h2 id="add-song-title">🎵 Add a Spotify song</h2></div><button className="close-button" type="button" onClick={() => setAddOpen(false)} aria-label="Close">×</button></div><div className="spotify-add-guide"><strong>🟢 Spotify → Share → Copy song link</strong><span>Paste the track below. Its title is checked before it joins the secret queue.</span></div><form className="link-form spotify-link-form" onSubmit={(event) => void submitLink(event)}><label htmlFor="song-link">SPOTIFY TRACK LINK</label><input id="song-link" name="song-link" type="url" inputMode="url" autoComplete="off" placeholder="https://open.spotify.com/track/..." required /><button type="submit" disabled={busy || party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON}>{busy ? "🔎 Checking Spotify…" : party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON ? "🚧 Your waiting queue is full" : "🤫 Add to the secret queue →"}</button></form><p className="queue-note">🕵️ The queue stays secret. You have {Math.max(0, MAX_PENDING_TRACKS_PER_PERSON - party.pendingCount)} of {MAX_PENDING_TRACKS_PER_PERSON} waiting slots left. Played and skipped songs free their slots.</p></section></div>}
 

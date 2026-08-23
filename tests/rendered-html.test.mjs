@@ -180,7 +180,7 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /FULL PARTY HISTORY/);
   assert.match(source, /activityAfter=/);
   assert.match(source, /Scrollable history of songs and reactions since the party began/);
-  assert.match(source, /Scroll inside Room Noise/);
+  assert.match(source, /At either end, keep scrolling to continue through the page/);
   assert.match(source, /item\.tone === "up" \? "🎉" : "👻"/);
   assert.match(source, /🦗 It’s suspiciously quiet/);
   assert.match(source, /Vote locked for this song\. No take-backs/);
@@ -200,6 +200,9 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /A remarkably peaceful party/);
   assert.match(source, /!ended && addOpen && party/);
   assert.match(source, /🎧 My music/);
+  assert.ok(source.indexOf("🔊 ROOM NOISE") < source.indexOf("🎧 My music"));
+  assert.match(source, /TOTAL MUSIC EVER ADDED/);
+  assert.match(source, /totalMusicTime\(myMusicSeconds\)/);
   assert.match(source, /Still in my queue/);
   assert.match(source, /My played songs/);
   assert.match(source, /My reactions/);
@@ -231,8 +234,14 @@ test("renders a code-specific participant room", async () => {
   assert.match(partySource, /WHERE event_id = \? AND participant_id = \?/);
   assert.match(partySource, /WHERE r\.event_id = \? AND r\.participant_id = \?/);
   assert.match(partySource, /export async function removePendingTrack/);
-  assert.match(partySource, /DELETE FROM submissions[\s\S]*participant_id = \? AND status = 'pending'/);
+  assert.match(partySource, /UPDATE submissions SET status = 'removed'[\s\S]*participant_id = \? AND status = 'pending'/);
+  assert.match(partySource, /SELECT id FROM submissions WHERE event_id = \? AND provider_track_id = \? LIMIT 1/);
+  assert.match(partySource, /That song is already part of this party/);
   assert.match(partySource, /That song is no longer waiting in your queue/);
+  const participantStyles = await readFile(new URL("app/globals.css", projectRoot), "utf8");
+  assert.match(participantStyles, /\.my-track-list \{[^}]*overscroll-behavior-y: auto/);
+  assert.match(participantStyles, /\.activity-list \{[^}]*overscroll-behavior-y: auto/);
+  assert.match(participantStyles, /\.event-heading \{ z-index: 20; \}/);
   const partyRouteSource = await readFile(new URL("app/api/party/route.ts", projectRoot), "utf8");
   assert.match(partyRouteSource, /body\.action === "remove" && body\.submissionId/);
   assert.match(partyRouteSource, /protectPartyAction\(request, body\.action, code, participantId\)/);
