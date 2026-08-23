@@ -38,3 +38,22 @@ yarn-error.log*
 /.wrangler/
 /outputs/
 /work/
+
+# Google Cloud and GitHub authentication
+gha-creds-*.json
+application_default_credentials.json
+service-account*.json
+*-service-account.json
+google-credentials*.json
+/.gcloud/
+/.firebase/
+firebase-debug.log*
+
+# Private keys and certificates
+*.key
+*.p12
+*.pfx
+
+# Local editor settings
+/.idea/
+/.vscode/
