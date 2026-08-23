@@ -985,7 +985,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .spotify-connected-row strong { font-size: 15px; }
 .spotify-connected-row p, .spotify-loading { margin: 5px 0 0; font-size: 12px; font-weight: 720; }
 .spotify-message { margin: 16px 0 0; border-top: 1px solid var(--ink); padding-top: 12px; font-size: 11px; font-weight: 800; }
-.host-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 24px; margin-top: 32px; }
+.host-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 24px; align-items: start; margin-top: 32px; }
 .host-now-card, .host-controls-card, .host-queue-card, .leaderboard-card { border: 2px solid var(--ink); background: var(--white); box-shadow: 7px 7px 0 var(--ink); animation: card-arrive .58s .14s cubic-bezier(.2, .75, .25, 1) both; }
 .host-controls-card { animation-delay: .2s; }
 .host-queue-card { animation-delay: .23s; }
@@ -1008,10 +1008,10 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .unplayable-track strong { font-size: 12px; }
 .unplayable-track span { font-size: 11px; font-weight: 700; }
 .host-reaction-counts { display: grid; grid-template-columns: 1fr 1fr; border-top: 2px solid var(--ink); }
-.host-reaction-counts > div { display: flex; align-items: baseline; justify-content: space-between; padding: 18px 22px; }
+.host-reaction-counts > div { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; min-height: 82px; padding: 14px 22px; }
 .host-reaction-counts > div:first-child { border-right: 2px solid var(--ink); }
 .host-cheers { background: var(--sun); } .host-boos { background: var(--coral); }
-.host-reaction-counts strong { font-size: 36px; } .host-reaction-counts span { font-size: 10px; font-weight: 900; letter-spacing: .1em; }
+.host-reaction-counts strong { font-size: 42px; line-height: 1; } .host-reaction-counts span { justify-self: end; font-size: 10px; font-weight: 900; letter-spacing: .1em; white-space: nowrap; }
 .host-controls-card { padding: 20px; }
 .host-controls-retired { display: grid; align-content: start; background: var(--mint); }
 .host-controls-retired .card-title-row > span { border: 2px solid var(--ink); background: var(--white); padding: 5px 7px; font-size: 8px; font-weight: 950; letter-spacing: .1em; }

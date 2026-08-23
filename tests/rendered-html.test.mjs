@@ -317,7 +317,9 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /THE AUX CABLE HAS BEEN RETIRED/);
   assert.match(source, /CONTROLS FROZEN/);
   assert.match(source, /UNPLAYED AT CLOSING/);
-  assert.match(source, /!partyStatus \|\| partyStatus === "ended"/);
+  assert.match(source, /const partyEnded = partyStatus === "ended"/);
+  assert.match(source, /if \(!participantId \|\| !hostKey \|\| partyEnded\) return/);
+  assert.match(source, /\[code, getSpotifyToken, hostKey, participantId, partyEnded\]/);
   assert.match(source, /party\.status !== "ended" && <section className=\{`spotify-connect-card/);
   assert.match(source, /party\.status !== "ended" && endConfirmOpen/);
   assert.match(source, /🙌 CHEERS/);
@@ -333,6 +335,11 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /player\.setVolume\(volume\)/);
   assert.match(source, /hostDevice === "ios"/);
   assert.match(source, /player\.resume\(\)/);
+  assert.match(source, /Start speaker →/);
+  assert.match(source, /Starts Spotify only\. Funny sounds stay off/);
+  assert.match(source, /Disable funny sounds/);
+  assert.match(source, /function disableAudio\(\)/);
+  assert.doesNotMatch(source, /Start speaker \+ funny sounds/);
   assert.match(source, /wakeLock\.request\("screen"\)/);
   assert.match(source, /visibilitychange/);
   assert.match(source, /Keep this screen awake/);
@@ -346,6 +353,9 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /Start the party now/);
   assert.match(source, /Let the queue marinate/);
   assert.doesNotMatch(source, /speechSynthesis|SpeechSynthesisUtterance/);
+  const hostStyles = await readFile(new URL("app/globals.css", projectRoot), "utf8");
+  assert.match(hostStyles, /\.host-grid \{[^}]*align-items: start/);
+  assert.match(hostStyles, /\.host-reaction-counts > div \{[^}]*align-items: center;[^}]*min-height: 82px/);
   const partySource = await readFile(new URL("db/party.ts", projectRoot), "utf8");
   assert.match(partySource, /const queuedTracks = isHost/);
   assert.match(partySource, /s\.status = 'pending'/);
