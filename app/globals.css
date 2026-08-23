@@ -515,10 +515,35 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 }
 .host-toast { bottom: 22px; }
 
-.shape { position: fixed; z-index: -1; border: 2px solid var(--ink); pointer-events: none; will-change: transform; }
+.landing-topbar, .landing-hero, .hosted-history, .landing-footer,
+.party-shell > .topbar, .event-heading, .ended-banner, .lobby-banner, .party-grid, .activity-card { position: relative; z-index: 1; }
+.shape {
+  position: fixed;
+  z-index: 0;
+  border: 2px solid var(--ink);
+  opacity: 1;
+  pointer-events: auto;
+  rotate: 0deg;
+  scale: 1;
+  will-change: transform;
+  transition: rotate .8s cubic-bezier(.16, 1, .3, 1), scale .65s cubic-bezier(.16, 1, .3, 1), border-radius .7s cubic-bezier(.16, 1, .3, 1), box-shadow .45s ease, filter .45s ease, opacity .45s ease;
+}
+.shape::before { content: ""; position: absolute; inset: -22px; }
+.shape::after { content: ""; position: absolute; inset: 18%; border: 2px solid var(--ink); border-radius: 3px; opacity: 0; transform: scale(.45) rotate(-80deg); transition: opacity .28s ease, transform .7s cubic-bezier(.16, 1, .3, 1), border-radius .6s ease; }
 .shape-one { width: 80px; height: 80px; top: 12%; left: -38px; border-radius: 50%; background: var(--blue); animation: shape-float-one 8s ease-in-out infinite; }
 .shape-two { width: 62px; height: 62px; top: 4%; right: 4%; background: var(--sun); transform: rotate(14deg); animation: shape-float-two 10s ease-in-out infinite; }
 .shape-three { width: 34px; height: 110px; bottom: 6%; right: 2%; background: var(--coral); transform: rotate(-35deg); animation: shape-float-three 9s ease-in-out infinite; }
+
+@media (hover: hover) and (pointer: fine) {
+  .shape { cursor: crosshair; }
+  .landing-shell:has(.shape:hover) .shape:not(:hover),
+  .party-shell:has(.shape:hover) .shape:not(:hover) { opacity: .48; scale: .82; rotate: -9deg; filter: saturate(.72); }
+  .shape:hover { scale: 1.28; border-radius: 30% 70% 58% 42%; box-shadow: 9px 9px 0 var(--ink); filter: saturate(1.3); }
+  .shape:hover::after { opacity: 1; border-radius: 50%; transform: scale(1) rotate(100deg); }
+  .shape-one:hover { rotate: 125deg; }
+  .shape-two:hover { rotate: 185deg; border-radius: 50%; }
+  .shape-three:hover { rotate: 18deg; scale: 1.34; border-radius: 999px; }
+}
 
 @keyframes pulse { 50% { opacity: .35; transform: scale(.8); } }
 @keyframes background-drift { to { background-position: 28px 28px; } }
