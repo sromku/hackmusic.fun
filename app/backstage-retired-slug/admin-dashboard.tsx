@@ -183,7 +183,7 @@ export default function AdminDashboard({ ownerEmail, signOutPath }: { ownerEmail
 
     setBackupBusy(true);
     try {
-      const response = await fetch("/api/backstage-retired-slug/backup", { cache: "no-store" });
+      const response = await fetch("/api/backstage-retired-slug/backup", { method: "POST", cache: "no-store" });
       const data = await response.json() as BackupResponse & { error?: string };
       if (!response.ok) throw new Error(data.error ?? "Could not prepare the backup.");
       const envelope = await encryptBackupSnapshot(data.backup, backupPassphrase);

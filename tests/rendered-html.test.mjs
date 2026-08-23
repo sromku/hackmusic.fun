@@ -457,6 +457,10 @@ test("protects the hosted read-only admin with ChatGPT identity and an owner all
   assert.match(backupRouteSource, /getChatGPTUser/);
   assert.match(backupRouteSource, /adminAccessForEmail/);
   assert.match(backupRouteSource, /readPortableBackup/);
+  assert.match(backupRouteSource, /assertSameOriginMutation/);
+  assert.match(backupRouteSource, /consumeRequestLimit/);
+  assert.match(backupRouteSource, /subject: user\.userId/);
+  assert.match(backupRouteSource, /maximum: 3/);
   assert.match(backupRouteSource, /no-store, private/);
   const adminSource = await readFile(new URL("db/admin.ts", projectRoot), "utf8");
   assert.doesNotMatch(adminSource, /host_pin/);

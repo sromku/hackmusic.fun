@@ -78,15 +78,34 @@ test("exports all durable D1 tables only for the allowlisted ChatGPT owner", asy
   db.prepare("INSERT INTO room_creation_limits (client_key, window_kind, window_start, attempts, expires_at) VALUES (?, ?, ?, ?, ?)")
     .bind("temporary-client-key", "day", 1, 1, 2).run();
 
-  const unauthenticated = await requestWorker("/api/backstage-retired-slug/backup", {}, bindings);
+  const unauthenticated = await requestWorker("/api/backstage-retired-slug/backup", { method: "POST" }, bindings);
   assert.equal(unauthenticated.status, 401);
 
   const forbidden = await requestWorker("/api/backstage-retired-slug/backup", {
+    method: "POST",
     headers: { "oai-authenticated-user-id": "stranger", "oai-authenticated-user-email": "stranger@example.com" },
   }, bindings);
   assert.equal(forbidden.status, 403);
 
+  const crossOrigin = await requestWorker("/api/backstage-retired-slug/backup", {
+    method: "POST",
+    headers: {
+      "oai-authenticated-user-id": "owner",
+      "oai-authenticated-user-email": "sromku@gmail.com",
+      origin: "https://evil.example",
+      "sec-fetch-site": "cross-site",
+    },
+  }, bindings);
+  assert.equal(crossOrigin.status, 403);
+  assert.match((await crossOrigin.json()).error, /must start from HackMusic/i);
+
+  const oldGet = await requestWorker("/api/backstage-retired-slug/backup", {
+    headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "sromku@gmail.com" },
+  }, bindings);
+  assert.equal(oldGet.status, 405);
+
   const response = await requestWorker("/api/backstage-retired-slug/backup", {
+    method: "POST",
     headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "sromku@gmail.com" },
   }, bindings);
   assert.equal(response.status, 200, await response.clone().text());
@@ -103,5 +122,20 @@ test("exports all durable D1 tables only for the allowlisted ChatGPT owner", asy
   assert.equal("room_creation_limits" in backup.tables, false);
   assert.equal("host_transfers" in backup.tables, false);
   assert.doesNotMatch(JSON.stringify(backup), /temporary-client-key/);
+
+  for (let attempt = 2; attempt <= 3; attempt += 1) {
+    const allowed = await requestWorker("/api/backstage-retired-slug/backup", {
+      method: "POST",
+      headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "sromku@gmail.com" },
+    }, bindings);
+    assert.equal(allowed.status, 200, `attempt ${attempt} should be allowed`);
+  }
+  const limited = await requestWorker("/api/backstage-retired-slug/backup", {
+    method: "POST",
+    headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "sromku@gmail.com" },
+  }, bindings);
+  assert.equal(limited.status, 429);
+  assert.match(limited.headers.get("retry-after") ?? "", /^\d+$/);
+  assert.match((await limited.json()).error, /too many requests/i);
   db.close();
 });
