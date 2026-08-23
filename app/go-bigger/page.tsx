@@ -26,9 +26,9 @@ export const metadata: Metadata = {
 };
 
 const possibilities = [
-  { icon: "🍽️", title: "Restaurants & bars", copy: "Turn the room into the DJ without surrendering the aux cable to one suspiciously confident table." },
-  { icon: "🏢", title: "Company events", copy: "Branded rooms, team rules, bigger crowds, and a playlist people actually participate in." },
-  { icon: "🎪", title: "Venues & conferences", copy: "A tailored setup for your screens, flow, moderation needs, and delightfully specific flavor of chaos." },
+  { icon: "🍽️", title: "Restaurants & bars", copy: "Turn the room into the DJ without surrendering the aux cable to one suspiciously confident table.", perks: ["TABLE QR CODES", "HOST MODERATION", "BRANDED ROOM"] },
+  { icon: "🏢", title: "Company events", copy: "Branded rooms, team rules, bigger crowds, and a playlist people actually participate in.", perks: ["TEAM COLORS", "CUSTOM RULES", "BIG-SCREEN MODE"] },
+  { icon: "🎪", title: "Venues & conferences", copy: "A tailored setup for your screens, flow, moderation needs, and delightfully specific flavor of chaos.", perks: ["LARGER CROWDS", "RUN-OF-SHOW FIT", "DEDICATED SETUP"] },
 ];
 
 const customIdeas = [
@@ -87,6 +87,7 @@ export default function GoBiggerPage() {
               <span className="bigger-card-icon" aria-hidden="true">{item.icon}</span>
               <h3>{item.title}</h3>
               <p>{item.copy}</p>
+              <div className="bigger-card-perks" aria-label={`${item.title} possibilities`}>{item.perks.map((perk) => <span key={perk}>{perk}</span>)}</div>
             </article>
           ))}
         </div>

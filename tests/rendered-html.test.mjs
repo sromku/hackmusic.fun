@@ -148,6 +148,10 @@ test("renders the commercial go bigger page with an email path", async () => {
   assert.match(html, /Restaurants &amp; bars/);
   assert.match(html, /Company events/);
   assert.match(html, /Venues &amp; conferences/);
+  assert.match(html, /TABLE QR CODES/);
+  assert.match(html, /BIG-SCREEN MODE/);
+  assert.match(html, /RUN-OF-SHOW FIT/);
+  assert.equal((html.match(/class="bigger-card-perks"/g) ?? []).length, 3);
   assert.match(html, /Custom chaos\. Sensibly invoiced/);
   assert.match(html, /bigger-word word-restaurant/);
   assert.match(html, /bigger-word word-gravity/);
