@@ -1378,6 +1378,18 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .admin-panel-title { display: flex; justify-content: space-between; gap: 14px; align-items: center; border-bottom: 2px solid var(--ink); padding: 16px 18px; }
 .admin-panel-title h2, .admin-panel-title h3 { margin: 0; }
 .admin-panel-title span { font-size: 10px; font-weight: 950; letter-spacing: .1em; text-transform: uppercase; }
+.admin-backup { margin: 48px 0 26px; }
+.admin-backup-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(360px, .95fr); }
+.admin-backup-copy { border-right: 2px solid var(--ink); background: var(--mint); padding: clamp(24px, 4vw, 48px); }
+.admin-backup-copy h3 { max-width: 620px; margin: 8px 0 16px; font-size: clamp(36px, 5vw, 68px); line-height: .95; letter-spacing: -.065em; }
+.admin-backup-copy > p:not(.eyebrow) { max-width: 680px; margin: 0; font-weight: 750; line-height: 1.55; }
+.admin-backup-copy ul { display: grid; gap: 10px; margin: 26px 0 0; padding: 0; list-style: none; font-size: 12px; font-weight: 850; }
+.admin-backup-form { display: grid; align-content: center; gap: 10px; background: var(--sun); padding: clamp(24px, 4vw, 48px); }
+.admin-backup-form label { margin-top: 5px; font-size: 10px; font-weight: 950; letter-spacing: .1em; }
+.admin-backup-form input { width: 100%; min-height: 52px; border: 2px solid var(--ink); background: var(--white); padding: 0 14px; font: inherit; }
+.admin-backup-form button { min-height: 56px; margin-top: 8px; border: 2px solid var(--ink); background: var(--blue); box-shadow: 5px 5px 0 var(--ink); padding: 10px 16px; cursor: pointer; font: inherit; font-weight: 950; }
+.admin-backup-form button:disabled { cursor: wait; opacity: .65; }
+.admin-backup-notice { margin: 12px 0 0; border-left: 4px solid var(--ink); background: var(--white); padding: 12px; font-size: 11px; font-weight: 850; line-height: 1.45; }
 .admin-room-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .admin-room-list > button { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: 16px; align-items: center; min-height: 130px; border: 0; border-bottom: 1px solid #d1cabb; background: transparent; padding: 20px; cursor: pointer; text-align: left; }
 .admin-room-list > button:nth-child(odd) { border-right: 1px solid #d1cabb; }
@@ -1420,6 +1432,8 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
   .admin-analytics-grid { grid-template-columns: 1fr; }
   .admin-traffic-trend { grid-column: 1; }
   .admin-room-list { grid-template-columns: 1fr; }
+  .admin-backup-grid { grid-template-columns: 1fr; }
+  .admin-backup-copy { border-right: 0; border-bottom: 2px solid var(--ink); }
   .admin-room-list > button:nth-child(odd) { border-right: 0; }
   .admin-detail-grid { grid-template-columns: 1fr; }
 }

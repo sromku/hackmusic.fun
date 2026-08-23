@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { encryptBackupSnapshot } from "../../lib/backup-encryption";
 
 type AdminOverview = {
   generatedAt: string;
@@ -39,6 +40,14 @@ type AdminRoom = {
   submissions: Array<{ title: string; artist: string; duration: string; status: string; skipReason: string | null; skipPercent: number | null; submittedBy: string; submittedAt: string }>;
   reactions: Array<{ kind: string; actor: string; track: string; createdAt: string }>;
   activity: Array<{ kind: string; actor: string | null; track: string | null; createdAt: string }>;
+};
+
+type BackupResponse = {
+  backup: {
+    exportedAt: string;
+    counts: Record<string, number>;
+    [key: string]: unknown;
+  };
 };
 
 function date(value: string | null) {
@@ -126,6 +135,10 @@ export default function AdminDashboard({ ownerEmail, signOutPath }: { ownerEmail
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [backupPassphrase, setBackupPassphrase] = useState("");
+  const [backupConfirmation, setBackupConfirmation] = useState("");
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupNotice, setBackupNotice] = useState("");
 
   const loadOverview = useCallback(async () => {
     setLoading(true);
@@ -157,9 +170,47 @@ export default function AdminDashboard({ ownerEmail, signOutPath }: { ownerEmail
     finally { setLoading(false); }
   }
 
+  async function downloadEncryptedBackup() {
+    setBackupNotice("");
+    if (backupPassphrase.length < 12) {
+      setBackupNotice("Use at least 12 characters. A memorable multi-word passphrase is excellent.");
+      return;
+    }
+    if (backupPassphrase !== backupConfirmation) {
+      setBackupNotice("The two passphrases do not match yet.");
+      return;
+    }
+
+    setBackupBusy(true);
+    try {
+      const response = await fetch("/api/backstage-retired-slug/backup", { cache: "no-store" });
+      const data = await response.json() as BackupResponse & { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Could not prepare the backup.");
+      const envelope = await encryptBackupSnapshot(data.backup, backupPassphrase);
+      const blob = new Blob([JSON.stringify(envelope)], { type: "application/vnd.hackmusic.backup+json" });
+      const link = document.createElement("a");
+      const stamp = data.backup.exportedAt.replaceAll(":", "-").replace(/\.\d{3}Z$/, "Z");
+      const downloadUrl = URL.createObjectURL(blob);
+      link.href = downloadUrl;
+      link.download = `hackmusic-backup-${stamp}.hackmusic-backup`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
+      const rows = Object.values(data.backup.counts).reduce((sum, count) => sum + count, 0);
+      setBackupNotice(`✅ Encrypted ${number(rows)} database rows. Store the file and passphrase separately.`);
+      setBackupPassphrase("");
+      setBackupConfirmation("");
+    } catch (error) {
+      setBackupNotice(error instanceof Error ? error.message : "Could not create the encrypted backup.");
+    } finally {
+      setBackupBusy(false);
+    }
+  }
+
   return <main className="hosted-admin-shell">
     <header className="admin-topbar"><a className="brand" href="/"><span className="brand-mark">HM</span><span>HackMusic Admin</span></a><div className="admin-identity"><span>🔐 {ownerEmail}</span><a href={signOutPath}>Sign out</a></div></header>
-    <section className="admin-hero"><div><p className="eyebrow">🪩 DATABASE BACKSTAGE</p><h1>Party<br />evidence.</h1></div><div className="admin-hero-note"><strong>Owner only. Read only.</strong><span>No host keys. Boo identities remain anonymous. Chaos, but with boundaries.</span></div></section>
+    <section className="admin-hero"><div><p className="eyebrow">🪩 DATABASE BACKSTAGE</p><h1>Party<br />evidence.</h1></div><div className="admin-hero-note"><strong>Owner only. Read only.</strong><span>Room inspection hides host keys. Boo identities remain anonymous. Chaos, but with boundaries.</span></div></section>
     {message && <p className="admin-message" role="alert">{message}</p>}
     {!selected ? <>
       <section className="admin-toolbar"><label htmlFor="admin-search">FIND A ROOM</label><input id="admin-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Room code or event name" /><button type="button" disabled={loading} onClick={() => void loadOverview()}>{loading ? "Refreshing…" : "↻ Refresh data"}</button><span>{overview ? `Updated ${date(overview.generatedAt)}` : "Connecting…"}</span></section>
@@ -209,6 +260,29 @@ export default function AdminDashboard({ ownerEmail, signOutPath }: { ownerEmail
           <AnalyticsBreakdown title="🌎 Countries" note="Provider code" rows={overview.analytics.countries} />
         </div>
       </section>}
+      <section className="admin-panel admin-backup" aria-labelledby="admin-backup-heading">
+        <div className="admin-panel-title"><h2 id="admin-backup-heading">🧳 Disaster recovery</h2><span>Manual · owner only</span></div>
+        <div className="admin-backup-grid">
+          <div className="admin-backup-copy">
+            <p className="eyebrow">COMPLETE ENCRYPTED EXPORT</p>
+            <h3>Take the database with you.</h3>
+            <p>Downloads every room, human, track, reaction, party-history event, and privacy-preserving analytics row. Temporary anti-spam counters stay behind because they are not product data.</p>
+            <ul>
+              <li>🔐 AES-256-GCM encryption happens only in this browser.</li>
+              <li>🧠 Your passphrase is never sent to HackMusic or stored anywhere.</li>
+              <li>⚠️ No “forgot password” button exists. Keep it somewhere sensible.</li>
+            </ul>
+          </div>
+          <form className="admin-backup-form" onSubmit={(event) => { event.preventDefault(); void downloadEncryptedBackup(); }}>
+            <label htmlFor="backup-passphrase">BACKUP PASSPHRASE</label>
+            <input id="backup-passphrase" type="password" minLength={12} autoComplete="new-password" value={backupPassphrase} onChange={(event) => setBackupPassphrase(event.target.value)} placeholder="12+ characters; longer is calmer" />
+            <label htmlFor="backup-confirmation">TYPE IT AGAIN</label>
+            <input id="backup-confirmation" type="password" minLength={12} autoComplete="new-password" value={backupConfirmation} onChange={(event) => setBackupConfirmation(event.target.value)} placeholder="Confirm the secret phrase" />
+            <button type="submit" disabled={backupBusy}>{backupBusy ? "Encrypting the evidence…" : "🔒 Download encrypted backup"}</button>
+            {backupNotice && <p className="admin-backup-notice" role="status">{backupNotice}</p>}
+          </form>
+        </div>
+      </section>
       <section className="admin-panel"><div className="admin-panel-title"><h2>🎉 Rooms</h2><span>Newest 100</span></div><div className="admin-room-list">{rooms.map((room) => <button type="button" onClick={() => void openRoom(room.code)} key={room.code}><strong className="admin-room-code">{room.code}</strong><span><b>{room.title}</b><small>{date(room.createdAt)} · {room.queueMode}</small><small>{room.participants} humans · {room.tracks} tracks · {room.reactions} reactions</small></span><i className={`admin-room-status ${room.status}`}>{room.status}</i></button>)}{!loading && !rooms.length && <p className="admin-empty">{search ? "No matching rooms." : "No parties have left evidence yet."}</p>}</div></section>
     </> : <section className="admin-detail"><button className="admin-back" type="button" onClick={() => setSelected(null)}>← All rooms</button><div className="admin-detail-heading"><div><p className="eyebrow">ROOM {selected.room.code}</p><h2>{selected.room.title}</h2><p>{selected.room.status.toUpperCase()} · {selected.room.queueMode} queue{selected.room.scheduledFor ? ` · expected ${date(selected.room.scheduledFor)}` : ""} · created {date(selected.room.createdAt)}</p></div></div><div className="admin-detail-grid">
       <section className="admin-panel"><div className="admin-panel-title"><h3>👥 Participants</h3><span>{selected.participants.length} rows</span></div><DataTable columns={[{ key: "name", label: "Name" }, { key: "score", label: "Score" }, { key: "joinedAt", label: "Joined", format: (value) => date(String(value)) }]} rows={selected.participants} /></section>

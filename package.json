@@ -12,6 +12,7 @@
     "test": "npm run build && node --import ./tests/support/register-cloudflare.mjs --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "deploy:prepare": "./scripts/prepare-openai-sites-deploy.sh",
+    "backup:decrypt": "node ./scripts/decrypt-hackmusic-backup.mjs",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {

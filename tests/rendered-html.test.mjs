@@ -431,7 +431,7 @@ test("protects the hosted read-only admin with ChatGPT identity and an owner all
   const dashboardSource = await readFile(new URL("app/backstage-retired-slug/admin-dashboard.tsx", projectRoot), "utf8");
   assert.match(dashboardSource, /Owner only\. Read only/);
   assert.match(dashboardSource, /\/api\/backstage-retired-slug/);
-  assert.match(dashboardSource, /No host keys/);
+  assert.match(dashboardSource, /Room inspection hides host keys/);
   assert.match(dashboardSource, /Website traffic/);
   assert.match(dashboardSource, /Site pulse/);
   assert.match(dashboardSource, /Daily party activity/);
@@ -440,6 +440,14 @@ test("protects the hosted read-only admin with ChatGPT identity and an owner all
   assert.match(dashboardSource, /Day by day/);
   assert.match(dashboardSource, /Top pages/);
   assert.match(dashboardSource, /No raw IPs, room codes, query strings/);
+  assert.match(dashboardSource, /Disaster recovery/);
+  assert.match(dashboardSource, /Download encrypted backup/);
+  assert.match(dashboardSource, /encryptBackupSnapshot/);
+  const backupRouteSource = await readFile(new URL("app/api/backstage-retired-slug/backup/route.ts", projectRoot), "utf8");
+  assert.match(backupRouteSource, /getChatGPTUser/);
+  assert.match(backupRouteSource, /adminAccessForEmail/);
+  assert.match(backupRouteSource, /readPortableBackup/);
+  assert.match(backupRouteSource, /no-store, private/);
   const adminSource = await readFile(new URL("db/admin.ts", projectRoot), "utf8");
   assert.doesNotMatch(adminSource, /host_pin/);
   assert.match(adminSource, /Anonymous boo/);

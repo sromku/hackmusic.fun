@@ -68,7 +68,21 @@ When adding a feature, prefer one meaningful flow or edge-case test over impleme
 
 Cloudflare D1 is exposed to the worker as the `DB` binding declared in `.openai/hosting.json`. Spotify and admin secrets belong in hosted secrets or ignored local environment files. Never commit client secrets, session encryption keys, host keys, passcodes, production database exports, or `.env*` files other than `.env.example`.
 
-The read-only owner dashboard lives at its intentionally unlinked backstage route. It requires ChatGPT sign-in and an email present in `ADMIN_ALLOWED_EMAILS`. It never returns host keys or boo identities.
+The read-only owner dashboard lives at its intentionally unlinked backstage route. It requires ChatGPT sign-in and an email present in `ADMIN_ALLOWED_EMAILS`. The room browser never returns host keys or boo identities. Its explicit backup action does include recovery-critical host keys and hashed passcodes, then encrypts the snapshot in the owner’s browser before download.
+
+## Manual encrypted backups
+
+The owner dashboard’s **Disaster recovery** panel downloads a complete, versioned database snapshot. It contains durable rooms, participants, submissions, reactions, activity history, and privacy-preserving analytics; temporary room-creation rate-limit rows are intentionally excluded.
+
+The passphrase never leaves the browser. The download uses PBKDF2-SHA-256 and AES-256-GCM, carries a plaintext SHA-256 integrity value, and contains no readable database data outside its ciphertext. Keep the file and passphrase in separate secure places. There is intentionally no password recovery mechanism.
+
+To verify and decrypt an export locally with Node.js 22 or newer:
+
+```bash
+npm run backup:decrypt -- /path/to/hackmusic-backup.hackmusic-backup
+```
+
+The script prompts without echoing the passphrase, verifies authenticated encryption and the integrity digest, refuses to overwrite an existing output, and writes the recovered JSON with owner-only filesystem permissions. Decryption is a recovery/inspection tool; importing that JSON into another database will be added as a separate, deliberate restore workflow.
 
 ## Deployment
 
