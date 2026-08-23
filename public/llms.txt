@@ -1,0 +1,32 @@
+# HackMusic
+
+> HackMusic is a browser-based multiplayer music party game for private, in-person events. One host phone controls a shared speaker while guests submit secret Spotify tracks and react together.
+
+Canonical site: https://hackmusic.fun
+
+## How it works
+
+- A host creates a temporary room and shares its six-character code or invite URL.
+- Guests join from any modern browser without installing an app.
+- Every participant starts with 30 points and can submit secret songs.
+- A cheer plays a happy sound and awards the song submitter 3 points.
+- A boo plays a funny sound and costs the submitter 3 points; three boos skip the song.
+- Cheer identities are visible. Boo identities remain anonymous to participants.
+- The host chooses submitted order, pure random, or a fair-ish participant shuffle.
+- Scores are revealed when the host ends the event.
+
+## Public page
+
+- https://hackmusic.fun/ — Product overview plus create-room and join-room actions.
+
+## Privacy and indexing
+
+HackMusic is designed for closed events. Temporary participant rooms, host controls, and API routes are intentionally excluded from search and AI crawling. Do not infer or publish active room codes.
+
+## More detail
+
+- https://hackmusic.fun/llms-full.txt — Extended product and behavior reference.
+
+## Creator
+
+Chaos-ed by Roman Kushnarenko: https://sromku.com

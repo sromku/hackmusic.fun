@@ -65,7 +65,8 @@ test("renders a code-specific participant room", async () => {
   const html = await response.text();
   assert.match(html, /Finding room[\s\S]*ABC123/);
   assert.match(html, /Join HackMusic room ABC123/);
-  assert.doesNotMatch(html, /og\.png/);
+  assert.match(html, /noindex/);
+  assert.doesNotMatch(html, /og(?:-v2)?\.png/);
   const source = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
   assert.match(source, /CHEER/);
   assert.match(source, /BOO/);
@@ -99,6 +100,28 @@ test("renders a code-specific participant room", async () => {
   assert.match(partySource, /pending\?\.count \?\? 0\) >= MAX_PENDING_TRACKS_PER_PERSON/);
   const partyRulesSource = await readFile(new URL("lib/party-rules.ts", projectRoot), "utf8");
   assert.match(partyRulesSource, /MAX_PENDING_TRACKS_PER_PERSON = 100/);
+});
+
+test("publishes crawler, sitemap, and install metadata without exposing private rooms", async () => {
+  const robotsResponse = await render("/robots.txt");
+  assert.equal(robotsResponse.status, 200);
+  const robots = await robotsResponse.text();
+  assert.match(robots, /User-Agent: \*/);
+  assert.match(robots, /Allow: \//);
+  assert.match(robots, /Disallow: \/api\//);
+  assert.match(robots, /Disallow: \/e\//);
+  assert.match(robots, /Disallow: \/host/);
+  assert.match(robots, /Sitemap: https:\/\/hackmusic\.fun\/sitemap\.xml/);
+
+  const sitemapResponse = await render("/sitemap.xml");
+  assert.equal(sitemapResponse.status, 200);
+  assert.match(await sitemapResponse.text(), /<loc>https:\/\/hackmusic\.fun<\/loc>/);
+
+  const manifestResponse = await render("/manifest.webmanifest");
+  assert.equal(manifestResponse.status, 200);
+  const manifest = await manifestResponse.json();
+  assert.equal(manifest.name, "HackMusic — Multiplayer Music Party Game");
+  assert.equal(manifest.start_url, "/");
 });
 
 test("renders a code-specific host control surface", async () => {
@@ -191,10 +214,15 @@ test("ships product metadata and removes starter artifacts", async () => {
   const response = await render();
   const html = await response.text();
   assert.match(html, /HackMusic — Let the room pick the vibe/);
-  assert.match(html, /http:\/\/localhost\/og\.png/);
+  assert.match(html, /http:\/\/localhost\/og-v2\.png/);
+  assert.match(html, /https:\/\/hackmusic\.fun/);
+  assert.match(html, /application\/ld\+json/);
+  assert.match(html, /Multiplayer music game|Secret song submissions/);
   assert.match(html, /favicon-32\.png/);
   assert.match(html, /apple-touch-icon\.png/);
-  await access(new URL("public/og.png", projectRoot));
+  await access(new URL("public/og-v2.png", projectRoot));
+  await access(new URL("public/llms.txt", projectRoot));
+  await access(new URL("public/llms-full.txt", projectRoot));
   await access(new URL("public/favicon.png", projectRoot));
   await access(new URL("public/favicon-32.png", projectRoot));
   await access(new URL("public/apple-touch-icon.png", projectRoot));

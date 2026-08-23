@@ -11,6 +11,7 @@ export async function generateMetadata({ params }: RoomPageProps): Promise<Metad
   return {
     title,
     description,
+    robots: { index: false, follow: false },
     openGraph: { title, description, images: [] },
     twitter: { title, description, images: [] },
   };

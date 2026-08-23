@@ -1,0 +1,28 @@
+# HackMusic: product reference
+
+HackMusic turns a shared playlist into a lightweight social game for roughly 6–30 people at a house party, board-game night, or hackathon. Events typically run for 3–12 hours. The product is intended for closed, in-person gatherings rather than public music distribution.
+
+## Experience
+
+The host creates a room at https://hackmusic.fun and connects the host phone to the event speaker. Guests open the invite URL, register a display name, and submit Spotify track links without seeing the queue. Playback stays on the host device.
+
+During each song, guests can do nothing, cheer, or boo. A cheer produces a short happy sound over playback and gives the submitter 3 points. A boo produces a funny sound, removes 3 points from the submitter, and stays anonymous in the participant interface. Three boos skip to the next song. The event feed keeps the full history of songs and reactions.
+
+The host can see and manage the waiting queue, enable reaction sounds, prevent the phone from sleeping when supported, skip songs, select a queue strategy, and end the party after confirmation. Queue strategies include submitted order, pure random selection, and a fair-ish shuffle that rotates among participants while preserving uncertainty.
+
+## Product principles
+
+- Fun and understandable within seconds.
+- One shared speaker, many lightweight browser clients.
+- Secret queue contents preserve surprise.
+- Visible cheers create recognition; anonymous boos reduce social friction.
+- Private event routes and host controls should not be indexed.
+- No participant installation is required.
+
+## Public canonical URL
+
+https://hackmusic.fun/
+
+## Contact
+
+Creator: Roman Kushnarenko — https://sromku.com
