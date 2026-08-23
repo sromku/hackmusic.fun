@@ -11,6 +11,7 @@ type HostParty = {
   title: string;
   status: "lobby" | "live" | "ended";
   scheduledFor: string | null;
+  requiresPasscode: boolean;
   currentTrack: { id: string; title: string; artist: string; duration: string; color: string } | null;
   people: Array<{ id: string; name: string; score: number; initials: string; color: string }>;
   reactions: Array<{ id: string; tone: "up" | "down" }>;
@@ -79,6 +80,8 @@ export default function HostRoom({ code }: { code: string }) {
   const [party, setParty] = useState<HostParty | null>(null);
   const [participantId, setParticipantId] = useState("");
   const [hostKey, setHostKey] = useState("");
+  const [joinPasscode, setJoinPasscode] = useState("");
+  const [replacementPasscode, setReplacementPasscode] = useState("");
   const [shareUrl, setShareUrl] = useState("");
   const [qrUrl, setQrUrl] = useState("");
   const [message, setMessage] = useState("");
@@ -170,12 +173,14 @@ export default function HostRoom({ code }: { code: string }) {
     const participant = window.localStorage.getItem(`hackmusic:${code}:participant`) ?? "";
     const key = window.localStorage.getItem(`hackmusic:${code}:host`) ?? "";
     const savedSpotifyClientId = window.localStorage.getItem("hackmusic:spotify:clientId") ?? "";
+    const savedJoinPasscode = window.localStorage.getItem(`hackmusic:${code}:joinPasscode`) ?? "";
     const url = `${window.location.origin}/e/${code}`;
     queueMicrotask(() => {
       setParticipantId(participant);
       setHostKey(key);
       setShareUrl(url);
       setSpotifyClientId(savedSpotifyClientId);
+      setJoinPasscode(savedJoinPasscode);
       setHostDevice(detectHostDevice(navigator.userAgent, navigator.platform, navigator.maxTouchPoints));
       if (!participant || !key) setError("This browser did not create that room, so its host controls are locked.");
     });
@@ -218,7 +223,7 @@ export default function HostRoom({ code }: { code: string }) {
   useEffect(() => {
     if (!participantId || !hostKey) return;
     let active = true;
-    const refresh = () => fetch(`/api/party?code=${encodeURIComponent(code)}&participantId=${encodeURIComponent(participantId)}&pin=${encodeURIComponent(hostKey)}`)
+    const refresh = () => fetch(`/api/party?code=${encodeURIComponent(code)}`, { headers: { "x-hackmusic-participant": participantId, "x-hackmusic-host-key": hostKey } })
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error ?? "Could not load the room.");
@@ -463,16 +468,36 @@ export default function HostRoom({ code }: { code: string }) {
   }
 
   async function copyInvite() {
-    try { await navigator.clipboard.writeText(shareUrl); setMessage("📋 Invite URL copied!"); }
+    if (!joinPasscode) { setMessage("🔐 Set a room passcode before sharing this invitation."); return; }
+    const invitation = `Join ${party?.title ?? "my HackMusic room"}\n${shareUrl}\nRoom: ${code}\nPasscode: ${joinPasscode}`;
+    try { await navigator.clipboard.writeText(invitation); setMessage("📋 Invite URL + passcode copied!"); }
     catch { setMessage("Copy the URL shown below."); }
   }
 
   async function shareInvite() {
+    if (!joinPasscode) { setMessage("🔐 Set a room passcode before sharing this invitation."); return; }
     if (navigator.share) {
-      await navigator.share({ title: party?.title ?? "HackMusic", text: `Join HackMusic room ${code}`, url: shareUrl });
+      await navigator.share({ title: party?.title ?? "HackMusic", text: `Join HackMusic room ${code}\nPasscode: ${joinPasscode}`, url: shareUrl });
     } else {
       await copyInvite();
     }
+  }
+
+  async function replaceJoinPasscode(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextPasscode = replacementPasscode.trim().toUpperCase();
+    setBusy(true);
+    try {
+      const response = await fetch("/api/party", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "passcode", code, participantId, pin: hostKey, passcode: nextPasscode }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Could not update the room passcode.");
+      window.localStorage.setItem(`hackmusic:${code}:joinPasscode`, nextPasscode);
+      setJoinPasscode(nextPasscode);
+      setReplacementPasscode("");
+      setParty(data.party);
+      setMessage("🔐 New room passcode armed. Share the new one with guests.");
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Could not update the room passcode."); }
+    finally { setBusy(false); }
   }
 
   function connectSpotify(event: React.FormEvent<HTMLFormElement>) {
@@ -547,7 +572,7 @@ export default function HostRoom({ code }: { code: string }) {
     <header className="topbar"><a className="brand" href="/"><span className="brand-mark">HM</span><span>HackMusic Host</span></a><a className="participant-link" href={`/e/${code}`}>🎉 Open participant page →</a></header>
     <div className="host-heading"><div><p className="eyebrow">🎛️ HOST CONTROL · ROOM {party.code}</p><h1>{party.title}</h1></div><span className={`host-status ${party.status}`}>{party.status === "ended" ? "🏁 PARTY ENDED" : party.status === "lobby" ? "🌙 LOBBY OPEN" : "⚡ LIVE"}</span></div>
 
-    <section className="share-room-card"><div className="share-code"><span>📱 ROOM CODE</span><strong>{party.code}</strong><p>{shareUrl}</p><div><button type="button" onClick={() => void copyInvite()}>📋 Copy invite</button><button type="button" onClick={() => void shareInvite()}>🚀 Share</button></div></div>{qrUrl && <Image unoptimized src={qrUrl} width={180} height={180} alt={`QR code to join room ${party.code}`} />}</section>
+    <section className="share-room-card"><div className="share-code"><span>📱 ROOM CODE</span><strong>{party.code}</strong>{joinPasscode ? <div className="share-passcode"><span>🔐 JOIN PASSCODE</span><strong>{joinPasscode}</strong><small>Not included in the URL or QR code. Copy/Share sends both.</small></div> : <div className="share-passcode-warning"><strong>{party.requiresPasscode ? "🔐 Passcode hidden on this browser" : "🚨 Legacy room: no passcode yet"}</strong><span>{party.requiresPasscode ? "Set a new one below if the original is lost." : "Lock it before sharing the room."}</span></div>}<details className="replace-passcode"><summary>{joinPasscode ? "Rotate room passcode" : "Set a room passcode"}</summary><form onSubmit={replaceJoinPasscode}><label htmlFor="replacement-passcode">NEW PASSCODE</label><input id="replacement-passcode" value={replacementPasscode} onChange={(event) => setReplacementPasscode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} minLength={4} maxLength={12} autoComplete="new-password" placeholder="e.g. VIBE42" required /><button type="submit" disabled={busy}>🔐 Save new passcode</button></form></details><p>{shareUrl}</p><div><button type="button" onClick={() => void copyInvite()}>📋 Copy invite</button><button type="button" onClick={() => void shareInvite()}>🚀 Share</button></div></div>{qrUrl && <Image unoptimized src={qrUrl} width={180} height={180} alt={`QR code to join room ${party.code}`} />}</section>
 
     {party.status === "lobby" && <section className="host-lobby-card"><div><p className="eyebrow">🌙 PRE-PARTY LOBBY IS OPEN</p><h2>Let the queue marinate.</h2><p>Expected start: <strong>{partyStartTime(party.scheduledFor)}</strong></p><small>Guests can join and add songs now. Playback and reactions stay locked until you start.</small></div><div className="host-lobby-action"><span><strong>{party.people.length}</strong> humans · <strong>{party.queueCount}</strong> secret songs</span><button type="button" disabled={busy} onClick={() => void control("start")}>{busy ? "🚀 Starting…" : "🚀 Start the party now →"}</button><small>You control the exact start time. This cannot return to lobby mode.</small></div></section>}
 

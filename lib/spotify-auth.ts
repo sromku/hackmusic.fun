@@ -18,20 +18,38 @@ export type SpotifySession = {
   scope: string;
 };
 
-export function encodeCookie(value: unknown) {
-  const bytes = new TextEncoder().encode(JSON.stringify(value));
+function base64Url(bytes: Uint8Array) {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-export function decodeCookie<T>(value?: string) {
+function fromBase64Url(value: string) {
+  const binary = atob(value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "="));
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+async function cookieKey() {
+  const secret = process.env.SPOTIFY_COOKIE_SECRET ?? "";
+  if (secret.length < 32) throw new Error("Spotify cookie encryption is not configured.");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
+  return crypto.subtle.importKey("raw", digest, "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+
+export async function encodeCookie(value: unknown) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const plaintext = new TextEncoder().encode(JSON.stringify(value));
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await cookieKey(), plaintext);
+  return `v1.${base64Url(iv)}.${base64Url(new Uint8Array(ciphertext))}`;
+}
+
+export async function decodeCookie<T>(value?: string) {
   if (!value) return null;
   try {
-    const base64 = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
-    const binary = atob(base64);
-    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-    return JSON.parse(new TextDecoder().decode(bytes)) as T;
+    const [version, encodedIv, encodedCiphertext] = value.split(".");
+    if (version !== "v1" || !encodedIv || !encodedCiphertext) return null;
+    const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromBase64Url(encodedIv) }, await cookieKey(), fromBase64Url(encodedCiphertext));
+    return JSON.parse(new TextDecoder().decode(plaintext)) as T;
   } catch {
     return null;
   }

@@ -1,1 +1,2 @@
 export const MAX_PENDING_TRACKS_PER_PERSON = 100;
+export const MAX_PARTICIPANTS_PER_ROOM = 200;

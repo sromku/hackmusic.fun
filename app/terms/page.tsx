@@ -50,8 +50,8 @@ const sections = [
     id: "accounts",
     title: "Rooms, host keys & devices",
     content: <>
-      <p>HackMusic does not require a participant account. A host key is saved in the browser that created the room. Anyone with access to that device and browser profile may be able to use host controls. Anyone with a participant invite link or room code may be able to enter that room.</p>
-      <p>Keep invite links and the host device appropriately private. We are not responsible for access caused by a shared device, forwarded room link, exposed code, cleared storage, compromised browser, or failure to secure the connected Spotify account.</p>
+      <p>HackMusic does not require a participant account. A host key and readable room passcode are saved in the browser that created the room. Anyone with access to that device and browser profile may be able to use host controls or reveal the passcode. Guests need both the room code and passcode to enter newly created rooms.</p>
+      <p>Keep invite links, passcodes, and the host device appropriately private. We are not responsible for access caused by a shared device, forwarded invitation, exposed code or passcode, cleared storage, compromised browser, or failure to secure the connected Spotify account.</p>
     </>,
   },
   {

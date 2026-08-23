@@ -33,10 +33,13 @@ async function initializePartySchema() {
       queue_mode TEXT NOT NULL DEFAULT 'ordered',
       current_submission_id TEXT,
       host_pin TEXT NOT NULL,
+      join_passcode_hash TEXT,
+      join_passcode_salt TEXT,
       created_at TEXT NOT NULL
     )`),
     d1.prepare(`CREATE TABLE IF NOT EXISTS participants (
       id TEXT PRIMARY KEY,
+      public_id TEXT UNIQUE,
       event_id TEXT NOT NULL,
       display_name TEXT NOT NULL,
       initials TEXT NOT NULL,
@@ -82,6 +85,8 @@ async function initializePartySchema() {
     )`),
     d1.prepare("CREATE UNIQUE INDEX IF NOT EXISTS submissions_event_track_unique ON submissions(event_id, provider_track_id)"),
     d1.prepare("CREATE UNIQUE INDEX IF NOT EXISTS reactions_submission_participant_unique ON reactions(submission_id, participant_id)"),
+    d1.prepare("CREATE INDEX IF NOT EXISTS participants_event_idx ON participants(event_id)"),
+    d1.prepare("CREATE INDEX IF NOT EXISTS submissions_event_participant_status_idx ON submissions(event_id, participant_id, status)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS activity_events_event_created_idx ON activity_events(event_id, created_at, id)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS room_creation_limits_expires_idx ON room_creation_limits(expires_at)"),
   ]);
@@ -90,6 +95,8 @@ async function initializePartySchema() {
   const missingEventColumns = [
     ["queue_mode", "ALTER TABLE events ADD COLUMN queue_mode TEXT NOT NULL DEFAULT 'ordered'"],
     ["scheduled_for", "ALTER TABLE events ADD COLUMN scheduled_for TEXT"],
+    ["join_passcode_hash", "ALTER TABLE events ADD COLUMN join_passcode_hash TEXT"],
+    ["join_passcode_salt", "ALTER TABLE events ADD COLUMN join_passcode_salt TEXT"],
   ] as const;
   for (const [column, statement] of missingEventColumns) {
     if (existingEventColumns.has(column)) continue;
@@ -99,6 +106,18 @@ async function initializePartySchema() {
       if (!(error instanceof Error) || !error.message.includes("duplicate column")) throw error;
     }
   }
+  const participantColumns = await d1.prepare("PRAGMA table_info(participants)").all<{ name: string }>();
+  if (!participantColumns.results.some((column) => column.name === "public_id")) {
+    try { await d1.prepare("ALTER TABLE participants ADD COLUMN public_id TEXT").run(); }
+    catch (error) { if (!(error instanceof Error) || !error.message.includes("duplicate column")) throw error; }
+  }
+  await d1.prepare("UPDATE participants SET public_id = 'person-' || lower(hex(randomblob(12))) WHERE public_id IS NULL").run();
+  await d1.batch([
+    d1.prepare("CREATE UNIQUE INDEX IF NOT EXISTS participants_public_id_unique ON participants(public_id)"),
+    d1.prepare("CREATE INDEX IF NOT EXISTS participants_event_idx ON participants(event_id)"),
+    d1.prepare("CREATE INDEX IF NOT EXISTS submissions_event_participant_status_idx ON submissions(event_id, participant_id, status)"),
+    d1.prepare("PRAGMA optimize"),
+  ]);
 }
 
 export function ensurePartySchema() {

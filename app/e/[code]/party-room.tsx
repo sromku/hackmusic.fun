@@ -5,11 +5,11 @@ import { MAX_PENDING_TRACKS_PER_PERSON } from "../../../lib/party-rules";
 
 type Color = "coral" | "sun" | "blue" | "mint";
 type Person = { id: string; initials: string; name: string; score: number | null; color: Color };
-type Reaction = { id: string; participantId: string; avatar: string; name: string; message: string; icon: "▲" | "▼"; tone: "up" | "down"; createdAt?: string };
-type Activity = { id: string; participantId?: string; avatar: string; name: string; message: string; icon: string; tone: "up" | "down" | "song"; trackTitle: string; createdAt: string };
+type Reaction = { id: string; mine: boolean; avatar: string; name: string; message: string; icon: "▲" | "▼"; tone: "up" | "down"; createdAt?: string };
+type Activity = { id: string; mine?: boolean; avatar: string; name: string; message: string; icon: string; tone: "up" | "down" | "song"; trackTitle: string; createdAt: string };
 type PartyState = { code: string; title: string; viewer: Person; people: Person[]; currentTrack: Track | null; reactions: Reaction[]; activity?: Activity[]; pendingCount: number; queueCount: number; status: "lobby" | "live" | "ended"; scheduledFor: string | null };
 type Track = { id: string; title: string; artist: string; duration: string; color: Color };
-type RoomSummary = { code: string; title: string; status: "lobby" | "live" | "ended"; scheduledFor: string | null };
+type RoomSummary = { code: string; title: string; status: "lobby" | "live" | "ended"; scheduledFor: string | null; requiresPasscode: boolean };
 
 function artworkVariant(seed: string) {
   return [...seed].reduce((value, character) => ((value * 31) + character.charCodeAt(0)) >>> 0, 7) % 5;
@@ -40,13 +40,14 @@ export default function PartyRoom({ code }: { code: string }) {
   const [party, setParty] = useState<PartyState | null>(null);
   const [participantId, setParticipantId] = useState("");
   const [joinName, setJoinName] = useState("");
+  const [joinPasscode, setJoinPasscode] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [showEveryone, setShowEveryone] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const myReaction = party?.reactions.find((reaction) => reaction.participantId === participantId)?.tone;
+  const myReaction = party?.reactions.find((reaction) => reaction.mine)?.tone;
   const boos = party?.reactions.filter((reaction) => reaction.tone === "down").length ?? 0;
   const ended = room?.status === "ended" || party?.status === "ended";
   const lobby = room?.status === "lobby" || party?.status === "lobby";
@@ -69,7 +70,7 @@ export default function PartyRoom({ code }: { code: string }) {
     let active = true;
     let activityHistory: Activity[] = [];
     let activityCursor = "";
-    const refresh = () => fetch(`/api/party?code=${encodeURIComponent(code)}&participantId=${encodeURIComponent(participantId)}&activityAfter=${encodeURIComponent(activityCursor)}`)
+    const refresh = () => fetch(`/api/party?code=${encodeURIComponent(code)}&activityAfter=${encodeURIComponent(activityCursor)}`, { headers: { "x-hackmusic-participant": participantId } })
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error ?? "Could not load the room.");
@@ -111,7 +112,7 @@ export default function PartyRoom({ code }: { code: string }) {
     setBusy(true);
     const id = `p-${crypto.randomUUID()}`;
     try {
-      const response = await fetch("/api/party", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "join", code, participantId: id, name: joinName }) });
+      const response = await fetch("/api/party", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "join", code, participantId: id, name: joinName, passcode: joinPasscode }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Could not join.");
       window.localStorage.setItem(`hackmusic:${code}:participant`, id);
@@ -192,7 +193,7 @@ export default function PartyRoom({ code }: { code: string }) {
 
       {addOpen && party && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setAddOpen(false)}><section className="song-modal spotify-song-modal" role="dialog" aria-modal="true" aria-labelledby="add-song-title"><div className="modal-topline"><div><p className="eyebrow">🤫 SECRET WEAPON</p><h2 id="add-song-title">🎵 Add a Spotify song</h2></div><button className="close-button" type="button" onClick={() => setAddOpen(false)} aria-label="Close">×</button></div><div className="spotify-add-guide"><strong>🟢 Spotify → Share → Copy song link</strong><span>Paste the track below. Its title is checked before it joins the secret queue.</span></div><form className="link-form spotify-link-form" onSubmit={(event) => void submitLink(event)}><label htmlFor="song-link">SPOTIFY TRACK LINK</label><input id="song-link" name="song-link" type="url" inputMode="url" autoComplete="off" placeholder="https://open.spotify.com/track/..." required /><button type="submit" disabled={busy || party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON}>{busy ? "🔎 Checking Spotify…" : party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON ? "🚧 Your waiting queue is full" : "🤫 Add to the secret queue →"}</button></form><p className="queue-note">🕵️ The queue stays secret. You have {Math.max(0, MAX_PENDING_TRACKS_PER_PERSON - party.pendingCount)} of {MAX_PENDING_TRACKS_PER_PERSON} waiting slots left. Played and skipped songs free their slots.</p></section></div>}
 
-      {!participantId && !ended && <div className="modal-backdrop join-backdrop"><form className="join-card" onSubmit={join}><span className="join-mark">HM</span><p className="eyebrow">🎟️ ROOM {room.code}</p><h2>{lobby ? "The pre-party is open 🌙" : "Who just walked in? 👀"}</h2><p>You’re joining <strong>{room.title}</strong>. {lobby ? "Pick a name and start hiding songs in the queue." : "Pick a name and collect your 30 points ⭐"}</p><label htmlFor="join-name">YOUR PARTY NAME</label><input id="join-name" value={joinName} onChange={(event) => setJoinName(event.target.value)} maxLength={24} placeholder="e.g. Dance Floor Dave" /><button type="submit" disabled={busy}>{busy ? "🚪 Joining…" : lobby ? "🌙 Enter the lobby →" : "🥳 Enter the party →"}</button><small>📱 No account. This phone remembers you for this room.</small></form></div>}
+      {!participantId && !ended && <div className="modal-backdrop join-backdrop"><form className="join-card" onSubmit={join}><span className="join-mark">HM</span><p className="eyebrow">🎟️ ROOM {room.code}</p><h2>{lobby ? "The pre-party is open 🌙" : "Who just walked in? 👀"}</h2><p>You’re joining <strong>{room.title}</strong>. {lobby ? "Pick a name and start hiding songs in the queue." : "Pick a name and collect your 30 points ⭐"}</p><label htmlFor="join-name">YOUR PARTY NAME</label><input id="join-name" value={joinName} onChange={(event) => setJoinName(event.target.value)} maxLength={24} autoComplete="nickname" placeholder="e.g. Dance Floor Dave" required />{room.requiresPasscode && <><label htmlFor="join-passcode">ROOM PASSCODE</label><input id="join-passcode" value={joinPasscode} onChange={(event) => setJoinPasscode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} minLength={4} maxLength={12} autoComplete="one-time-code" placeholder="Ask the host" required /></>}<button type="submit" disabled={busy}>{busy ? "🔐 Checking the guest list…" : lobby ? "🌙 Enter the lobby →" : "🥳 Enter the party →"}</button><small>🔐 Room code + passcode keeps random party crashers outside.</small></form></div>}
       {notice && <div className="toast" role="status">{notice}</div>}
     </main>
   );

@@ -19,6 +19,20 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
+function securedResponse(response: Response, pathname: string) {
+  const headers = new Headers(response.headers);
+  headers.set("content-security-policy", "frame-ancestors 'none'; base-uri 'self'; object-src 'none'");
+  headers.set("permissions-policy", "camera=(), microphone=(), geolocation=()");
+  headers.set("referrer-policy", "no-referrer");
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("x-frame-options", "DENY");
+  if (pathname.startsWith("/api/") || pathname.startsWith("/e/") || pathname === "/host" || pathname.startsWith("/backstage-")) {
+    headers.set("x-robots-tag", "noindex, nofollow, noarchive");
+  }
+  if (pathname.startsWith("/api/")) headers.set("cache-control", "no-store");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 // Image security config. SVG sources with .svg extension auto-skip the
 // optimization endpoint on the client side (served directly, no proxy).
 // To route SVGs through the optimizer (with security headers), set
@@ -31,16 +45,17 @@ const worker = {
 
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
-      return handleImageOptimization(request, {
+      const response = await handleImageOptimization(request, {
         fetchAsset: (path) => env.ASSETS.fetch(new Request(new URL(path, request.url))),
         transformImage: async (body, { width, format, quality }) => {
           const result = await env.IMAGES.input(body).transform(width > 0 ? { width } : {}).output({ format, quality });
           return result.response();
         },
       }, allowedWidths);
+      return securedResponse(response, url.pathname);
     }
 
-    return handler.fetch(request, env, ctx);
+    return securedResponse(await handler.fetch(request, env, ctx), url.pathname);
   },
 };
 

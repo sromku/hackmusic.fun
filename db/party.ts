@@ -1,5 +1,6 @@
 import { ensurePartySchema, getD1 } from ".";
-import { MAX_PENDING_TRACKS_PER_PERSON } from "../lib/party-rules";
+import { MAX_PARTICIPANTS_PER_ROOM, MAX_PENDING_TRACKS_PER_PERSON } from "../lib/party-rules";
+import { hashRoomPasscode, verifyRoomPasscode } from "../lib/room-passcode";
 import { parseSpotifyTrackReference, resolveSpotifyTrack } from "../lib/spotify-track";
 
 export type TrackInput = {
@@ -19,6 +20,8 @@ type EventRow = {
   queue_mode: QueueMode;
   current_submission_id: string | null;
   host_pin: string;
+  join_passcode_hash: string | null;
+  join_passcode_salt: string | null;
   created_at: string;
 };
 
@@ -26,6 +29,7 @@ export type QueueMode = "ordered" | "random" | "fair";
 
 type ParticipantRow = {
   id: string;
+  public_id: string;
   display_name: string;
   initials: string;
   color: string;
@@ -91,11 +95,11 @@ function randomCode() {
 
 async function getEvent(code: string) {
   await ensurePartySchema();
-  return getD1().prepare("SELECT id, code, title, status, scheduled_for, queue_mode, current_submission_id, host_pin, created_at FROM events WHERE code = ?")
+  return getD1().prepare("SELECT id, code, title, status, scheduled_for, queue_mode, current_submission_id, host_pin, join_passcode_hash, join_passcode_salt, created_at FROM events WHERE code = ?")
     .bind(cleanCode(code)).first<EventRow>();
 }
 
-export async function createRoom(titleInput: string, hostNameInput: string, options: { preParty?: boolean; scheduledFor?: string } = {}) {
+export async function createRoom(titleInput: string, hostNameInput: string, options: { passcode?: string; preParty?: boolean; scheduledFor?: string } = {}) {
   await ensurePartySchema();
   const title = cleanName(titleInput);
   const hostName = cleanName(hostNameInput);
@@ -124,14 +128,16 @@ export async function createRoom(titleInput: string, hostNameInput: string, opti
   const eventId = `event-${crypto.randomUUID()}`;
   const participantId = `p-${crypto.randomUUID()}`;
   const hostKey = `host-${crypto.randomUUID()}-${crypto.randomUUID()}`;
+  const hostPublicId = `person-${crypto.randomUUID()}`;
+  const passcode = await hashRoomPasscode(options.passcode ?? "");
   const profile = profileFor(hostName);
   const now = new Date().toISOString();
   const status = options.preParty ? "lobby" : "live";
   await d1.batch([
-    d1.prepare("INSERT INTO events (id, code, title, status, scheduled_for, current_submission_id, host_pin, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)")
-      .bind(eventId, code, title, status, scheduledFor, hostKey, now),
-    d1.prepare("INSERT INTO participants (id, event_id, display_name, initials, color, score, created_at) VALUES (?, ?, ?, ?, ?, 30, ?)")
-      .bind(participantId, eventId, hostName, profile.initials, profile.color, now),
+    d1.prepare("INSERT INTO events (id, code, title, status, scheduled_for, current_submission_id, host_pin, join_passcode_hash, join_passcode_salt, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)")
+      .bind(eventId, code, title, status, scheduledFor, hostKey, passcode.hash, passcode.salt, now),
+    d1.prepare("INSERT INTO participants (id, public_id, event_id, display_name, initials, color, score, created_at) VALUES (?, ?, ?, ?, ?, ?, 30, ?)")
+      .bind(participantId, hostPublicId, eventId, hostName, profile.initials, profile.color, now),
   ]);
   return { code, title, status, scheduledFor, createdAt: now, participantId, hostKey };
 }
@@ -139,7 +145,7 @@ export async function createRoom(titleInput: string, hostNameInput: string, opti
 export async function readRoomSummary(codeInput: string) {
   const event = await getEvent(codeInput);
   if (!event) throw new Error("Room not found.");
-  return { code: event.code, title: event.title, status: event.status, scheduledFor: event.scheduled_for, createdAt: event.created_at };
+  return { code: event.code, title: event.title, status: event.status, scheduledFor: event.scheduled_for, createdAt: event.created_at, requiresPasscode: Boolean(event.join_passcode_hash) };
 }
 
 export async function readParty(codeInput: string, viewerId: string, hostKey = "", activityAfter?: string) {
@@ -167,8 +173,8 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
   }
 
   const peopleResult = await d1.prepare(revealScores
-    ? "SELECT id, display_name, initials, color, score FROM participants WHERE event_id = ? ORDER BY score DESC, created_at ASC"
-    : "SELECT id, display_name, initials, color, score FROM participants WHERE event_id = ? ORDER BY created_at ASC")
+    ? "SELECT id, public_id, display_name, initials, color, score FROM participants WHERE event_id = ? ORDER BY score DESC, created_at ASC"
+    : "SELECT id, public_id, display_name, initials, color, score FROM participants WHERE event_id = ? ORDER BY created_at ASC")
     .bind(event.id).all<ParticipantRow>();
   const reactionResult = current
     ? await d1.prepare(`SELECT r.id, r.participant_id, r.kind, r.created_at, p.display_name, p.initials
@@ -210,13 +216,14 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
   }
 
   const people = peopleResult.results.map((person) => ({
-    id: person.id,
+    id: person.public_id,
     initials: person.initials,
     name: person.id === viewerId ? "You" : person.display_name,
     score: revealScores ? person.score : null,
     color: person.color,
   }));
-  const viewer = people.find((person) => person.id === viewerId);
+  const viewerIndex = peopleResult.results.findIndex((person) => person.id === viewerId);
+  const viewer = viewerIndex >= 0 ? people[viewerIndex] : undefined;
   if (!viewer) throw new Error("Join this room first.");
 
   return {
@@ -224,6 +231,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
     title: event.title,
     status: event.status,
     scheduledFor: event.scheduled_for,
+    requiresPasscode: Boolean(event.join_passcode_hash),
     viewer,
     people,
     currentTrack: current ? {
@@ -235,7 +243,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
     } : null,
     reactions: reactionResult.results.map((reaction) => reaction.kind === "down" ? {
       id: reaction.id,
-      participantId: reaction.participant_id,
+      mine: reaction.participant_id === viewerId,
       avatar: "?",
       name: "Someone",
       message: "booed this song",
@@ -244,7 +252,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
       createdAt: reaction.created_at,
     } : {
       id: reaction.id,
-      participantId: reaction.participant_id,
+      mine: reaction.participant_id === viewerId,
       avatar: reaction.initials,
       name: reaction.participant_id === viewerId ? "You" : reaction.display_name,
       message: "cheered this song",
@@ -265,7 +273,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
       createdAt: item.created_at,
     } : item.kind === "down" ? {
       id: item.id,
-      participantId: item.participant_id,
+      mine: item.participant_id === viewerId,
       tone: "down",
       avatar: "?",
       name: "Someone",
@@ -275,7 +283,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
       createdAt: item.created_at,
     } : {
       id: item.id,
-      participantId: item.participant_id,
+      mine: item.participant_id === viewerId,
       tone: "up",
       avatar: item.initials ?? "!",
       name: item.participant_id === viewerId ? "You" : item.display_name ?? "Someone",
@@ -340,6 +348,15 @@ export async function setQueueMode(code: string, hostKey: string, queueMode: Que
   if (event.status === "ended") throw new Error("This party has ended.");
   if (!(["ordered", "random", "fair"] as const).includes(queueMode)) throw new Error("Choose a valid queue mode.");
   await getD1().prepare("UPDATE events SET queue_mode = ? WHERE id = ?").bind(queueMode, event.id).run();
+}
+
+export async function setRoomPasscode(code: string, hostKey: string, passcodeInput: string) {
+  const event = await getEvent(code);
+  if (!event || event.host_pin !== hostKey) throw new Error("This phone is not the host for that room.");
+  if (event.status === "ended") throw new Error("This party has ended.");
+  const passcode = await hashRoomPasscode(passcodeInput);
+  await getD1().prepare("UPDATE events SET join_passcode_hash = ?, join_passcode_salt = ? WHERE id = ?")
+    .bind(passcode.hash, passcode.salt, event.id).run();
 }
 
 export async function reactToCurrent(code: string, participantId: string, kind: "up" | "down") {
@@ -421,16 +438,28 @@ export async function submitTrack(code: string, participantId: string, track: Tr
   }
 }
 
-export async function joinParty(code: string, participantId: string, displayName: string) {
+export async function assertPartyParticipant(code: string, participantId: string) {
+  const event = await getEvent(code);
+  if (!event) throw new Error("Room not found.");
+  const member = await getD1().prepare("SELECT id FROM participants WHERE id = ? AND event_id = ?").bind(participantId, event.id).first<{ id: string }>();
+  if (!member) throw new Error("Join this room first.");
+}
+
+export async function joinParty(code: string, participantId: string, displayName: string, passcodeInput: string) {
   const event = await getEvent(code);
   if (!event) throw new Error("Room not found.");
   if (event.status === "ended") throw new Error("This party has ended.");
+  if (event.join_passcode_hash && (!event.join_passcode_salt || !await verifyRoomPasscode(passcodeInput, event.join_passcode_hash, event.join_passcode_salt))) throw new Error("Room code or passcode is incorrect.");
   const name = cleanName(displayName);
   if (name.length < 2 || name.length > 24) throw new Error("Use a name between 2 and 24 characters.");
-  if (!/^p-[a-zA-Z0-9-]+$/.test(participantId)) throw new Error("Invalid participant.");
+  if (!/^p-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(participantId)) throw new Error("Invalid participant.");
   const profile = profileFor(name);
-  await getD1().prepare("INSERT OR IGNORE INTO participants (id, event_id, display_name, initials, color, score, created_at) VALUES (?, ?, ?, ?, ?, 30, ?)")
-    .bind(participantId, event.id, name, profile.initials, profile.color, new Date().toISOString()).run();
+  const publicId = `person-${crypto.randomUUID()}`;
+  const result = await getD1().prepare(`INSERT OR IGNORE INTO participants (id, public_id, event_id, display_name, initials, color, score, created_at)
+    SELECT ?, ?, ?, ?, ?, ?, 30, ?
+    WHERE (SELECT COUNT(*) FROM participants WHERE event_id = ?) < ?`)
+    .bind(participantId, publicId, event.id, name, profile.initials, profile.color, new Date().toISOString(), event.id, MAX_PARTICIPANTS_PER_ROOM).run();
+  if (!result.meta.changes) throw new Error(`This room already has ${MAX_PARTICIPANTS_PER_ROOM} people.`);
 }
 
 export async function hostControl(code: string, hostKey: string, action: "start" | "skip" | "advance" | "end") {

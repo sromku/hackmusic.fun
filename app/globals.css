@@ -112,6 +112,8 @@ body {
 .room-start-picker button small { font-size: 9px; font-weight: 700; line-height: 1.25; }
 .schedule-field { display: grid; margin-top: 8px; }
 .schedule-field small { margin-top: 7px; font-size: 9px; font-weight: 750; line-height: 1.35; }
+.passcode-hint { margin: 7px 0 2px; font-size: 9px; font-weight: 750; line-height: 1.35; }
+.passcode-hint em { font-style: normal; text-decoration: underline; text-decoration-color: var(--coral); text-decoration-thickness: 2px; }
 .join-room-card { display: grid; grid-template-columns: 1fr 116px 88px; gap: 12px; align-items: end; background: var(--mint); padding: 20px; }
 .join-room-card h2 { margin: 2px 0 0; font-size: 26px; }
 .join-room-card .eyebrow { margin: 0; }
@@ -702,6 +704,19 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .share-code > strong { display: block; margin-top: 4px; font-size: clamp(46px, 7vw, 82px); line-height: .9; letter-spacing: .08em; }
 .share-code > p { margin: 12px 0; font-size: 12px; font-weight: 700; word-break: break-all; }
 .share-code > div { display: flex; gap: 10px; }
+.share-code > .share-passcode { display: grid; width: fit-content; gap: 3px; margin: 14px 0 6px; border: 2px solid var(--ink); background: var(--white); box-shadow: 4px 4px 0 var(--ink); padding: 10px 13px; }
+.share-passcode span { font-size: 8px; font-weight: 950; letter-spacing: .1em; }
+.share-passcode strong { font: 950 24px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; }
+.share-passcode small { font-size: 8px; font-weight: 750; }
+.share-passcode-warning { display: grid !important; width: fit-content; gap: 4px; margin: 14px 0 6px; border: 2px solid var(--ink); background: var(--coral); padding: 10px 12px; }
+.share-passcode-warning strong { font-size: 10px; }
+.share-passcode-warning span { font-size: 9px; font-weight: 750; }
+.replace-passcode { width: min(360px, 100%); margin: 10px 0 4px; border: 2px solid var(--ink); background: var(--white); }
+.replace-passcode summary { padding: 8px 10px; cursor: pointer; font-size: 9px; font-weight: 900; }
+.replace-passcode form { display: grid; grid-template-columns: 1fr auto; gap: 7px; border-top: 2px solid var(--ink); padding: 9px; }
+.replace-passcode label { grid-column: 1 / -1; font-size: 8px; font-weight: 950; letter-spacing: .1em; }
+.replace-passcode input { min-width: 0; min-height: 38px; border: 2px solid var(--ink); padding: 0 9px; font: 850 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; }
+.replace-passcode button { min-height: 38px; border: 2px solid var(--ink); background: var(--mint); padding: 0 10px; cursor: pointer; font-size: 9px; font-weight: 900; }
 .share-code button { min-height: 38px; border: 2px solid var(--ink); background: var(--white); padding: 0 14px; cursor: pointer; font-weight: 900; }
 .share-code button:last-child { background: var(--blue); }
 .share-room-card img { border: 2px solid var(--ink); background: var(--white); padding: 7px; }

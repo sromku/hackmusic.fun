@@ -19,7 +19,7 @@ function hostRedirect(request: Request, roomCode: string, result: "connected" | 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const cookieStore = await cookies();
-  const oauth = decodeCookie<SpotifyOAuthState>(cookieStore.get(SPOTIFY_OAUTH_COOKIE)?.value);
+  const oauth = await decodeCookie<SpotifyOAuthState>(cookieStore.get(SPOTIFY_OAUTH_COOKIE)?.value);
   if (!oauth) return new Response("Spotify login expired. Return to the host page and try again.", { status: 400 });
   cookieStore.delete(SPOTIFY_OAUTH_COOKIE);
 
@@ -53,6 +53,6 @@ export async function GET(request: Request) {
     roomCode: oauth.roomCode,
     scope: token.scope ?? "",
   };
-  cookieStore.set(SPOTIFY_SESSION_COOKIE, encodeCookie(session), spotifyCookieOptions(request, 30 * 24 * 60 * 60));
+  cookieStore.set(SPOTIFY_SESSION_COOKIE, await encodeCookie(session), spotifyCookieOptions(request, 30 * 24 * 60 * 60));
   return Response.redirect(hostRedirect(request, oauth.roomCode, "connected"), 302);
 }

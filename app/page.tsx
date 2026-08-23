@@ -49,6 +49,7 @@ export default function Home() {
   const router = useRouter();
   const [eventName, setEventName] = useState("");
   const [hostName, setHostName] = useState("");
+  const [roomPasscode, setRoomPasscode] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [preParty, setPreParty] = useState(false);
   const [scheduledFor, setScheduledFor] = useState("");
@@ -122,13 +123,14 @@ export default function Home() {
       const response = await fetch("/api/party", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "create", title: eventName, name: hostName, preParty, scheduledFor: scheduledDate?.toISOString(), website: String(form.get("website") ?? "") }),
+        body: JSON.stringify({ action: "create", title: eventName, name: hostName, passcode: roomPasscode, preParty, scheduledFor: scheduledDate?.toISOString(), website: String(form.get("website") ?? "") }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Could not create the room.");
       const code = data.room.code as string;
       window.localStorage.setItem(`hackmusic:${code}:participant`, data.room.participantId);
       window.localStorage.setItem(`hackmusic:${code}:host`, data.room.hostKey);
+      window.localStorage.setItem(`hackmusic:${code}:joinPasscode`, roomPasscode.trim().toUpperCase());
       const now = new Date().toISOString();
       saveHostedRooms([{ code, title: data.room.title, status: hostedRoomStatus(data.room.status), createdAt: data.room.createdAt ?? now, lastOpenedAt: now }, ...hostedRooms.filter((room) => room.code !== code)]);
       router.push(`/e/${code}/host`);
@@ -190,6 +192,7 @@ export default function Home() {
             <div className="entry-card-top"><p className="eyebrow">⚡ START THE CHAOS</p><span>NO APP NEEDED</span></div><h2>Create a room</h2>
             <label htmlFor="event-name">EVENT NAME</label><input id="event-name" value={eventName} onChange={(event) => setEventName(event.target.value)} maxLength={60} placeholder="Friday night hackathon" required />
             <label htmlFor="host-name">YOUR NAME</label><input id="host-name" value={hostName} onChange={(event) => setHostName(event.target.value)} maxLength={24} placeholder="The brave host" required />
+            <label htmlFor="room-passcode">ROOM PASSCODE</label><input id="room-passcode" value={roomPasscode} onChange={(event) => setRoomPasscode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} minLength={4} maxLength={12} autoComplete="new-password" placeholder="e.g. VIBE42" required /><small className="passcode-hint">🔐 Guests need the room code <em>and</em> this passcode. It never appears in the invite URL.</small>
             <fieldset className="room-start-picker"><legend>WHEN DOES THE MUSIC START?</legend><div>
               <button className={!preParty ? "active" : ""} type="button" aria-pressed={!preParty} onClick={() => setPreParty(false)}><span>⚡</span><strong>Start now</strong><small>First song plays immediately.</small></button>
               <button className={preParty ? "active" : ""} type="button" aria-pressed={preParty} onClick={() => setPreParty(true)}><span>🌙</span><strong>Pre-party lobby</strong><small>Collect songs before the event.</small></button>

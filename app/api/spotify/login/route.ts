@@ -32,7 +32,7 @@ export async function GET(request: Request) {
   const redirectUri = spotifyCallbackUrl(request);
   const oauthState: SpotifyOAuthState = { state, verifier, clientId, roomCode, redirectUri };
   const cookieStore = await cookies();
-  cookieStore.set(SPOTIFY_OAUTH_COOKIE, encodeCookie(oauthState), spotifyCookieOptions(request, 10 * 60));
+  cookieStore.set(SPOTIFY_OAUTH_COOKIE, await encodeCookie(oauthState), spotifyCookieOptions(request, 10 * 60));
 
   const authorizeUrl = new URL("https://accounts.spotify.com/authorize");
   authorizeUrl.search = new URLSearchParams({

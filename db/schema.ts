@@ -9,18 +9,23 @@ export const events = sqliteTable("events", {
   queueMode: text("queue_mode").notNull().default("ordered"),
   currentSubmissionId: text("current_submission_id"),
   hostPin: text("host_pin").notNull(),
+  joinPasscodeHash: text("join_passcode_hash"),
+  joinPasscodeSalt: text("join_passcode_salt"),
   createdAt: text("created_at").notNull(),
 });
 
 export const participants = sqliteTable("participants", {
   id: text("id").primaryKey(),
+  publicId: text("public_id").unique(),
   eventId: text("event_id").notNull(),
   displayName: text("display_name").notNull(),
   initials: text("initials").notNull(),
   color: text("color").notNull(),
   score: integer("score").notNull().default(30),
   createdAt: text("created_at").notNull(),
-});
+}, (table) => [
+  index("participants_event_idx").on(table.eventId),
+]);
 
 export const submissions = sqliteTable("submissions", {
   id: text("id").primaryKey(),
@@ -35,6 +40,7 @@ export const submissions = sqliteTable("submissions", {
   submittedAt: text("submitted_at").notNull(),
 }, (table) => [
   uniqueIndex("submissions_event_track_unique").on(table.eventId, table.providerTrackId),
+  index("submissions_event_participant_status_idx").on(table.eventId, table.participantId, table.status),
 ]);
 
 export const reactions = sqliteTable("reactions", {

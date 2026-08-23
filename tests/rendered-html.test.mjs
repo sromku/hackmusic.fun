@@ -41,6 +41,15 @@ test("normalizes Spotify share links to their actual track token", async () => {
   });
 });
 
+test("hashes room passcodes and compares them without storing plaintext", async () => {
+  const passcodes = await loadTypeScriptModule("lib/room-passcode.ts");
+  const secured = await passcodes.hashRoomPasscode("vibe42");
+  assert.notEqual(secured.hash, "VIBE42");
+  assert.equal(await passcodes.verifyRoomPasscode("VIBE42", secured.hash, secured.salt), true);
+  assert.equal(await passcodes.verifyRoomPasscode("WRONG1", secured.hash, secured.salt), false);
+  assert.throws(() => passcodes.validateRoomPasscode("123"), /4–12/);
+});
+
 test("renders the create and join landing page", async () => {
   const response = await render();
   assert.equal(response.status, 200);
@@ -68,6 +77,8 @@ test("renders the create and join landing page", async () => {
   assert.match(landingSource, /Pre-party lobby/);
   assert.match(landingSource, /type="datetime-local"/);
   assert.match(landingSource, /preParty, scheduledFor/);
+  assert.match(landingSource, /ROOM PASSCODE/);
+  assert.match(landingSource, /joinPasscode/);
   assert.match(landingSource, /hackmusic:hostedRooms/);
   assert.match(landingSource, /Your hosted rooms/);
   assert.match(landingSource, /See all \{hostedRooms\.length\} rooms/);
@@ -97,6 +108,8 @@ test("renders tailored privacy and terms pages", async () => {
   assert.match(privacy, /hackmusic\.fun@gmail\.com/);
   assert.match(privacy, /New Jersey/);
   assert.match(privacy, /Spotify session cookie/);
+  assert.match(privacy, /salted, one-way hashes/);
+  assert.match(privacy, /encrypted, HTTP-only/);
   assert.match(privacy, /hosted-room shortcuts/);
   assert.match(privacy, /do not sell personal data/i);
 
@@ -144,6 +157,9 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /PRE-PARTY LOBBY/);
   assert.match(source, /The queue is undercover/);
   assert.match(source, /Reactions unlock when the host starts the party/);
+  assert.match(source, /ROOM PASSCODE/);
+  assert.match(source, /x-hackmusic-participant/);
+  assert.doesNotMatch(source, /participantId=\$\{encodeURIComponent/);
   assert.match(source, /art-variant-/);
   assert.doesNotMatch(source, /Playback lives on the host speaker/);
   assert.match(source, /ended && <span className="person-score"/);
@@ -159,6 +175,9 @@ test("renders a code-specific participant room", async () => {
   assert.match(partySource, /event\.status === "lobby" \|\| event\.current_submission_id/);
   assert.match(partySource, /UPDATE events SET status = 'live'/);
   assert.match(partySource, /action: "start" \| "skip"/);
+  assert.match(partySource, /verifyRoomPasscode/);
+  assert.match(partySource, /id: person\.public_id/);
+  assert.match(partySource, /mine: reaction\.participant_id === viewerId/);
   const lobbyMigration = await readFile(new URL("drizzle/0004_lean_kronos.sql", projectRoot), "utf8");
   assert.match(lobbyMigration, /ADD `scheduled_for` text/);
   const roomGuardSource = await readFile(new URL("lib/room-creation-guard.ts", projectRoot), "utf8");
@@ -171,6 +190,11 @@ test("renders a code-specific participant room", async () => {
   assert.match(roomGuardMigration, /room_creation_limits_expires_idx/);
   const partyRulesSource = await readFile(new URL("lib/party-rules.ts", projectRoot), "utf8");
   assert.match(partyRulesSource, /MAX_PENDING_TRACKS_PER_PERSON = 100/);
+  assert.match(partyRulesSource, /MAX_PARTICIPANTS_PER_ROOM = 200/);
+  const securityMigration = await readFile(new URL("drizzle/0005_swift_manta.sql", projectRoot), "utf8");
+  assert.match(securityMigration, /join_passcode_hash/);
+  assert.match(securityMigration, /randomblob\(12\)/);
+  assert.match(securityMigration, /participants_public_id_unique/);
 });
 
 test("publishes crawler, sitemap, and install metadata without exposing private rooms", async () => {
@@ -234,7 +258,9 @@ test("renders a code-specific host control surface", async () => {
   assert.doesNotMatch(source, /className="host-message"/);
   assert.match(source, /🙌 CHEERS/);
   assert.match(source, /👻 BOOS/);
-  assert.match(source, /pin=\$\{encodeURIComponent\(hostKey\)\}/);
+  assert.match(source, /x-hackmusic-host-key/);
+  assert.doesNotMatch(source, /pin=\$\{encodeURIComponent\(hostKey\)\}/);
+  assert.match(source, /JOIN PASSCODE/);
   assert.match(source, /\/sounds\/cheer\.wav/);
   assert.match(source, /\/sounds\/boo\.wav/);
   assert.match(source, /wakeLock\.request\("screen"\)/);
@@ -270,6 +296,9 @@ test("renders a code-specific host control surface", async () => {
   const spotifyCallbackSource = await readFile(new URL("app/api/spotify/callback/route.ts", projectRoot), "utf8");
   assert.match(spotifyCallbackSource, /grant_type: "authorization_code"/);
   assert.match(spotifyCallbackSource, /SPOTIFY_SESSION_COOKIE/);
+  const spotifyAuthSource = await readFile(new URL("lib/spotify-auth.ts", projectRoot), "utf8");
+  assert.match(spotifyAuthSource, /AES-GCM/);
+  assert.match(spotifyAuthSource, /SPOTIFY_COOKIE_SECRET/);
   const participantSource = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
   assert.match(participantSource, /Checking Spotify/);
   assert.match(participantSource, /Add to the secret queue/);
@@ -285,6 +314,7 @@ test("detects the host device used for wake-lock guidance", async () => {
 
 test("starts Spotify PKCE without exposing a client secret", async () => {
   const clientId = "1234567890abcdef1234567890abcdef";
+  process.env.SPOTIFY_COOKIE_SECRET = "test-only-cookie-encryption-secret-32-bytes";
   const response = await render(`/api/spotify/login?clientId=${clientId}&roomCode=ABC123`);
   assert.equal(response.status, 302);
   const location = new URL(response.headers.get("location"));
@@ -299,6 +329,20 @@ test("starts Spotify PKCE without exposing a client secret", async () => {
 
   const tokenResponse = await render("/api/spotify/token");
   assert.equal(tokenResponse.status, 401);
+  delete process.env.SPOTIFY_COOKIE_SECRET;
+});
+
+test("adds API and private-route security headers", async () => {
+  const response = await render("/e/ABC123");
+  assert.equal(response.headers.get("x-frame-options"), "DENY");
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+  assert.match(response.headers.get("content-security-policy") ?? "", /frame-ancestors 'none'/);
+  assert.match(response.headers.get("x-robots-tag") ?? "", /noindex/);
+  const partyRoute = await readFile(new URL("app/api/party/route.ts", projectRoot), "utf8");
+  assert.match(partyRoute, /readBoundedJson/);
+  assert.match(partyRoute, /protectPartyAction/);
+  assert.match(partyRoute, /assertPartyParticipant/);
 });
 
 test("protects the hosted read-only admin with ChatGPT identity and an owner allowlist", async () => {

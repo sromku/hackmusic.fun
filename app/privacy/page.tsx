@@ -35,6 +35,7 @@ const sections = [
       <h3>Information created while the service runs</h3>
       <ul>
         <li>Random room, participant, submission, reaction, activity, and host-control identifiers.</li>
+        <li>Room passcodes are stored by HackMusic only as salted, one-way hashes. The readable passcode remains on the host’s browser so it can be shared with invited guests.</li>
         <li>Event status, queue order, timestamps, reaction history, and final scores.</li>
         <li>Basic request and security information that our hosting and network providers may process, such as IP address, browser/device details, request logs, and error information.</li>
         <li>For the owner-only admin page, the ChatGPT account identifier and email forwarded by OpenAI Sites are used at request time to authenticate the owner and enforce the email allowlist. HackMusic does not add them to the event database.</li>
@@ -61,8 +62,8 @@ const sections = [
       </div>
       <ul>
         <li><strong>Spotify OAuth cookie:</strong> a short-lived, HTTP-only cookie keeps the Spotify sign-in request secure for about 10 minutes.</li>
-        <li><strong>Spotify session cookie:</strong> an HTTP-only, secure cookie keeps the host’s authorized Spotify connection available for up to 30 days, or until the host disconnects it. It contains Spotify access credentials and required connection details and is not available to page scripts.</li>
-        <li><strong>Local browser storage:</strong> participant IDs, host keys, hosted-room shortcuts, room names and statuses, recent access times, and the host’s public Spotify Client ID are stored on that device so the browser can recognize its room role and help the host reopen recent events. This hosted-room history stays in that browser and is not a separate server-side profile. Clearing site data removes it and may lock that browser out of host controls.</li>
+        <li><strong>Spotify session cookie:</strong> an encrypted, HTTP-only, secure cookie keeps the host’s authorized Spotify connection available for up to 30 days, or until the host disconnects it. It contains Spotify access credentials and required connection details and is not available to page scripts.</li>
+        <li><strong>Local browser storage:</strong> participant IDs, host keys, the host’s readable room passcode, hosted-room shortcuts, room names and statuses, recent access times, and the host’s public Spotify Client ID are stored on that device so the browser can recognize its room role, share invitations, and help the host reopen recent events. This hosted-room history stays in that browser and is not a separate server-side profile. Clearing site data removes it and may lock that browser out of host controls.</li>
         <li><strong>Infrastructure storage:</strong> OpenAI Sites and its infrastructure providers may use strictly necessary security, routing, authentication, load-balancing, or fraud-prevention technologies.</li>
       </ul>
       <p>You can clear cookies and local storage through your browser. Blocking necessary storage may prevent room recognition, host access, or Spotify playback.</p>
@@ -95,7 +96,7 @@ const sections = [
     title: "Retention & security",
     content: <>
       <p>Event records currently may remain in our hosted database until they are manually deleted, deleted during operational cleanup, or removed after a valid request. We do not promise a fixed automatic deletion date. Spotify cookies expire as described above or can be removed by disconnecting or clearing site data.</p>
-      <p>We use reasonable measures such as HTTPS, randomized room/participant identifiers, device-held host keys, HTTP-only Spotify cookies, limited data collection, and restricted host controls. No online service is perfectly secure. Keep room links private, do not reuse sensitive information as a display name, and protect the host device.</p>
+      <p>We use reasonable measures such as HTTPS, randomized room and participant identifiers, salted passcode hashes, request throttling based on one-way network-derived keys, device-held host keys, encrypted HTTP-only Spotify cookies, limited data collection, and restricted host controls. No online service is perfectly secure. Keep room links and passcodes private, do not reuse sensitive information as a display name, and protect the host device.</p>
     </>,
   },
   {

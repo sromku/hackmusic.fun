@@ -1,4 +1,5 @@
 import { ensurePartySchema, getD1 } from "../db";
+import { assertSameOriginMutation, consumeRequestLimit, RequestSecurityError } from "./request-security";
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
 const ONE_DAY = 24 * 60 * 60 * 1000;
@@ -48,16 +49,10 @@ export async function protectRoomCreation(request: Request, website = "") {
     throw new RoomCreationGuardError("Could not create the room.", 400);
   }
 
-  const origin = request.headers.get("origin");
-  if (origin) {
-    try {
-      if (new URL(origin).origin !== new URL(request.url).origin) {
-        throw new RoomCreationGuardError("Room creation must start from HackMusic.", 403);
-      }
-    } catch (error) {
-      if (error instanceof RoomCreationGuardError) throw error;
-      throw new RoomCreationGuardError("Room creation must start from HackMusic.", 403);
-    }
+  try { assertSameOriginMutation(request); }
+  catch (error) {
+    if (error instanceof RequestSecurityError) throw new RoomCreationGuardError("Room creation must start from HackMusic.", error.status);
+    throw error;
   }
 
   await ensurePartySchema();
@@ -68,4 +63,30 @@ export async function protectRoomCreation(request: Request, website = "") {
   for (const limit of limits) {
     await consumeLimit(clientKey, limit.kind, limit.windowMs, limit.maximum, now);
   }
+}
+
+export async function protectPartyAction(request: Request, action: string, code: string, participantId = "") {
+  assertSameOriginMutation(request);
+  const normalizedCode = code.trim().toUpperCase();
+  if (action === "join") {
+    await consumeRequestLimit(request, { bucket: "join-room", subject: normalizedCode, windowMs: FIFTEEN_MINUTES, maximum: 60 });
+    return;
+  }
+  if (action === "submit") {
+    await consumeRequestLimit(request, { bucket: "submit-track-room", subject: normalizedCode, windowMs: 60_000, maximum: 30 });
+    if (participantId) await consumeRequestLimit(request, { bucket: "submit-track-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 6 });
+    return;
+  }
+  if (action === "react") {
+    await consumeRequestLimit(request, { bucket: "react-room", subject: normalizedCode, windowMs: 60_000, maximum: 120 });
+    if (participantId) await consumeRequestLimit(request, { bucket: "react-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 12 });
+    return;
+  }
+  if (["start", "skip", "advance", "end", "queueMode", "passcode"].includes(action)) {
+    await consumeRequestLimit(request, { bucket: "host-control", subject: normalizedCode, windowMs: 60_000, maximum: 90 });
+  }
+}
+
+export async function protectRoomLookup(request: Request) {
+  await consumeRequestLimit(request, { bucket: "room-lookup", windowMs: FIFTEEN_MINUTES, maximum: 180 });
 }

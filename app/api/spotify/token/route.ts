@@ -10,7 +10,7 @@ type RefreshResponse = {
 
 export async function GET(request: Request) {
   const cookieStore = await cookies();
-  let session = decodeCookie<SpotifySession>(cookieStore.get(SPOTIFY_SESSION_COOKIE)?.value);
+  let session = await decodeCookie<SpotifySession>(cookieStore.get(SPOTIFY_SESSION_COOKIE)?.value);
   if (!session) return Response.json({ error: "Spotify is not connected." }, { status: 401 });
 
   if (session.expiresAt <= Date.now() + 60_000) {
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
       expiresAt: Date.now() + (refreshed.expires_in ?? 3600) * 1000,
       scope: refreshed.scope ?? session.scope,
     };
-    cookieStore.set(SPOTIFY_SESSION_COOKIE, encodeCookie(session), spotifyCookieOptions(request, 30 * 24 * 60 * 60));
+    cookieStore.set(SPOTIFY_SESSION_COOKIE, await encodeCookie(session), spotifyCookieOptions(request, 30 * 24 * 60 * 60));
   }
 
   return Response.json({ accessToken: session.accessToken, expiresAt: session.expiresAt, roomCode: session.roomCode }, { headers: { "cache-control": "no-store" } });
