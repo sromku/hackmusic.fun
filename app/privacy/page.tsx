@@ -37,6 +37,8 @@ const sections = [
         <li>Random room, participant, submission, reaction, activity, and host-control identifiers.</li>
         <li>Room passcodes are stored by HackMusic only as salted, one-way hashes. The readable passcode remains on the host’s browser so it can be shared with invited guests.</li>
         <li>Event status, queue order, timestamps, reaction history, and final scores.</li>
+        <li>Cookie-free, first-party website analytics: visit time, a normalized page category, external referrer hostname, broad device category, and a country code when our hosting provider makes one available. Private room codes, query strings, full referrer URLs, raw IP addresses, and full browser user-agent strings are not added to the analytics database.</li>
+        <li>A random identifier kept only in the browser tab session is converted on the server into a one-way identifier that changes each UTC day. We use it to estimate visits without creating a persistent visitor profile.</li>
         <li>Basic request and security information that our hosting and network providers may process, such as IP address, browser/device details, request logs, and error information.</li>
         <li>For the owner-only admin page, the ChatGPT account identifier and email forwarded by OpenAI Sites are used at request time to authenticate the owner and enforce the email allowlist. HackMusic does not add them to the event database.</li>
       </ul>
@@ -47,7 +49,7 @@ const sections = [
     id: "use",
     title: "How we use information",
     content: <>
-      <p>We use information only to provide and protect the service: create and operate rooms, remember participants and the host device, validate Spotify tracks, control authorized playback, calculate scores, display event history, authenticate the owner-only administration page, prevent abuse, diagnose failures, answer support requests, and comply with law.</p>
+      <p>We use information only to provide, understand, and protect the service: create and operate rooms, remember participants and the host device, validate Spotify tracks, control authorized playback, calculate scores, display event history, measure aggregate website usage, authenticate the owner-only administration page, prevent abuse, diagnose failures, answer support requests, and comply with law.</p>
       <p>We do not sell personal data. We do not use event data for targeted advertising, cross-site behavioral profiling, credit decisions, employment decisions, or other legally significant automated decisions.</p>
     </>,
   },
@@ -55,7 +57,7 @@ const sections = [
     id: "cookies",
     title: "Cookies & device storage",
     content: <>
-      <p>HackMusic uses only storage that is required to make the requested features work. We do not use advertising cookies, analytics cookies, tracking pixels, or cross-site marketing cookies.</p>
+      <p>HackMusic does not use advertising cookies, analytics cookies, tracking pixels, or cross-site marketing cookies. Our first-party analytics does not send information to an advertising or third-party analytics platform.</p>
       <div className="legal-callout">
         <strong>🍪 Necessary means necessary.</strong>
         <span>No ad-tech confetti is hiding behind the real confetti.</span>
@@ -64,6 +66,7 @@ const sections = [
         <li><strong>Spotify OAuth cookie:</strong> a short-lived, HTTP-only cookie keeps the Spotify sign-in request secure for about 10 minutes.</li>
         <li><strong>Spotify session cookie:</strong> an encrypted, HTTP-only, secure cookie keeps the host’s authorized Spotify connection available for up to 30 days, or until the host disconnects it. It contains Spotify access credentials and required connection details and is not available to page scripts.</li>
         <li><strong>Local browser storage:</strong> participant IDs, host keys, the host’s readable room passcode, hosted-room shortcuts, room names and statuses, recent access times, and the host’s public Spotify Client ID are stored on that device so the browser can recognize its room role, share invitations, and help the host reopen recent events. This hosted-room history stays in that browser and is not a separate server-side profile. Clearing site data removes it and may lock that browser out of host controls.</li>
+        <li><strong>Analytics session storage:</strong> a random visit identifier is stored only for the life of the current browser tab session. It is not a cookie, is not shared across sites, and is not used to recognize you over time. Analytics collection is skipped when the browser sends an enabled Do Not Track or Global Privacy Control signal.</li>
         <li><strong>Infrastructure storage:</strong> OpenAI Sites and its infrastructure providers may use strictly necessary security, routing, authentication, load-balancing, or fraud-prevention technologies.</li>
       </ul>
       <p>You can clear cookies and local storage through your browser. Blocking necessary storage may prevent room recognition, host access, or Spotify playback.</p>
@@ -95,7 +98,7 @@ const sections = [
     id: "retention",
     title: "Retention & security",
     content: <>
-      <p>Event records currently may remain in our hosted database until they are manually deleted, deleted during operational cleanup, or removed after a valid request. We do not promise a fixed automatic deletion date. Spotify cookies expire as described above or can be removed by disconnecting or clearing site data.</p>
+      <p>Website analytics records older than 90 days are automatically deleted when analytics collection or owner reporting runs. The browser-tab analytics identifier ends with the tab session, and its server-side one-way form changes daily. Event records currently may remain in our hosted database until they are manually deleted, deleted during operational cleanup, or removed after a valid request. We do not promise a fixed automatic deletion date for event records. Spotify cookies expire as described above or can be removed by disconnecting or clearing site data.</p>
       <p>We use reasonable measures such as HTTPS, randomized room and participant identifiers, salted passcode hashes, request throttling based on one-way network-derived keys, device-held host keys, encrypted HTTP-only Spotify cookies, limited data collection, and restricted host controls. No online service is perfectly secure. Keep room links and passcodes private, do not reuse sensitive information as a display name, and protect the host device.</p>
     </>,
   },
@@ -103,7 +106,7 @@ const sections = [
     id: "rights",
     title: "Your privacy choices & rights",
     content: <>
-      <p>Depending on where you live, you may have rights to know or access personal data, correct it, delete it, receive a portable copy, withdraw consent, or appeal a decision about a request. New Jersey residents may exercise applicable rights under New Jersey law. Because we do not sell personal data or use it for targeted advertising or legally significant profiling, there is no sale or targeted-advertising opt-out to process.</p>
+      <p>Depending on where you live, you may have rights to know or access personal data, correct it, delete it, receive a portable copy, withdraw consent, or appeal a decision about a request. New Jersey residents may exercise applicable rights under New Jersey law. Because we do not sell personal data or use it for targeted advertising or legally significant profiling, there is no sale or targeted-advertising opt-out to process. You can prevent our first-party analytics collection by enabling Do Not Track or Global Privacy Control in a supporting browser.</p>
       <p>Email <a href="mailto:hackmusic.fun@gmail.com">hackmusic.fun@gmail.com</a> with the room code, approximate event date, display name, requested action, and enough information to verify the request without sending unnecessary sensitive data. Use “Privacy Appeal” in the subject line to appeal a response. We may retain limited information when legally required or necessary for security and dispute handling.</p>
     </>,
   },
@@ -134,5 +137,5 @@ const sections = [
 ];
 
 export default function PrivacyPage() {
-  return <LegalPage eyebrow="🔐 YOUR DATA, MINUS THE DRAMA" title="Privacy Policy" summary="The short version: we collect what the party needs, skip ad tracking, and keep private event routes away from search bots." accent="mint" sections={sections} />;
+  return <LegalPage eyebrow="🔐 YOUR DATA, MINUS THE DRAMA" title="Privacy Policy" summary="The short version: we collect what the party needs, use limited cookie-free traffic counts, skip ad tracking, and keep private event routes away from search bots." accent="mint" sections={sections} lastUpdated="August 23, 2026" />;
 }

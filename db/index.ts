@@ -85,12 +85,25 @@ async function initializePartySchema() {
       expires_at INTEGER NOT NULL,
       PRIMARY KEY (client_key, window_kind, window_start)
     )`),
+    d1.prepare(`CREATE TABLE IF NOT EXISTS analytics_pageviews (
+      id TEXT PRIMARY KEY,
+      visited_at TEXT NOT NULL,
+      day TEXT NOT NULL,
+      path TEXT NOT NULL,
+      visit_hash TEXT NOT NULL,
+      referrer_host TEXT NOT NULL,
+      device TEXT NOT NULL,
+      country TEXT NOT NULL
+    )`),
     d1.prepare("CREATE UNIQUE INDEX IF NOT EXISTS submissions_event_track_unique ON submissions(event_id, provider_track_id)"),
     d1.prepare("CREATE UNIQUE INDEX IF NOT EXISTS reactions_submission_participant_unique ON reactions(submission_id, participant_id)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS participants_event_idx ON participants(event_id)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS submissions_event_participant_status_idx ON submissions(event_id, participant_id, status)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS activity_events_event_created_idx ON activity_events(event_id, created_at, id)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS room_creation_limits_expires_idx ON room_creation_limits(expires_at)"),
+    d1.prepare("CREATE INDEX IF NOT EXISTS analytics_pageviews_day_idx ON analytics_pageviews(day)"),
+    d1.prepare("CREATE INDEX IF NOT EXISTS analytics_pageviews_day_path_idx ON analytics_pageviews(day, path)"),
+    d1.prepare("CREATE INDEX IF NOT EXISTS analytics_pageviews_day_visit_idx ON analytics_pageviews(day, visit_hash)"),
   ]);
   const eventColumns = await d1.prepare("PRAGMA table_info(events)").all<{ name: string }>();
   const existingEventColumns = new Set(eventColumns.results.map((column) => column.name));

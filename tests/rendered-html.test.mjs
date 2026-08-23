@@ -147,6 +147,11 @@ test("renders tailored privacy and terms pages", async () => {
   assert.match(privacy, /encrypted, HTTP-only/);
   assert.match(privacy, /hosted-room shortcuts/);
   assert.match(privacy, /do not sell personal data/i);
+  assert.match(privacy, /cookie-free, first-party website analytics/i);
+  assert.match(privacy, /raw IP addresses/);
+  assert.match(privacy, /older than 90 days/);
+  assert.match(privacy, /Global Privacy Control/);
+  assert.match(privacy, /Last updated August 23, 2026/);
 
   const termsResponse = await render("/terms");
   assert.equal(termsResponse.status, 200);
@@ -484,6 +489,9 @@ test("protects the hosted read-only admin with ChatGPT identity and an owner all
   assert.match(dashboardSource, /Owner only\. Read only/);
   assert.match(dashboardSource, /\/api\/backstage-retired-slug/);
   assert.match(dashboardSource, /No host keys/);
+  assert.match(dashboardSource, /Website traffic/);
+  assert.match(dashboardSource, /Top pages/);
+  assert.match(dashboardSource, /No raw IPs, room codes, query strings/);
   const adminSource = await readFile(new URL("db/admin.ts", projectRoot), "utf8");
   assert.doesNotMatch(adminSource, /host_pin/);
   assert.match(adminSource, /Anonymous boo/);
@@ -491,6 +499,34 @@ test("protects the hosted read-only admin with ChatGPT identity and an owner all
   await assert.rejects(access(new URL("app/admin/page.tsx", projectRoot)));
   await assert.rejects(access(new URL("app/api/admin/route.ts", projectRoot)));
 
+});
+
+test("collects privacy-preserving first-party website analytics", async () => {
+  const layoutSource = await readFile(new URL("app/layout.tsx", projectRoot), "utf8");
+  assert.match(layoutSource, /AnalyticsTracker/);
+
+  const trackerSource = await readFile(new URL("app/analytics-tracker.tsx", projectRoot), "utf8");
+  assert.match(trackerSource, /sessionStorage/);
+  assert.match(trackerSource, /navigator\.doNotTrack/);
+  assert.match(trackerSource, /globalPrivacyControl/);
+  assert.match(trackerSource, /credentials: "omit"/);
+  assert.match(trackerSource, /pathname\.startsWith\("\/backstage-"\)/);
+
+  const routeSource = await readFile(new URL("app/api/analytics/route.ts", projectRoot), "utf8");
+  assert.match(routeSource, /assertSameOriginMutation/);
+  assert.match(routeSource, /readBoundedJson/);
+  assert.match(routeSource, /recordPageview/);
+
+  const analyticsSource = await readFile(new URL("db/analytics.ts", projectRoot), "utf8");
+  assert.match(analyticsSource, /\/e\/:room/);
+  assert.match(analyticsSource, /SHA-256/);
+  assert.match(analyticsSource, /RETENTION_DAYS = 90/);
+  assert.match(analyticsSource, /DELETE FROM analytics_pageviews/);
+  assert.doesNotMatch(analyticsSource, /cf-connecting-ip|x-forwarded-for|x-real-ip/);
+
+  const migration = await readFile(new URL("drizzle/0007_nasty_iron_man.sql", projectRoot), "utf8");
+  assert.match(migration, /CREATE TABLE `analytics_pageviews`/);
+  assert.match(migration, /analytics_pageviews_day_visit_idx/);
 });
 
 test("ships product metadata and removes starter artifacts", async () => {

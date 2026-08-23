@@ -12,9 +12,10 @@ type LegalPageProps = {
   summary: string;
   accent: "blue" | "mint";
   sections: LegalSection[];
+  lastUpdated?: string;
 };
 
-export default function LegalPage({ eyebrow, title, summary, accent, sections }: LegalPageProps) {
+export default function LegalPage({ eyebrow, title, summary, accent, sections, lastUpdated = "August 22, 2026" }: LegalPageProps) {
   return (
     <main className={`legal-shell legal-${accent}`}>
       <header className="topbar legal-topbar">
@@ -34,7 +35,7 @@ export default function LegalPage({ eyebrow, title, summary, accent, sections }:
         <aside className="legal-stamp" aria-label="Document details">
           <span>📍 NEW JERSEY</span>
           <strong>Plain-ish English.</strong>
-          <small>Last updated August 22, 2026</small>
+          <small>{`Last updated ${lastUpdated}`}</small>
         </aside>
       </section>
 

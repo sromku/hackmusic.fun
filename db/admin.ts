@@ -1,5 +1,6 @@
 import { ensurePartySchema, getD1 } from ".";
 import { PublicError } from "../lib/public-error";
+import { readAnalyticsOverview } from "./analytics";
 
 type CountRow = {
   rooms: number;
@@ -29,21 +30,24 @@ function roomCode(value: string) {
 export async function readAdminOverview() {
   await ensurePartySchema();
   const d1 = getD1();
-  const totals = await d1.prepare(`SELECT
-    (SELECT COUNT(*) FROM events) AS rooms,
-    (SELECT COUNT(*) FROM events WHERE status = 'live') AS live_rooms,
-    (SELECT COUNT(*) FROM participants) AS participants,
-    (SELECT COUNT(*) FROM submissions) AS tracks,
-    (SELECT COUNT(*) FROM reactions) AS reactions`).first<CountRow>();
-  const rooms = await d1.prepare(`SELECT
-    e.code, e.title, e.status, e.scheduled_for, e.queue_mode, e.created_at,
-    (SELECT s.title FROM submissions s WHERE s.id = e.current_submission_id) AS current_track,
-    (SELECT COUNT(*) FROM participants p WHERE p.event_id = e.id) AS participants,
-    (SELECT COUNT(*) FROM submissions s WHERE s.event_id = e.id) AS tracks,
-    (SELECT COUNT(*) FROM reactions r WHERE r.event_id = e.id) AS reactions
-    FROM events e
-    ORDER BY e.created_at DESC
-    LIMIT 100`).all<RoomRow>();
+  const [totals, rooms, analytics] = await Promise.all([
+    d1.prepare(`SELECT
+      (SELECT COUNT(*) FROM events) AS rooms,
+      (SELECT COUNT(*) FROM events WHERE status = 'live') AS live_rooms,
+      (SELECT COUNT(*) FROM participants) AS participants,
+      (SELECT COUNT(*) FROM submissions) AS tracks,
+      (SELECT COUNT(*) FROM reactions) AS reactions`).first<CountRow>(),
+    d1.prepare(`SELECT
+      e.code, e.title, e.status, e.scheduled_for, e.queue_mode, e.created_at,
+      (SELECT s.title FROM submissions s WHERE s.id = e.current_submission_id) AS current_track,
+      (SELECT COUNT(*) FROM participants p WHERE p.event_id = e.id) AS participants,
+      (SELECT COUNT(*) FROM submissions s WHERE s.event_id = e.id) AS tracks,
+      (SELECT COUNT(*) FROM reactions r WHERE r.event_id = e.id) AS reactions
+      FROM events e
+      ORDER BY e.created_at DESC
+      LIMIT 100`).all<RoomRow>(),
+    readAnalyticsOverview(),
+  ]);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -54,6 +58,7 @@ export async function readAdminOverview() {
       tracks: totals?.tracks ?? 0,
       reactions: totals?.reactions ?? 0,
     },
+    analytics,
     rooms: rooms.results.map((room) => ({
       code: room.code,
       title: room.title,

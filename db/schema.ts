@@ -77,3 +77,18 @@ export const roomCreationLimits = sqliteTable("room_creation_limits", {
   primaryKey({ columns: [table.clientKey, table.windowKind, table.windowStart] }),
   index("room_creation_limits_expires_idx").on(table.expiresAt),
 ]);
+
+export const analyticsPageviews = sqliteTable("analytics_pageviews", {
+  id: text("id").primaryKey(),
+  visitedAt: text("visited_at").notNull(),
+  day: text("day").notNull(),
+  path: text("path").notNull(),
+  visitHash: text("visit_hash").notNull(),
+  referrerHost: text("referrer_host").notNull(),
+  device: text("device").notNull(),
+  country: text("country").notNull(),
+}, (table) => [
+  index("analytics_pageviews_day_idx").on(table.day),
+  index("analytics_pageviews_day_path_idx").on(table.day, table.path),
+  index("analytics_pageviews_day_visit_idx").on(table.day, table.visitHash),
+]);

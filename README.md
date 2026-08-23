@@ -100,6 +100,8 @@ The read-only dashboard lives at `/backstage-retired-slug`. Sites requires ChatG
 
 The dashboard never returns host control keys and keeps boo identities anonymous. It is excluded from search indexing and has no link from the public navigation.
 
+The dashboard also includes first-party website analytics for the latest 30 days. Public pages send cookie-free page views to `/api/analytics`; normalized D1 records older than 90 days are pruned during collection and reporting. Analytics stores page categories, daily-rotating visit hashes, referrer hostnames, broad device classes, and provider country codes. It does not store raw IP addresses, full user-agent strings, query strings, or private room codes, and it honors Do Not Track and Global Privacy Control.
+
 ## Deploy to OpenAI Sites
 
 Sites deployment uses short-lived credentials supplied by Codex, so the release
