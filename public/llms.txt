@@ -20,6 +20,7 @@ Canonical site: https://hackmusic.fun
 ## Public page
 
 - https://hackmusic.fun/ — Product overview plus create-room and join-room actions.
+- https://hackmusic.fun/go-bigger — Contact page for restaurants, company events, venues, conferences, larger crowds, and custom HackMusic deployments.
 - https://hackmusic.fun/privacy — Data collection, necessary storage, sharing, retention, and privacy rights.
 - https://hackmusic.fun/terms — Acceptable use, music responsibility, third-party services, and New Jersey terms.
 
@@ -33,4 +34,4 @@ HackMusic is designed for closed events. Temporary participant rooms, host contr
 
 ## Creator
 
-Chaos-ed by Roman Kushnarenko: https://sromku.com
+Scrambled by Roman Kushnarenko: https://sromku.com

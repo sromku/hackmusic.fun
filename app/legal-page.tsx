@@ -68,6 +68,7 @@ export default function LegalPage({ eyebrow, title, summary, accent, sections }:
           <a href="mailto:hackmusic.fun@gmail.com">hackmusic.fun@gmail.com</a>
         </div>
         <nav aria-label="Legal pages">
+          <a href="/go-bigger">Go bigger</a>
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
           <a href="/">Home</a>

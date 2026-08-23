@@ -164,7 +164,7 @@ export default function Home() {
       <div className="shape shape-three" aria-hidden="true" />
       <header className="topbar landing-topbar">
         <a className="brand" href="/" aria-label="HackMusic home"><span className="brand-mark">HM</span><span>HackMusic</span></a>
-        <span className="landing-tag">🎉 PRIVATE PARTIES · 🔊 LOUD OPINIONS</span>
+        <div className="landing-top-actions"><span className="landing-tag">🎉 PRIVATE PARTIES · 🔊 LOUD OPINIONS</span><a href="/go-bigger">🏟️ GO BIGGER →</a></div>
       </header>
       <section className="landing-hero">
         <div className="landing-copy">
@@ -216,7 +216,7 @@ export default function Home() {
       </section>}
       <footer className="landing-footer">
         <span>Scrambled by <a href="https://sromku.com" target="_blank" rel="noreferrer">@sromku</a> + AI Codex agent</span>
-        <nav aria-label="Legal links"><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
+        <nav aria-label="Site links"><a href="/go-bigger">Go bigger</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
         <span>SOTA unlocked. Common sense still in beta.</span>
       </footer>
       {historyOpen && <div className="hosted-history-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setHistoryOpen(false)}><section className="hosted-history-sheet" role="dialog" aria-modal="true" aria-labelledby="all-hosted-rooms-title"><div className="hosted-sheet-handle" aria-hidden="true" /><div className="hosted-sheet-heading"><div><p className="eyebrow">🗃️ THE HOST ARCHIVES</p><h2 id="all-hosted-rooms-title">All rooms from this browser</h2></div><button ref={closeHistoryRef} type="button" onClick={() => setHistoryOpen(false)} aria-label="Close hosted room history">×</button></div><div className="hosted-sheet-list">{hostedRooms.map((room) => <article key={room.code}><span className={`hosted-room-status ${room.status}`}>{room.status === "lobby" ? "🌙 LOBBY" : room.status === "live" ? "⚡ LIVE" : room.status === "ended" ? "🏁 ENDED" : "📼 SAVED"}</span><div><strong>{room.title}</strong><small>Room {room.code} · {hostedRoomDate(room.createdAt)}</small></div><a href={`/e/${room.code}/host`} onClick={() => { rememberRoomOpened(room.code); setHistoryOpen(false); }}>Open host →</a></article>)}</div><p className="hosted-sheet-note">🧠 Clear this browser’s site data and these shortcuts disappear. The actual event data is unaffected.</p></section></div>}

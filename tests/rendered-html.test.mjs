@@ -86,6 +86,7 @@ test("renders the create and join landing page", async () => {
   assert.match(html, /Common sense still in beta/);
   assert.match(html, /href="\/privacy"/);
   assert.match(html, /href="\/terms"/);
+  assert.match(html, /href="\/go-bigger"/);
   assert.match(html, /By creating or joining a room/);
   assert.match(html, /name="website"/);
   const landingSource = await readFile(new URL("app/page.tsx", projectRoot), "utf8");
@@ -112,6 +113,21 @@ test("renders the create and join landing page", async () => {
   assert.match(globalStyles, /\.landing-copy \{ padding-top: clamp\(64px, 7vh, 84px\); \}/);
   assert.match(globalStyles, /@media \(max-width: 840px\)[\s\S]*\.landing-copy \{ padding-top: 0; \}/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/);
+});
+
+test("renders the commercial go bigger page with an email path", async () => {
+  const response = await render("/go-bigger");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Go bigger/);
+  assert.match(html, /Keep the chaos/);
+  assert.match(html, /Restaurants &amp; bars/);
+  assert.match(html, /Company events/);
+  assert.match(html, /Venues &amp; conferences/);
+  assert.match(html, /Custom chaos\. Sensibly invoiced/);
+  assert.match(html, /mailto:hackmusic\.fun@gmail\.com\?subject=HackMusic/);
+  assert.match(html, /Event%20or%20venue/);
+  assert.match(html, /href="\/"/);
 });
 
 test("renders tailored privacy and terms pages", async () => {
@@ -230,6 +246,7 @@ test("publishes crawler, sitemap, and install metadata without exposing private 
   assert.match(sitemap, /<loc>https:\/\/hackmusic\.fun<\/loc>/);
   assert.match(sitemap, /<loc>https:\/\/hackmusic\.fun\/privacy<\/loc>/);
   assert.match(sitemap, /<loc>https:\/\/hackmusic\.fun\/terms<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/hackmusic\.fun\/go-bigger<\/loc>/);
 
   const manifestResponse = await render("/manifest.webmanifest");
   assert.equal(manifestResponse.status, 200);
