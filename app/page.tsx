@@ -92,9 +92,14 @@ export default function Home() {
             <button type="submit" disabled={busy}>🚪 Join →</button>
           </form>
           {message && <p className="landing-message" role="alert">{message}</p>}
+          <p className="entry-legal-note">By creating or joining a room, you agree to the <Link href="/terms">Terms</Link> and acknowledge the <Link href="/privacy">Privacy Policy</Link>.</p>
         </div>
       </section>
-      <footer className="landing-footer"><span>Chaos-ed by <a href="https://sromku.com" target="_blank" rel="noreferrer">@sromku ↗</a> and an AI Codex agent.</span><span>SOTA unlocked. Common sense still in beta.</span></footer>
+      <footer className="landing-footer">
+        <span>Chaos-ed by <a href="https://sromku.com" target="_blank" rel="noreferrer">@sromku ↗</a> and an AI Codex agent.</span>
+        <nav aria-label="Legal links"><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></nav>
+        <span>SOTA unlocked. Common sense still in beta.</span>
+      </footer>
     </main>
   );
 }

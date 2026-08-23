@@ -56,7 +56,31 @@ test("renders the create and join landing page", async () => {
   assert.match(html, /Chaos-ed by/);
   assert.match(html, /https:\/\/sromku\.com/);
   assert.match(html, /Common sense still in beta/);
+  assert.match(html, /href="\/privacy"/);
+  assert.match(html, /href="\/terms"/);
+  assert.match(html, /By creating or joining a room/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/);
+});
+
+test("renders tailored privacy and terms pages", async () => {
+  const privacyResponse = await render("/privacy");
+  assert.equal(privacyResponse.status, 200);
+  const privacy = await privacyResponse.text();
+  assert.match(privacy, /Privacy Policy/);
+  assert.match(privacy, /Necessary means necessary/);
+  assert.match(privacy, /hackmusic\.fun@gmail\.com/);
+  assert.match(privacy, /New Jersey/);
+  assert.match(privacy, /Spotify session cookie/);
+  assert.match(privacy, /do not sell personal data/i);
+
+  const termsResponse = await render("/terms");
+  assert.equal(termsResponse.status, 200);
+  const terms = await termsResponse.text();
+  assert.match(terms, /Terms of Use/);
+  assert.match(terms, /New Jersey law/);
+  assert.match(terms, /public-performance license/);
+  assert.match(terms, /OpenAI Sites/);
+  assert.match(terms, /hackmusic\.fun@gmail\.com/);
 });
 
 test("renders a code-specific participant room", async () => {
@@ -115,7 +139,10 @@ test("publishes crawler, sitemap, and install metadata without exposing private 
 
   const sitemapResponse = await render("/sitemap.xml");
   assert.equal(sitemapResponse.status, 200);
-  assert.match(await sitemapResponse.text(), /<loc>https:\/\/hackmusic\.fun<\/loc>/);
+  const sitemap = await sitemapResponse.text();
+  assert.match(sitemap, /<loc>https:\/\/hackmusic\.fun<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/hackmusic\.fun\/privacy<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/hackmusic\.fun\/terms<\/loc>/);
 
   const manifestResponse = await render("/manifest.webmanifest");
   assert.equal(manifestResponse.status, 200);

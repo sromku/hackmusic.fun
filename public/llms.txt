@@ -18,6 +18,8 @@ Canonical site: https://hackmusic.fun
 ## Public page
 
 - https://hackmusic.fun/ — Product overview plus create-room and join-room actions.
+- https://hackmusic.fun/privacy — Data collection, necessary storage, sharing, retention, and privacy rights.
+- https://hackmusic.fun/terms — Acceptable use, music responsibility, third-party services, and New Jersey terms.
 
 ## Privacy and indexing
 
