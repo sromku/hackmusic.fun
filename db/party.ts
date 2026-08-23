@@ -53,6 +53,21 @@ type QueuedSubmissionRow = SubmissionRow & {
   submitted_at: string;
 };
 
+type MySubmissionRow = SubmissionRow & {
+  status: "pending" | "playing" | "played" | "skipped";
+  submitted_at: string;
+};
+
+type MyReactionHistoryRow = {
+  id: string;
+  kind: "up" | "down";
+  created_at: string;
+  provider_track_id: string;
+  title: string;
+  artist: string;
+  status: "pending" | "playing" | "played" | "skipped";
+};
+
 type ReactionRow = {
   id: string;
   participant_id: string;
@@ -195,6 +210,20 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
         ORDER BY s.submitted_at ASC`)
       .bind(event.id).all<QueuedSubmissionRow>()
     : null;
+  const mySongs = !isHost
+    ? await d1.prepare(`SELECT id, participant_id, provider_track_id, title, artist, duration, color, status, submitted_at
+        FROM submissions
+        WHERE event_id = ? AND participant_id = ?
+        ORDER BY submitted_at DESC`)
+      .bind(event.id, viewerId).all<MySubmissionRow>()
+    : null;
+  const myReactionHistory = !isHost
+    ? await d1.prepare(`SELECT r.id, r.kind, r.created_at, s.provider_track_id, s.title, s.artist, s.status
+        FROM reactions r JOIN submissions s ON s.id = r.submission_id
+        WHERE r.event_id = ? AND r.participant_id = ?
+        ORDER BY r.created_at DESC`)
+      .bind(event.id, viewerId).all<MyReactionHistoryRow>()
+    : null;
   let activityResult: { results: ActivityRow[] } | null = null;
   if (activityAfter !== undefined) {
     const separator = activityAfter.lastIndexOf("|");
@@ -302,6 +331,25 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
       color: track.color,
       submittedBy: track.participant_id === viewerId ? "You" : track.display_name,
       submitterInitials: track.initials,
+    })) } : {}),
+    ...(mySongs ? { mySongs: mySongs.results.map((track) => ({
+      queueId: track.id,
+      id: track.provider_track_id,
+      title: track.title,
+      artist: track.artist,
+      duration: track.duration,
+      color: track.color,
+      status: track.status,
+      submittedAt: track.submitted_at,
+    })) } : {}),
+    ...(myReactionHistory ? { myReactionHistory: myReactionHistory.results.map((reaction) => ({
+      reactionId: reaction.id,
+      id: reaction.provider_track_id,
+      title: reaction.title,
+      artist: reaction.artist,
+      tone: reaction.kind,
+      songStatus: reaction.status,
+      reactedAt: reaction.created_at,
     })) } : {}),
   };
 }
@@ -437,6 +485,18 @@ export async function submitTrack(code: string, participantId: string, track: Tr
     if (error instanceof Error && error.message.includes("UNIQUE")) throw new PublicError("That song is already hiding in this room’s queue.");
     throw error;
   }
+}
+
+export async function removePendingTrack(code: string, participantId: string, submissionId: string) {
+  const event = await getEvent(code);
+  if (!event) throw new PublicError("Room not found. Check the six-character code and try again.", 404);
+  if (event.status === "ended") throw new PublicError("This party has ended, so its queue is frozen.");
+  if (!submissionId || submissionId.length > 80) throw new PublicError("That song could not be identified. Refresh the page and try again.");
+  const d1 = getD1();
+  const result = await d1.prepare(`DELETE FROM submissions
+    WHERE id = ? AND event_id = ? AND participant_id = ? AND status = 'pending'`)
+    .bind(submissionId, event.id, participantId).run();
+  if (!result.meta.changes) throw new PublicError("That song is no longer waiting in your queue. Refresh to see the latest mix.", 409);
 }
 
 export async function assertPartyParticipant(code: string, participantId: string) {

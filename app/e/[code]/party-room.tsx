@@ -7,8 +7,10 @@ type Color = "coral" | "sun" | "blue" | "mint";
 type Person = { id: string; initials: string; name: string; score: number | null; color: Color };
 type Reaction = { id: string; mine: boolean; avatar: string; name: string; message: string; icon: "▲" | "▼"; tone: "up" | "down"; createdAt?: string };
 type Activity = { id: string; mine?: boolean; avatar: string; name: string; message: string; icon: string; tone: "up" | "down" | "song"; trackTitle: string; createdAt: string };
-type PartyState = { code: string; title: string; viewer: Person; people: Person[]; currentTrack: Track | null; reactions: Reaction[]; activity?: Activity[]; pendingCount: number; queueCount: number; status: "lobby" | "live" | "ended"; scheduledFor: string | null };
 type Track = { id: string; title: string; artist: string; duration: string; color: Color };
+type MySong = Track & { queueId: string; status: "pending" | "playing" | "played" | "skipped"; submittedAt: string };
+type MyReactionHistory = { reactionId: string; id: string; title: string; artist: string; tone: "up" | "down"; songStatus: MySong["status"]; reactedAt: string };
+type PartyState = { code: string; title: string; viewer: Person; people: Person[]; currentTrack: Track | null; reactions: Reaction[]; activity?: Activity[]; mySongs: MySong[]; myReactionHistory: MyReactionHistory[]; pendingCount: number; queueCount: number; status: "lobby" | "live" | "ended"; scheduledFor: string | null };
 type RoomSummary = { code: string; title: string; status: "lobby" | "live" | "ended"; scheduledFor: string | null; requiresPasscode: boolean };
 
 function artworkVariant(seed: string) {
@@ -31,6 +33,13 @@ function partyStartTime(value: string | null) {
   return Number.isNaN(date.getTime()) ? "when the host is ready" : new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(date);
 }
 
+function songStatusLabel(status: MySong["status"], ended: boolean) {
+  if (status === "playing") return "⚡ Playing now";
+  if (status === "played") return "✅ Played";
+  if (status === "skipped") return "⏭️ Skipped";
+  return ended ? "📦 Left unplayed" : "🤫 Still waiting";
+}
+
 function Artwork({ tone, seed }: { tone: Color; seed: string }) {
   return <div className={`album-art ${tone} art-variant-${artworkVariant(seed)}`} role="img" aria-label="Animated geometric artwork generated for this song"><span className="album-circle" /><span className="album-stair" /><span className="album-star">✦</span><span className="album-chaos-dot" /><span className="album-chaos-pill" /><span className="album-chaos-ring" /></div>;
 }
@@ -46,6 +55,7 @@ export default function PartyRoom({ code }: { code: string }) {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [removeConfirmId, setRemoveConfirmId] = useState("");
 
   const myReaction = party?.reactions.find((reaction) => reaction.mine)?.tone;
   const boos = party?.reactions.filter((reaction) => reaction.tone === "down").length ?? 0;
@@ -153,9 +163,26 @@ export default function PartyRoom({ code }: { code: string }) {
     }
   }
 
+  async function removeSong(song: MySong) {
+    if (busy || song.status !== "pending") return;
+    setBusy(true);
+    try {
+      const data = await postAction({ action: "remove", submissionId: song.queueId });
+      setParty((current) => ({ ...data.party, activity: current?.activity ?? [] }));
+      setRemoveConfirmId("");
+      setNotice(`🫥 ${song.title} vanished from your queue.`);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Song could not be removed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (error) return <main className="missing-room"><span className="brand-mark">HM</span><p className="eyebrow">ROOM LOST</p><h1>{error}</h1><a href="/">Try another code →</a></main>;
   if (!room) return <main className="loading-room"><span className="brand-mark">HM</span><p>Finding room {code}…</p></main>;
   const currentSpotifyUrl = party?.currentTrack ? spotifyTrackUrl(party.currentTrack.id) : "";
+  const waitingSongs = party?.mySongs.filter((song) => song.status === "pending") ?? [];
+  const submittedHistory = party?.mySongs.filter((song) => song.status !== "pending") ?? [];
 
   return (
     <main className="party-shell">
@@ -188,6 +215,34 @@ export default function PartyRoom({ code }: { code: string }) {
           <section className="sidebar-card crowd-card"><div className="card-title-row"><h2>{ended ? "🏆 FINAL SCORES" : "🪩 THE CROWD"}</h2><span>{ended ? "👀 REVEALED" : `🎉 ${party.people.length} HERE`}</span></div><div className="people-list">{visiblePeople.map((person) => <div className="person-row" key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><strong>{person.name}</strong>{ended && <span className="person-score">{person.score ?? "—"}</span>}</div>)}</div>{!ended && party.people.length > 4 && <button className="text-button" type="button" onClick={() => setShowEveryone((value) => !value)}>{showEveryone ? "Show less ↑" : "Show everybody →"}</button>}</section>
         </aside>
       </div>}
+
+      {party && <section className="my-music-card" aria-labelledby="my-music-title">
+        <div className="my-music-heading"><div><p className="eyebrow">🔐 PRIVATE TO THIS BROWSER</p><h2 id="my-music-title">🎧 My music</h2></div><p>Your picks and your reactions. Nobody else gets this backstage pass.</p></div>
+        <div className="my-music-grid">
+          <article className="my-music-column my-queue-column">
+            <div className="my-column-title"><div><span>{ended ? "📦" : "🤫"}</span><div><h3>{ended ? "Left in my queue" : "Still in my queue"}</h3><p>{ended ? "The party ended before these escaped." : "The room still hides when they’ll play."}</p></div></div><b>{waitingSongs.length}</b></div>
+            <div className="my-track-list">{waitingSongs.map((song) => <div className="my-track-row" key={song.queueId}>
+              <span className={`my-track-art ${song.color}`} aria-hidden="true">♪</span>
+              <div className="my-track-copy"><strong dir="auto">{song.title}</strong><span dir="auto">{song.artist} · {song.duration}</span><small>{songStatusLabel(song.status, ended)}</small></div>
+              {!ended && (removeConfirmId === song.queueId ? <div className="remove-confirm" aria-label={`Confirm removal of ${song.title}`}><button type="button" onClick={() => setRemoveConfirmId("")} disabled={busy}>Keep</button><button className="remove-now" type="button" onClick={() => void removeSong(song)} disabled={busy}>{busy ? "Removing…" : "Remove"}</button></div> : <button className="remove-song-button" type="button" onClick={() => setRemoveConfirmId(song.queueId)} disabled={busy} aria-label={`Remove ${song.title} from your queue`}>Remove</button>)}
+            </div>)}{waitingSongs.length === 0 && <p className="my-music-empty">{ended ? "📭 Nothing was stranded. Clean exit." : "🕳️ No secret picks waiting. Suspicious."}</p>}</div>
+          </article>
+
+          <article className="my-music-column">
+            <div className="my-column-title"><div><span>📼</span><div><h3>My played songs</h3><p>What happened to the songs you smuggled in.</p></div></div><b>{submittedHistory.length}</b></div>
+            <div className="my-track-list">{submittedHistory.map((song) => <a className="my-track-row my-track-link" href={spotifyTrackUrl(song.id)} target="_blank" rel="noreferrer" key={song.queueId}>
+              <span className={`my-track-art ${song.color}`} aria-hidden="true">♪</span><span className="my-track-copy"><strong dir="auto">{song.title}</strong><span dir="auto">{song.artist} · {song.duration}</span><small>{songStatusLabel(song.status, ended)}</small></span><span className="my-track-arrow" aria-hidden="true">↗</span>
+            </a>)}{submittedHistory.length === 0 && <p className="my-music-empty">🎚️ Your songs have not reached the speaker yet.</p>}</div>
+          </article>
+
+          <article className="my-music-column my-reactions-column">
+            <div className="my-column-title"><div><span>🫣</span><div><h3>My reactions</h3><p>Your cheers—and your privately remembered boos.</p></div></div><b>{party.myReactionHistory.length}</b></div>
+            <div className="my-track-list">{party.myReactionHistory.map((reaction) => <a className={`my-track-row my-track-link my-reaction-history ${reaction.tone}`} href={spotifyTrackUrl(reaction.id)} target="_blank" rel="noreferrer" key={reaction.reactionId}>
+              <span className="my-reaction-mark" aria-hidden="true">{reaction.tone === "up" ? "🙌" : "👻"}</span><span className="my-track-copy"><strong dir="auto">{reaction.title}</strong><span dir="auto">{reaction.artist}</span><small>{reaction.tone === "up" ? "You cheered" : "You booed anonymously"} · {songStatusLabel(reaction.songStatus, ended)}</small></span><span className="my-track-arrow" aria-hidden="true">↗</span>
+            </a>)}{party.myReactionHistory.length === 0 && <p className="my-music-empty">🧘 No opinions recorded. Astonishing restraint.</p>}</div>
+          </article>
+        </div>
+      </section>}
 
       {party && <section className="activity-card"><div className="card-title-row"><h2>🔊 ROOM NOISE</h2><span>📜 FULL PARTY HISTORY</span></div><div className="activity-list" role="log" aria-live="polite" aria-label="Scrollable history of songs and reactions since the party began">{[...(party.activity ?? [])].reverse().map((item) => <div className={`activity-row ${item.tone}${item.tone === "song" ? " song-start" : ""}`} key={item.id}><span className="activity-avatar">{item.avatar}</span>{item.tone === "song" ? <p><strong>🎶 Now playing:</strong> <span dir="auto">{item.trackTitle}</span></p> : <p><span className="activity-emoji" aria-hidden="true">{item.tone === "up" ? "🎉" : "👻"}</span> <strong>{item.name}</strong> {item.message} <b dir="auto">“{item.trackTitle}”</b></p>}<span className="activity-icon" aria-hidden="true">{item.icon}</span><time dateTime={item.createdAt}>{activityTime(item.createdAt)}</time></div>)}{!(party.activity ?? []).length && <p className="quiet-feed">{ended ? "📼 A remarkably peaceful party. No songs or reactions made the history book." : "🦗 It’s suspiciously quiet in here… The full story will appear here."}</p>}</div><p className="activity-scroll-hint">↕️ Scroll inside Room Noise to travel all the way back to the party’s first song.</p></section>}
 

@@ -1,10 +1,10 @@
-import { assertPartyParticipant, createRoom, hostControl, joinParty, reactToCurrent, readParty, readRoomSummary, setQueueMode, setRoomPasscode, submitTrack, type QueueMode } from "../../../db/party";
+import { assertPartyParticipant, createRoom, hostControl, joinParty, reactToCurrent, readParty, readRoomSummary, removePendingTrack, setQueueMode, setRoomPasscode, submitTrack, type QueueMode } from "../../../db/party";
 import { resolveSpotifyTrack, type ResolvedSpotifyTrack } from "../../../lib/spotify-track";
 import { protectPartyAction, protectRoomCreation, protectRoomLookup, RoomCreationGuardError } from "../../../lib/room-creation-guard";
 import { readBoundedJson, RequestSecurityError } from "../../../lib/request-security";
 import { PublicError, publicErrorDetails } from "../../../lib/public-error";
 
-type PartyAction = "create" | "join" | "react" | "submit" | "start" | "skip" | "advance" | "end" | "queueMode" | "passcode";
+type PartyAction = "create" | "join" | "react" | "submit" | "remove" | "start" | "skip" | "advance" | "end" | "queueMode" | "passcode";
 
 type PartyRequest = {
   action?: PartyAction;
@@ -20,6 +20,7 @@ type PartyRequest = {
   preParty?: boolean;
   scheduledFor?: string;
   trackUrl?: string;
+  submissionId?: string;
   track?: { id: string; title: string; artist: string; duration: string; color: string };
 };
 
@@ -28,6 +29,7 @@ function actionFallback(action?: PartyAction) {
   if (action === "join") return "We could not join the room. Check the room code and passcode, then try again.";
   if (action === "submit") return "We could not check that Spotify song right now. Check the link and try again in a moment.";
   if (action === "react") return "Your reaction did not go through. Check your connection and try again.";
+  if (action === "remove") return "We could not remove that song. Refresh your list and try again.";
   if (action === "passcode") return "We could not update the room passcode. Try again—the current passcode is still active.";
   if (action === "queueMode") return "We could not change the queue mode. Refresh the host page and try again.";
   return "That host action did not finish. Refresh the host page and try again.";
@@ -83,6 +85,9 @@ export async function POST(request: Request) {
       if (trackReference.length > 512) throw new PublicError("That Spotify link is too long. Copy the track link directly from Spotify and try again.");
       submittedTrack = await resolveSpotifyTrack(trackReference);
       await submitTrack(code, participantId, submittedTrack);
+    } else if (body.action === "remove" && body.submissionId) {
+      await protectPartyAction(request, body.action, code, participantId);
+      await removePendingTrack(code, participantId, body.submissionId);
     } else if ((body.action === "start" || body.action === "skip" || body.action === "advance" || body.action === "end") && body.pin) {
       await protectPartyAction(request, body.action, code);
       await hostControl(code, body.pin, body.action);
