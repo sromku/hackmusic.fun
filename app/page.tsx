@@ -1,8 +1,50 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+
+type HostedRoom = {
+  code: string;
+  title: string;
+  status: "lobby" | "live" | "ended" | "unknown";
+  createdAt: string;
+  lastOpenedAt: string;
+};
+
+const hostedRoomsKey = "hackmusic:hostedRooms";
+const visibleHostedRooms = 3;
+
+function hostedRoomDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Saved on this browser" : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(date);
+}
+
+function hostedRoomStatus(value: unknown): HostedRoom["status"] {
+  return value === "lobby" || value === "live" || value === "ended" ? value : "unknown";
+}
+
+function parseHostedRooms(value: string | null) {
+  if (!value) return [] as HostedRoom[];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((room): room is HostedRoom => Boolean(room && typeof room === "object" && "code" in room && typeof room.code === "string" && /^[A-Z0-9]{6}$/.test(room.code)))
+      .map((room) => ({
+        code: room.code,
+        title: typeof room.title === "string" && room.title ? room.title : `Room ${room.code}`,
+        status: hostedRoomStatus(room.status),
+        createdAt: typeof room.createdAt === "string" ? room.createdAt : "",
+        lastOpenedAt: typeof room.lastOpenedAt === "string" ? room.lastOpenedAt : room.createdAt || "",
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function saveHostedRooms(rooms: HostedRoom[]) {
+  window.localStorage.setItem(hostedRoomsKey, JSON.stringify(rooms.slice(0, 100)));
+}
 
 export default function Home() {
   const router = useRouter();
@@ -11,8 +53,62 @@ export default function Home() {
   const [roomCode, setRoomCode] = useState("");
   const [preParty, setPreParty] = useState(false);
   const [scheduledFor, setScheduledFor] = useState("");
+  const [hostedRooms, setHostedRooms] = useState<HostedRoom[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const closeHistoryRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function loadHostedRooms() {
+      const stored = parseHostedRooms(window.localStorage.getItem(hostedRoomsKey));
+      const byCode = new Map(stored.filter((room) => window.localStorage.getItem(`hackmusic:${room.code}:host`)).map((room) => [room.code, room]));
+      for (let index = 0; index < window.localStorage.length; index += 1) {
+        const key = window.localStorage.key(index) ?? "";
+        const code = key.match(/^hackmusic:([A-Z0-9]{6}):host$/)?.[1];
+        if (code && !byCode.has(code)) byCode.set(code, { code, title: `Room ${code}`, status: "unknown", createdAt: "", lastOpenedAt: "" });
+      }
+      const refreshed = await Promise.all([...byCode.values()].map(async (room) => {
+        try {
+          const response = await fetch(`/api/party?code=${encodeURIComponent(room.code)}`);
+          const data = await response.json();
+          if (!response.ok) throw new Error();
+          return { ...room, title: data.room.title, status: hostedRoomStatus(data.room.status), createdAt: data.room.createdAt ?? room.createdAt };
+        } catch {
+          return room;
+        }
+      }));
+      const sorted = refreshed.sort((a, b) => (Date.parse(b.lastOpenedAt || b.createdAt) || 0) - (Date.parse(a.lastOpenedAt || a.createdAt) || 0));
+      if (active) {
+        setHostedRooms(sorted);
+        saveHostedRooms(sorted);
+      }
+    }
+    void loadHostedRooms();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!historyOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const frame = window.requestAnimationFrame(() => closeHistoryRef.current?.focus());
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setHistoryOpen(false); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [historyOpen]);
+
+  function rememberRoomOpened(code: string) {
+    const next = hostedRooms.map((room) => room.code === code ? { ...room, lastOpenedAt: new Date().toISOString() } : room)
+      .sort((a, b) => (Date.parse(b.lastOpenedAt || b.createdAt) || 0) - (Date.parse(a.lastOpenedAt || a.createdAt) || 0));
+    setHostedRooms(next);
+    saveHostedRooms(next);
+  }
 
   async function createRoom(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,6 +130,8 @@ export default function Home() {
       const code = data.room.code as string;
       window.localStorage.setItem(`hackmusic:${code}:participant`, data.room.participantId);
       window.localStorage.setItem(`hackmusic:${code}:host`, data.room.hostKey);
+      const now = new Date().toISOString();
+      saveHostedRooms([{ code, title: data.room.title, status: hostedRoomStatus(data.room.status), createdAt: data.room.createdAt ?? now, lastOpenedAt: now }, ...hostedRooms.filter((room) => room.code !== code)]);
       router.push(`/e/${code}/host`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not create the room.");
@@ -108,11 +206,16 @@ export default function Home() {
           <p className="entry-legal-note">By creating or joining a room, you agree to the <a href="/terms">Terms</a> and acknowledge the <a href="/privacy">Privacy Policy</a>.</p>
         </div>
       </section>
+      {hostedRooms.length > 0 && <section className="hosted-history" aria-labelledby="hosted-history-title">
+        <div className="hosted-history-heading"><div><p className="eyebrow">🗝️ THIS BROWSER REMEMBERS</p><h2 id="hosted-history-title">Your hosted rooms</h2><p>Private to this browser. No account, no awkward archaeological expedition.</p></div>{hostedRooms.length > visibleHostedRooms && <button type="button" onClick={() => setHistoryOpen(true)}>See all {hostedRooms.length} rooms →</button>}</div>
+        <div className="hosted-room-grid">{hostedRooms.slice(0, visibleHostedRooms).map((room) => <article className="hosted-room-card" key={room.code}><div className="hosted-room-topline"><span className={`hosted-room-status ${room.status}`}>{room.status === "lobby" ? "🌙 LOBBY" : room.status === "live" ? "⚡ LIVE" : room.status === "ended" ? "🏁 ENDED" : "📼 SAVED"}</span><span>{hostedRoomDate(room.createdAt)}</span></div><h3>{room.title}</h3><strong className="hosted-room-code">{room.code}</strong><div className="hosted-room-actions"><Link href={`/e/${room.code}/host`} onClick={() => rememberRoomOpened(room.code)}>🎛️ Host controls →</Link><Link href={`/e/${room.code}`} onClick={() => rememberRoomOpened(room.code)}>Guest view</Link></div></article>)}</div>
+      </section>}
       <footer className="landing-footer">
         <span>Chaos-ed by <a href="https://sromku.com" target="_blank" rel="noreferrer">@sromku ↗</a> and an AI Codex agent.</span>
         <nav aria-label="Legal links"><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
         <span>SOTA unlocked. Common sense still in beta.</span>
       </footer>
+      {historyOpen && <div className="hosted-history-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setHistoryOpen(false)}><section className="hosted-history-sheet" role="dialog" aria-modal="true" aria-labelledby="all-hosted-rooms-title"><div className="hosted-sheet-handle" aria-hidden="true" /><div className="hosted-sheet-heading"><div><p className="eyebrow">🗃️ THE HOST ARCHIVES</p><h2 id="all-hosted-rooms-title">All rooms from this browser</h2></div><button ref={closeHistoryRef} type="button" onClick={() => setHistoryOpen(false)} aria-label="Close hosted room history">×</button></div><div className="hosted-sheet-list">{hostedRooms.map((room) => <article key={room.code}><span className={`hosted-room-status ${room.status}`}>{room.status === "lobby" ? "🌙 LOBBY" : room.status === "live" ? "⚡ LIVE" : room.status === "ended" ? "🏁 ENDED" : "📼 SAVED"}</span><div><strong>{room.title}</strong><small>Room {room.code} · {hostedRoomDate(room.createdAt)}</small></div><Link href={`/e/${room.code}/host`} onClick={() => { rememberRoomOpened(room.code); setHistoryOpen(false); }}>Open host →</Link></article>)}</div><p className="hosted-sheet-note">🧠 Clear this browser’s site data and these shortcuts disappear. The actual event data is unaffected.</p></section></div>}
     </main>
   );
 }

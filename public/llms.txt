@@ -14,6 +14,7 @@ Canonical site: https://hackmusic.fun
 - A boo plays a funny sound and costs the submitter 3 points; three boos skip the song.
 - Cheer identities are visible. Boo identities remain anonymous to participants.
 - The host chooses submitted order, pure random, or a fair-ish participant shuffle.
+- The home page keeps device-local shortcuts to rooms created in that browser so the host can reopen them without an account.
 - Scores are revealed when the host ends the event.
 
 ## Public page

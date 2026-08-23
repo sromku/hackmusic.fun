@@ -19,6 +19,7 @@ type EventRow = {
   queue_mode: QueueMode;
   current_submission_id: string | null;
   host_pin: string;
+  created_at: string;
 };
 
 export type QueueMode = "ordered" | "random" | "fair";
@@ -90,7 +91,7 @@ function randomCode() {
 
 async function getEvent(code: string) {
   await ensurePartySchema();
-  return getD1().prepare("SELECT id, code, title, status, scheduled_for, queue_mode, current_submission_id, host_pin FROM events WHERE code = ?")
+  return getD1().prepare("SELECT id, code, title, status, scheduled_for, queue_mode, current_submission_id, host_pin, created_at FROM events WHERE code = ?")
     .bind(cleanCode(code)).first<EventRow>();
 }
 
@@ -132,13 +133,13 @@ export async function createRoom(titleInput: string, hostNameInput: string, opti
     d1.prepare("INSERT INTO participants (id, event_id, display_name, initials, color, score, created_at) VALUES (?, ?, ?, ?, ?, 30, ?)")
       .bind(participantId, eventId, hostName, profile.initials, profile.color, now),
   ]);
-  return { code, title, participantId, hostKey };
+  return { code, title, status, scheduledFor, createdAt: now, participantId, hostKey };
 }
 
 export async function readRoomSummary(codeInput: string) {
   const event = await getEvent(codeInput);
   if (!event) throw new Error("Room not found.");
-  return { code: event.code, title: event.title, status: event.status, scheduledFor: event.scheduled_for };
+  return { code: event.code, title: event.title, status: event.status, scheduledFor: event.scheduled_for, createdAt: event.created_at };
 }
 
 export async function readParty(codeInput: string, viewerId: string, hostKey = "", activityAfter?: string) {

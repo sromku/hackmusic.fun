@@ -61,7 +61,7 @@ const sections = [
       <ul>
         <li><strong>Spotify OAuth cookie:</strong> a short-lived, HTTP-only cookie keeps the Spotify sign-in request secure for about 10 minutes.</li>
         <li><strong>Spotify session cookie:</strong> an HTTP-only, secure cookie keeps the host’s authorized Spotify connection available for up to 30 days, or until the host disconnects it. It contains Spotify access credentials and required connection details and is not available to page scripts.</li>
-        <li><strong>Local browser storage:</strong> participant IDs, the host key, and the host’s public Spotify Client ID are stored on that device so the browser can recognize its room role. Clearing site data removes them from the device and may lock that browser out of host controls.</li>
+        <li><strong>Local browser storage:</strong> participant IDs, host keys, hosted-room shortcuts, room names and statuses, recent access times, and the host’s public Spotify Client ID are stored on that device so the browser can recognize its room role and help the host reopen recent events. This hosted-room history stays in that browser and is not a separate server-side profile. Clearing site data removes it and may lock that browser out of host controls.</li>
         <li><strong>Infrastructure storage:</strong> OpenAI Sites and its infrastructure providers may use strictly necessary security, routing, authentication, load-balancing, or fraud-prevention technologies.</li>
       </ul>
       <p>You can clear cookies and local storage through your browser. Blocking necessary storage may prevent room recognition, host access, or Spotify playback.</p>

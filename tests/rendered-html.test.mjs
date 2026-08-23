@@ -64,6 +64,14 @@ test("renders the create and join landing page", async () => {
   assert.match(landingSource, /Pre-party lobby/);
   assert.match(landingSource, /type="datetime-local"/);
   assert.match(landingSource, /preParty, scheduledFor/);
+  assert.match(landingSource, /hackmusic:hostedRooms/);
+  assert.match(landingSource, /Your hosted rooms/);
+  assert.match(landingSource, /See all \{hostedRooms\.length\} rooms/);
+  assert.match(landingSource, /hosted-history-sheet/);
+  assert.match(landingSource, /role="dialog"/);
+  assert.match(landingSource, /localStorage\.key\(index\)/);
+  assert.match(landingSource, /hackmusic:\(\[A-Z0-9\]/);
+  assert.match(landingSource, /Clear this browser’s site data/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/);
 });
 
@@ -76,6 +84,7 @@ test("renders tailored privacy and terms pages", async () => {
   assert.match(privacy, /hackmusic\.fun@gmail\.com/);
   assert.match(privacy, /New Jersey/);
   assert.match(privacy, /Spotify session cookie/);
+  assert.match(privacy, /hosted-room shortcuts/);
   assert.match(privacy, /do not sell personal data/i);
 
   const termsResponse = await render("/terms");
@@ -127,6 +136,7 @@ test("renders a code-specific participant room", async () => {
   assert.match(partySource, /revealScores = event\.status === "ended"/);
   assert.match(partySource, /score: revealScores \? person\.score : null/);
   assert.match(partySource, /UPDATE reactions SET kind/);
+  assert.match(partySource, /createdAt: event\.created_at/);
   assert.match(partySource, /newEffect - oldEffect/);
   assert.match(partySource, /current\.artist === "Spotify"/);
   assert.match(partySource, /pending\?\.count \?\? 0\) >= MAX_PENDING_TRACKS_PER_PERSON/);

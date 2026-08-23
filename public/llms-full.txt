@@ -10,6 +10,8 @@ During each song, guests can do nothing, cheer, or boo. A cheer produces a short
 
 The host can see and manage the waiting queue, enable reaction sounds, prevent the phone from sleeping when supported, skip songs, select a queue strategy, and end the party after confirmation. Queue strategies include submitted order, pure random selection, and a fair-ish shuffle that rotates among participants while preserving uncertainty.
 
+The home page keeps a browser-local list of rooms created on that device, with quick links back to host controls. This shortcut history is not an account and disappears if the browser's site data is cleared.
+
 ## Product principles
 
 - Fun and understandable within seconds.
