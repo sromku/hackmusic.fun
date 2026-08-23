@@ -65,6 +65,13 @@ test("shows helpful product errors without leaking internal exceptions", async (
   assert.deepEqual(errors.publicErrorDetails(new Error("Pbkdf2 failed: internal runtime detail"), "Please try again."), { message: "Please try again.", status: 500 });
 });
 
+test("accepts only the curated party-face emoji collection", async () => {
+  const avatars = await loadTypeScriptModule("lib/avatar-emojis.ts");
+  assert.equal(avatars.AVATAR_EMOJIS.length, 24);
+  assert.equal(avatars.isAvatarEmoji("🪩"), true);
+  assert.equal(avatars.isAvatarEmoji("not-an-emoji"), false);
+});
+
 test("renders the create and join landing page", async () => {
   const response = await render();
   assert.equal(response.status, 200);
@@ -208,6 +215,11 @@ test("renders a code-specific participant room", async () => {
   assert.ok(source.indexOf("🔊 ROOM NOISE") < source.indexOf("🎧 My music"));
   assert.match(source, /TOTAL MUSIC EVER ADDED/);
   assert.match(source, /totalMusicTime\(myMusicSeconds\)/);
+  assert.match(source, /Pick your party face/);
+  assert.match(source, /Surprise me, algorithm/);
+  assert.match(source, /action: "avatar", avatarEmoji: emoji/);
+  assert.match(source, /AVATAR_EMOJIS\.map/);
+  assert.match(source, /Your anonymous boos remain delightfully anonymous/);
   assert.match(source, /Still in my queue/);
   assert.match(source, /My played songs/);
   assert.match(source, /My reactions/);
@@ -242,14 +254,23 @@ test("renders a code-specific participant room", async () => {
   assert.match(partySource, /UPDATE submissions SET status = 'removed'[\s\S]*participant_id = \? AND status = 'pending'/);
   assert.match(partySource, /SELECT id FROM submissions WHERE event_id = \? AND provider_track_id = \? LIMIT 1/);
   assert.match(partySource, /That song is already part of this party/);
+  assert.match(partySource, /export async function setParticipantAvatar/);
+  assert.match(partySource, /UPDATE participants SET initials = \? WHERE id = \? AND event_id = \?/);
+  assert.match(partySource, /isAvatarEmoji\(emoji\)/);
   assert.match(partySource, /That song is no longer waiting in your queue/);
   const participantStyles = await readFile(new URL("app/globals.css", projectRoot), "utf8");
   assert.match(participantStyles, /\.my-track-list \{[^}]*overscroll-behavior-y: auto/);
   assert.match(participantStyles, /\.activity-list \{[^}]*overscroll-behavior-y: auto/);
   assert.match(participantStyles, /\.event-heading \{ z-index: 20; \}/);
+  assert.match(participantStyles, /\.avatar-grid \{[^}]*grid-template-columns: repeat\(6/);
+  assert.match(participantStyles, /\.party-avatar-trigger/);
   const partyRouteSource = await readFile(new URL("app/api/party/route.ts", projectRoot), "utf8");
   assert.match(partyRouteSource, /body\.action === "remove" && body\.submissionId/);
+  assert.match(partyRouteSource, /body\.action === "avatar" && body\.avatarEmoji/);
+  assert.match(partyRouteSource, /setParticipantAvatar\(code, participantId, body\.avatarEmoji\)/);
   assert.match(partyRouteSource, /protectPartyAction\(request, body\.action, code, participantId\)/);
+  const guardSource = await readFile(new URL("lib/room-creation-guard.ts", projectRoot), "utf8");
+  assert.match(guardSource, /bucket: "avatar-person"/);
   const lobbyMigration = await readFile(new URL("drizzle/0004_lean_kronos.sql", projectRoot), "utf8");
   assert.match(lobbyMigration, /ADD `scheduled_for` text/);
   const roomGuardSource = await readFile(new URL("lib/room-creation-guard.ts", projectRoot), "utf8");

@@ -1,10 +1,10 @@
-import { assertPartyParticipant, createRoom, hostControl, joinParty, reactToCurrent, readParty, readRoomSummary, recordBooSkipProgress, removePendingTrack, setQueueMode, setRoomPasscode, submitTrack, type QueueMode } from "../../../db/party";
+import { assertPartyParticipant, createRoom, hostControl, joinParty, reactToCurrent, readParty, readRoomSummary, recordBooSkipProgress, removePendingTrack, setParticipantAvatar, setQueueMode, setRoomPasscode, submitTrack, type QueueMode } from "../../../db/party";
 import { resolveSpotifyTrack, type ResolvedSpotifyTrack } from "../../../lib/spotify-track";
 import { protectPartyAction, protectRoomCreation, protectRoomLookup, RoomCreationGuardError } from "../../../lib/room-creation-guard";
 import { readBoundedJson, RequestSecurityError } from "../../../lib/request-security";
 import { PublicError, publicErrorDetails } from "../../../lib/public-error";
 
-type PartyAction = "create" | "join" | "react" | "submit" | "remove" | "start" | "skip" | "advance" | "end" | "queueMode" | "passcode" | "skipProgress";
+type PartyAction = "create" | "join" | "react" | "submit" | "remove" | "avatar" | "start" | "skip" | "advance" | "end" | "queueMode" | "passcode" | "skipProgress";
 
 type PartyRequest = {
   action?: PartyAction;
@@ -22,6 +22,7 @@ type PartyRequest = {
   trackUrl?: string;
   trackId?: string;
   submissionId?: string;
+  avatarEmoji?: string;
   skipPercent?: number;
   track?: { id: string; title: string; artist: string; duration: string; color: string };
 };
@@ -32,6 +33,7 @@ function actionFallback(action?: PartyAction) {
   if (action === "submit") return "We could not check that Spotify song right now. Check the link and try again in a moment.";
   if (action === "react") return "Your reaction did not go through. Check your connection and try again.";
   if (action === "remove") return "We could not remove that song. Refresh your list and try again.";
+  if (action === "avatar") return "Your party face did not change. Try another emoji.";
   if (action === "passcode") return "We could not update the room passcode. Try again—the current passcode is still active.";
   if (action === "queueMode") return "We could not change the queue mode. Refresh the host page and try again.";
   return "That host action did not finish. Refresh the host page and try again.";
@@ -90,6 +92,9 @@ export async function POST(request: Request) {
     } else if (body.action === "remove" && body.submissionId) {
       await protectPartyAction(request, body.action, code, participantId);
       await removePendingTrack(code, participantId, body.submissionId);
+    } else if (body.action === "avatar" && body.avatarEmoji) {
+      await protectPartyAction(request, body.action, code, participantId);
+      await setParticipantAvatar(code, participantId, body.avatarEmoji);
     } else if ((body.action === "start" || body.action === "skip" || body.action === "advance" || body.action === "end") && body.pin) {
       await protectPartyAction(request, body.action, code);
       await hostControl(code, body.pin, body.action);

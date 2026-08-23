@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { AVATAR_EMOJIS } from "../../../lib/avatar-emojis";
 import { MAX_PENDING_TRACKS_PER_PERSON } from "../../../lib/party-rules";
 
 type Color = "coral" | "sun" | "blue" | "mint";
@@ -72,6 +73,7 @@ export default function PartyRoom({ code }: { code: string }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [removeConfirmId, setRemoveConfirmId] = useState("");
+  const [avatarOpen, setAvatarOpen] = useState(false);
 
   const myReaction = party?.reactions.find((reaction) => reaction.mine)?.tone;
   const boos = party?.reactions.filter((reaction) => reaction.tone === "down").length ?? 0;
@@ -193,6 +195,27 @@ export default function PartyRoom({ code }: { code: string }) {
     }
   }
 
+  async function changeAvatar(emoji: string) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const data = await postAction({ action: "avatar", avatarEmoji: emoji });
+      setParty((current) => ({ ...data.party, activity: current?.activity ?? [] }));
+      setAvatarOpen(false);
+      setNotice(`${emoji} Party face unlocked. Looking dangerously iconic.`);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Your party face escaped. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function surpriseAvatar() {
+    const alternatives = AVATAR_EMOJIS.filter((option) => option.emoji !== party?.viewer.initials);
+    const choice = alternatives[Math.floor(Math.random() * alternatives.length)] ?? AVATAR_EMOJIS[0];
+    void changeAvatar(choice.emoji);
+  }
+
   if (error) return <main className="missing-room"><span className="brand-mark">HM</span><p className="eyebrow">ROOM LOST</p><h1>{error}</h1><a href="/">Try another code →</a></main>;
   if (!room) return <main className="loading-room"><span className="brand-mark">HM</span><p>Finding room {code}…</p></main>;
   const currentSpotifyUrl = party?.currentTrack ? spotifyTrackUrl(party.currentTrack.id) : "";
@@ -228,7 +251,7 @@ export default function PartyRoom({ code }: { code: string }) {
         </section>
 
         <aside className={`party-sidebar ${ended ? "scores-revealed" : "scores-hidden"}`}>{ended && <section className="sidebar-card score-card"><div className="score-topline"><span>🏆 YOUR FINAL SCORE</span><span>⭐</span></div><strong className="big-score">{party.viewer.score ?? "—"}</strong><p>🧊 Frozen forever. Brag responsibly.</p></section>}
-          <section className="sidebar-card crowd-card"><div className="card-title-row"><h2>{ended ? "🏆 FINAL SCORES" : "🪩 THE CROWD"}</h2><span>{ended ? "👀 REVEALED" : `🎉 ${party.people.length} HERE`}</span></div><div className="people-list">{visiblePeople.map((person) => <div className="person-row" key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><strong>{person.name}</strong>{ended && <span className="person-score">{person.score ?? "—"}</span>}</div>)}</div>{!ended && party.people.length > 4 && <button className="text-button" type="button" onClick={() => setShowEveryone((value) => !value)}>{showEveryone ? "Show less ↑" : "Show everybody →"}</button>}</section>
+          <section className="sidebar-card crowd-card"><div className="card-title-row"><h2>{ended ? "🏆 FINAL SCORES" : "🪩 THE CROWD"}</h2><span>{ended ? "👀 REVEALED" : `🎉 ${party.people.length} HERE`}</span></div><button className="party-avatar-trigger" type="button" onClick={() => setAvatarOpen(true)}><span className={`avatar ${party.viewer.color}`}>{party.viewer.initials}</span><span><small>YOUR PARTY FACE</small><strong>Tap to unleash an emoji</strong></span><b>CHANGE →</b></button><div className="people-list">{visiblePeople.map((person) => <div className="person-row" key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><strong>{person.name}</strong>{ended && <span className="person-score">{person.score ?? "—"}</span>}</div>)}</div>{!ended && party.people.length > 4 && <button className="text-button" type="button" onClick={() => setShowEveryone((value) => !value)}>{showEveryone ? "Show less ↑" : "Show everybody →"}</button>}</section>
         </aside>
       </div>}
 
@@ -263,6 +286,8 @@ export default function PartyRoom({ code }: { code: string }) {
       </section>}
 
       {!ended && addOpen && party && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setAddOpen(false)}><section className="song-modal spotify-song-modal" role="dialog" aria-modal="true" aria-labelledby="add-song-title"><div className="modal-topline"><div><p className="eyebrow">🤫 SECRET WEAPON</p><h2 id="add-song-title">🎵 Add a Spotify song</h2></div><button className="close-button" type="button" onClick={() => setAddOpen(false)} aria-label="Close">×</button></div><div className="spotify-add-guide"><strong>🟢 Spotify → Share → Copy song link</strong><span>Paste the track below. Its title is checked before it joins the secret queue.</span></div><form className="link-form spotify-link-form" onSubmit={(event) => void submitLink(event)}><label htmlFor="song-link">SPOTIFY TRACK LINK</label><input id="song-link" name="song-link" type="url" inputMode="url" autoComplete="off" placeholder="https://open.spotify.com/track/..." required /><button type="submit" disabled={busy || party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON}>{busy ? "🔎 Checking Spotify…" : party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON ? "🚧 Your waiting queue is full" : "🤫 Add to the secret queue →"}</button></form><p className="queue-note">🕵️ The queue stays secret. You have {Math.max(0, MAX_PENDING_TRACKS_PER_PERSON - party.pendingCount)} of {MAX_PENDING_TRACKS_PER_PERSON} waiting slots left. Played and skipped songs free their slots.</p></section></div>}
+
+      {avatarOpen && party && <div className="modal-backdrop avatar-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setAvatarOpen(false)}><section className="avatar-picker-card" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title"><div className="modal-topline"><div><p className="eyebrow">🎭 IDENTITY, BUT LOUDER</p><h2 id="avatar-picker-title">Pick your party face</h2></div><button className="close-button" type="button" onClick={() => setAvatarOpen(false)} aria-label="Close avatar picker">×</button></div><p className="avatar-picker-intro">Choose wisely. This tiny face will represent your enormous musical opinions.</p><div className="avatar-grid" role="group" aria-label="Party face emojis">{AVATAR_EMOJIS.map((option) => <button className={party.viewer.initials === option.emoji ? "selected" : ""} type="button" onClick={() => void changeAvatar(option.emoji)} disabled={busy} aria-label={`Use ${option.label} as my party face`} aria-pressed={party.viewer.initials === option.emoji} key={option.emoji}><span aria-hidden="true">{option.emoji}</span><small>{option.label}</small></button>)}</div><button className="avatar-surprise" type="button" onClick={surpriseAvatar} disabled={busy}>{busy ? "✨ Summoning chaos…" : "🎲 Surprise me, algorithm →"}</button><p className="avatar-privacy-note">🔐 Only your avatar changes. Your anonymous boos remain delightfully anonymous.</p></section></div>}
 
       {!participantId && !ended && <div className="modal-backdrop join-backdrop"><form className="join-card" onSubmit={join}><span className="join-mark">HM</span><p className="eyebrow">🎟️ ROOM {room.code}</p><h2>{lobby ? "The pre-party is open 🌙" : "Who just walked in? 👀"}</h2><p>You’re joining <strong>{room.title}</strong>. {lobby ? "Pick a name and start hiding songs in the queue." : "Pick a name and collect your 30 points ⭐"}</p><label htmlFor="join-name">YOUR PARTY NAME</label><input id="join-name" value={joinName} onChange={(event) => setJoinName(event.target.value)} maxLength={24} autoComplete="nickname" placeholder="e.g. Dance Floor Dave" required />{room.requiresPasscode && <><label htmlFor="join-passcode">ROOM PASSCODE</label><input id="join-passcode" value={joinPasscode} onChange={(event) => setJoinPasscode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} minLength={4} maxLength={12} autoComplete="one-time-code" placeholder="Ask the host" required /></>}<button type="submit" disabled={busy}>{busy ? "🔐 Checking the guest list…" : lobby ? "🌙 Enter the lobby →" : "🥳 Enter the party →"}</button><small>🔐 Room code + passcode keeps random party crashers outside.</small></form></div>}
       {notice && <div className="toast" role="status">{notice}</div>}

@@ -414,6 +414,30 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 .sun { background: var(--sun); } .coral { background: var(--coral); } .blue { background: var(--blue); } .mint { background: var(--mint); }
 .person-score { margin-left: auto; font-size: 13px; font-weight: 900; }
 .text-button { padding: 6px 0 0; border: 0; background: transparent; cursor: pointer; font-size: 12px; font-weight: 900; }
+.party-avatar-trigger { display: grid; width: 100%; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; margin-top: 12px; border: 2px solid var(--ink); background: var(--sun); box-shadow: 3px 3px 0 var(--ink); padding: 9px; color: var(--ink); cursor: pointer; text-align: left; transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
+.party-avatar-trigger:hover { background: var(--mint); box-shadow: 5px 5px 0 var(--ink); transform: translate(-2px, -2px) rotate(-.35deg); }
+.party-avatar-trigger:active { box-shadow: 1px 1px 0 var(--ink); transform: translate(1px, 1px); }
+.party-avatar-trigger .avatar { flex: none; font-size: 18px; }
+.party-avatar-trigger > span:nth-child(2) { display: grid; gap: 2px; }
+.party-avatar-trigger small { font-size: 7px; font-weight: 950; letter-spacing: .11em; }
+.party-avatar-trigger strong { font-size: 10px; }
+.party-avatar-trigger b { font-size: 8px; letter-spacing: .08em; }
+
+.avatar-picker-card { width: min(650px, calc(100% - 28px)); max-height: min(790px, 92dvh); overflow-y: auto; border: 2px solid var(--ink); background: var(--sun); box-shadow: 10px 10px 0 var(--ink); padding: 24px; }
+.avatar-picker-card h2 { margin: 3px 0 0; font-size: clamp(34px, 6vw, 58px); line-height: .9; letter-spacing: -.06em; }
+.avatar-picker-intro { max-width: 520px; margin: 16px 0 18px; font-size: 13px; font-weight: 800; line-height: 1.4; }
+.avatar-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 9px; }
+.avatar-grid button { position: relative; display: grid; aspect-ratio: 1; place-items: center; align-content: center; gap: 4px; border: 2px solid var(--ink); background: var(--white); box-shadow: 3px 3px 0 var(--ink); cursor: pointer; transition: transform .16s cubic-bezier(.2, .8, .25, 1.3), box-shadow .16s ease, background .16s ease; }
+.avatar-grid button:nth-child(4n + 2) { background: var(--mint); transform: rotate(1deg); }
+.avatar-grid button:nth-child(4n + 3) { background: var(--blue); transform: rotate(-1deg); }
+.avatar-grid button:hover:not(:disabled) { z-index: 1; background: var(--coral); box-shadow: 6px 6px 0 var(--ink); transform: translate(-3px, -3px) rotate(-3deg) scale(1.08); }
+.avatar-grid button.selected { background: var(--coral); box-shadow: 0 0 0 3px var(--white), 0 0 0 5px var(--ink), 5px 5px 0 5px var(--ink); transform: rotate(-2deg) scale(1.03); }
+.avatar-grid button:disabled { cursor: wait; opacity: .62; }
+.avatar-grid button > span { font-size: clamp(25px, 4vw, 38px); line-height: 1; }
+.avatar-grid button small { overflow: hidden; width: 90%; font-size: 7px; font-weight: 900; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.avatar-surprise { width: 100%; min-height: 50px; margin-top: 18px; border: 2px solid var(--ink); background: var(--blue); box-shadow: 5px 5px 0 var(--ink); cursor: pointer; font-size: 14px; font-weight: 950; }
+.avatar-surprise:hover:not(:disabled) { background: var(--mint); transform: translate(-2px, -2px); }
+.avatar-privacy-note { margin: 16px 0 0; font-size: 9px; font-weight: 850; text-align: center; }
 
 .my-music-card { margin-top: 24px; overflow: hidden; }
 .my-music-heading { display: flex; justify-content: space-between; gap: 28px; align-items: end; border-bottom: 2px solid var(--ink); background: var(--sun); padding: 20px 22px; }
@@ -740,6 +764,10 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
   .toast { bottom: 82px; }
   .host-toast { bottom: 18px; }
   .shape-two { display: none; }
+  .avatar-backdrop { align-items: end; padding: 0; }
+  .avatar-picker-card { width: 100%; max-height: 88dvh; border-width: 2px 0 0; box-shadow: none; padding: 20px 16px 28px; }
+  .avatar-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .avatar-grid button > span { font-size: 30px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

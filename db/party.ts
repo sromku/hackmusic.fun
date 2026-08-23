@@ -1,4 +1,5 @@
 import { ensurePartySchema, getD1 } from ".";
+import { isAvatarEmoji } from "../lib/avatar-emojis";
 import { MAX_PARTICIPANTS_PER_ROOM, MAX_PENDING_TRACKS_PER_PERSON } from "../lib/party-rules";
 import { PublicError } from "../lib/public-error";
 import { hashRoomPasscode, verifyRoomPasscode } from "../lib/room-passcode";
@@ -570,6 +571,15 @@ export async function removePendingTrack(code: string, participantId: string, su
     WHERE id = ? AND event_id = ? AND participant_id = ? AND status = 'pending'`)
     .bind(submissionId, event.id, participantId).run();
   if (!result.meta.changes) throw new PublicError("That song is no longer waiting in your queue. Refresh to see the latest mix.", 409);
+}
+
+export async function setParticipantAvatar(code: string, participantId: string, emoji: string) {
+  const event = await getEvent(code);
+  if (!event) throw new PublicError("Room not found. Check the six-character code and try again.", 404);
+  if (!isAvatarEmoji(emoji)) throw new PublicError("That party face wandered outside the emoji booth. Pick one from the list.");
+  const result = await getD1().prepare("UPDATE participants SET initials = ? WHERE id = ? AND event_id = ?")
+    .bind(emoji, participantId, event.id).run();
+  if (!result.meta.changes) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);
 }
 
 export async function assertPartyParticipant(code: string, participantId: string) {
