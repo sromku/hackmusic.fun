@@ -57,6 +57,8 @@ async function initializePartySchema() {
       duration TEXT NOT NULL,
       color TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'pending',
+      skip_reason TEXT,
+      skip_percent INTEGER,
       submitted_at TEXT NOT NULL
     )`),
     d1.prepare(`CREATE TABLE IF NOT EXISTS reactions (
@@ -112,6 +114,20 @@ async function initializePartySchema() {
     catch (error) { if (!(error instanceof Error) || !error.message.includes("duplicate column")) throw error; }
   }
   await d1.prepare("UPDATE participants SET public_id = 'person-' || lower(hex(randomblob(12))) WHERE public_id IS NULL").run();
+  const submissionColumns = await d1.prepare("PRAGMA table_info(submissions)").all<{ name: string }>();
+  const existingSubmissionColumns = new Set(submissionColumns.results.map((column) => column.name));
+  const missingSubmissionColumns = [
+    ["skip_reason", "ALTER TABLE submissions ADD COLUMN skip_reason TEXT"],
+    ["skip_percent", "ALTER TABLE submissions ADD COLUMN skip_percent INTEGER"],
+  ] as const;
+  for (const [column, statement] of missingSubmissionColumns) {
+    if (existingSubmissionColumns.has(column)) continue;
+    try {
+      await d1.prepare(statement).run();
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("duplicate column")) throw error;
+    }
+  }
   await d1.batch([
     d1.prepare("CREATE UNIQUE INDEX IF NOT EXISTS participants_public_id_unique ON participants(public_id)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS participants_event_idx ON participants(event_id)"),

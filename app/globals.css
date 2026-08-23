@@ -986,7 +986,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .spotify-connected-row p, .spotify-loading { margin: 5px 0 0; font-size: 12px; font-weight: 720; }
 .spotify-message { margin: 16px 0 0; border-top: 1px solid var(--ink); padding-top: 12px; font-size: 11px; font-weight: 800; }
 .host-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 24px; align-items: start; margin-top: 32px; }
-.host-now-card, .host-controls-card, .host-queue-card, .leaderboard-card { border: 2px solid var(--ink); background: var(--white); box-shadow: 7px 7px 0 var(--ink); animation: card-arrive .58s .14s cubic-bezier(.2, .75, .25, 1) both; }
+.host-now-card, .host-controls-card, .host-queue-card, .host-history-card, .leaderboard-card { border: 2px solid var(--ink); background: var(--white); box-shadow: 7px 7px 0 var(--ink); animation: card-arrive .58s .14s cubic-bezier(.2, .75, .25, 1) both; }
 .host-controls-card { animation-delay: .2s; }
 .host-queue-card { animation-delay: .23s; }
 .leaderboard-card { animation-delay: .26s; }
@@ -1095,6 +1095,25 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .host-queue-empty > span { font-size: 38px; }
 .host-queue-empty strong { font-size: 17px; }
 .host-queue-empty p { margin: 5px 0 0; color: #625e56; font-size: 11px; font-weight: 720; }
+.host-history-card { margin-top: 24px; padding: 22px; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; animation-delay: .25s; }
+.host-history-card > .card-title-row > span { border: 2px solid var(--ink); background: var(--blue); padding: 6px 8px; font-size: 9px; font-weight: 950; letter-spacing: .08em; }
+.host-history-card ol { display: grid; margin: 12px 0 0; padding: 0; list-style: none; }
+.host-history-card li { display: grid; grid-template-columns: 60px minmax(0, 1fr) auto; gap: 16px; align-items: center; border-bottom: 1px solid #c9c3b6; padding: 14px 0; }
+.host-history-card li:last-child { border-bottom: 0; }
+.history-track-copy { min-width: 0; }
+.history-track-copy strong, .history-track-copy span, .history-track-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-track-copy strong { font-size: 17px; }
+.history-track-copy span { margin-top: 4px; color: #5f5a52; font-size: 11px; font-weight: 750; }
+.history-track-copy small { margin-top: 5px; color: #6b675f; font-size: 9px; font-weight: 850; }
+.song-outcome { min-width: 140px; border: 2px solid var(--ink); padding: 9px 10px; font-size: 9px; font-weight: 950; letter-spacing: .07em; text-align: center; }
+.song-outcome.played { background: var(--mint); }
+.song-outcome.boos { background: var(--coral); }
+.song-outcome.host { background: var(--sun); }
+.song-outcome.unknown { background: var(--paper); }
+.host-history-empty { display: flex; gap: 14px; align-items: center; min-height: 92px; padding-top: 16px; }
+.host-history-empty > span { font-size: 34px; }
+.host-history-empty strong { font-size: 16px; }
+.host-history-empty p { margin: 5px 0 0; color: #625e56; font-size: 11px; font-weight: 720; }
 .leaderboard-card { margin-top: 24px; padding: 20px; }
 .leaderboard-card ol { margin: 8px 0 0; padding: 0; list-style: none; }
 .leaderboard-card li { display: grid; grid-template-columns: 38px 32px 1fr auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid #c9c3b6; }
@@ -1117,15 +1136,19 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
   .share-room-card img { width: 132px; height: 132px; }
   .spotify-connect-card { margin-top: 22px; padding: 18px; }
   .host-grid { gap: 18px; margin-top: 24px; }
-  .host-now-card, .host-controls-card, .host-queue-card, .leaderboard-card, .share-room-card, .spotify-connect-card, .host-lobby-card { box-shadow: 5px 5px 0 var(--ink); }
+  .host-now-card, .host-controls-card, .host-queue-card, .host-history-card, .leaderboard-card, .share-room-card, .spotify-connect-card, .host-lobby-card { box-shadow: 5px 5px 0 var(--ink); }
   .host-lobby-card { grid-template-columns: 1fr; gap: 18px; margin-top: 22px; padding: 18px; }
   .host-track { grid-template-columns: 76px 1fr; gap: 14px; padding: 14px; }
   .host-art { width: 76px; height: 76px; font-size: 34px; }
   .host-track h2 { font-size: 24px; }
-  .host-controls-card, .host-queue-card, .leaderboard-card { padding: 16px; }
+  .host-controls-card, .host-queue-card, .host-history-card, .leaderboard-card { padding: 16px; }
   .host-queue-card { margin-top: 18px; padding: 16px 14px; }
   .host-queue-card > .card-title-row { align-items: flex-start; gap: 10px; }
   .host-queue-card > .card-title-row h2 { font-size: 15px; }
+  .host-history-card { margin-top: 18px; padding: 16px 14px; }
+  .host-history-card li { grid-template-columns: 52px minmax(0, 1fr); gap: 12px; }
+  .host-history-card .queue-art { width: 48px; height: 48px; font-size: 21px; }
+  .song-outcome { grid-column: 2; justify-self: start; min-width: 0; }
   .queue-mode-picker > div { grid-template-columns: 1fr; }
   .queue-mode-picker button { grid-template-columns: 40px minmax(0, 1fr) auto; min-height: 82px; padding: 12px; }
   .queue-mode-icon { width: 40px; height: 40px; font-size: 21px; }

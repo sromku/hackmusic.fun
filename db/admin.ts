@@ -89,11 +89,11 @@ export async function readAdminRoom(codeInput: string) {
       FROM participants WHERE event_id = ? ORDER BY created_at ASC`).bind(event.id).all<{
         display_name: string; initials: string; color: string; score: number; created_at: string;
       }>(),
-    d1.prepare(`SELECT s.title, s.artist, s.duration, s.status, s.submitted_at,
+    d1.prepare(`SELECT s.title, s.artist, s.duration, s.status, s.skip_reason, s.skip_percent, s.submitted_at,
       p.display_name AS submitted_by
       FROM submissions s JOIN participants p ON p.id = s.participant_id
       WHERE s.event_id = ? ORDER BY s.submitted_at DESC LIMIT 1000`).bind(event.id).all<{
-        title: string; artist: string; duration: string; status: string; submitted_at: string; submitted_by: string;
+        title: string; artist: string; duration: string; status: string; skip_reason: string | null; skip_percent: number | null; submitted_at: string; submitted_by: string;
       }>(),
     d1.prepare(`SELECT r.kind, r.created_at, p.display_name, s.title
       FROM reactions r
@@ -133,6 +133,8 @@ export async function readAdminRoom(codeInput: string) {
       artist: track.artist,
       duration: track.duration,
       status: track.status,
+      skipReason: track.skip_reason,
+      skipPercent: track.skip_percent,
       submittedBy: track.submitted_by,
       submittedAt: track.submitted_at,
     })),

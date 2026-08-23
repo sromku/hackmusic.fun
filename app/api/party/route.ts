@@ -1,10 +1,10 @@
-import { assertPartyParticipant, createRoom, hostControl, joinParty, reactToCurrent, readParty, readRoomSummary, removePendingTrack, setQueueMode, setRoomPasscode, submitTrack, type QueueMode } from "../../../db/party";
+import { assertPartyParticipant, createRoom, hostControl, joinParty, reactToCurrent, readParty, readRoomSummary, recordBooSkipProgress, removePendingTrack, setQueueMode, setRoomPasscode, submitTrack, type QueueMode } from "../../../db/party";
 import { resolveSpotifyTrack, type ResolvedSpotifyTrack } from "../../../lib/spotify-track";
 import { protectPartyAction, protectRoomCreation, protectRoomLookup, RoomCreationGuardError } from "../../../lib/room-creation-guard";
 import { readBoundedJson, RequestSecurityError } from "../../../lib/request-security";
 import { PublicError, publicErrorDetails } from "../../../lib/public-error";
 
-type PartyAction = "create" | "join" | "react" | "submit" | "remove" | "start" | "skip" | "advance" | "end" | "queueMode" | "passcode";
+type PartyAction = "create" | "join" | "react" | "submit" | "remove" | "start" | "skip" | "advance" | "end" | "queueMode" | "passcode" | "skipProgress";
 
 type PartyRequest = {
   action?: PartyAction;
@@ -20,7 +20,9 @@ type PartyRequest = {
   preParty?: boolean;
   scheduledFor?: string;
   trackUrl?: string;
+  trackId?: string;
   submissionId?: string;
+  skipPercent?: number;
   track?: { id: string; title: string; artist: string; duration: string; color: string };
 };
 
@@ -97,6 +99,9 @@ export async function POST(request: Request) {
     } else if (body.action === "passcode" && body.passcode && body.pin) {
       await protectPartyAction(request, body.action, code);
       await setRoomPasscode(code, body.pin, body.passcode);
+    } else if (body.action === "skipProgress" && body.trackId && typeof body.skipPercent === "number" && body.pin) {
+      await protectPartyAction(request, body.action, code);
+      await recordBooSkipProgress(code, body.pin, body.trackId, body.skipPercent);
     } else {
       return json({ error: "Invalid party action." }, 400);
     }

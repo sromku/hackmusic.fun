@@ -87,7 +87,7 @@ export async function protectPartyAction(request: Request, action: string, code:
     if (participantId) await consumeRequestLimit(request, { bucket: "react-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 12 });
     return;
   }
-  if (["start", "skip", "advance", "end", "queueMode", "passcode"].includes(action)) {
+  if (["start", "skip", "advance", "end", "queueMode", "passcode", "skipProgress"].includes(action)) {
     await consumeRequestLimit(request, { bucket: "host-control", subject: normalizedCode, windowMs: 60_000, maximum: 90 });
   }
 }

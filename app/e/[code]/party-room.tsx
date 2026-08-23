@@ -8,8 +8,8 @@ type Person = { id: string; initials: string; name: string; score: number | null
 type Reaction = { id: string; mine: boolean; avatar: string; name: string; message: string; icon: "▲" | "▼"; tone: "up" | "down"; createdAt?: string };
 type Activity = { id: string; mine?: boolean; avatar: string; name: string; message: string; icon: string; tone: "up" | "down" | "song"; trackTitle: string; createdAt: string };
 type Track = { id: string; title: string; artist: string; duration: string; color: Color };
-type MySong = Track & { queueId: string; status: "pending" | "playing" | "played" | "skipped"; submittedAt: string };
-type MyReactionHistory = { reactionId: string; id: string; title: string; artist: string; tone: "up" | "down"; songStatus: MySong["status"]; reactedAt: string };
+type MySong = Track & { queueId: string; status: "pending" | "playing" | "played" | "skipped"; skipReason: "boos" | "host" | null; skipPercent: number | null; submittedAt: string };
+type MyReactionHistory = { reactionId: string; id: string; title: string; artist: string; tone: "up" | "down"; songStatus: MySong["status"]; skipReason: MySong["skipReason"]; skipPercent: number | null; reactedAt: string };
 type PartyState = { code: string; title: string; viewer: Person; people: Person[]; currentTrack: Track | null; reactions: Reaction[]; activity?: Activity[]; mySongs: MySong[]; myReactionHistory: MyReactionHistory[]; pendingCount: number; queueCount: number; status: "lobby" | "live" | "ended"; scheduledFor: string | null };
 type RoomSummary = { code: string; title: string; status: "lobby" | "live" | "ended"; scheduledFor: string | null; requiresPasscode: boolean };
 
@@ -33,10 +33,12 @@ function partyStartTime(value: string | null) {
   return Number.isNaN(date.getTime()) ? "when the host is ready" : new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(date);
 }
 
-function songStatusLabel(status: MySong["status"], ended: boolean) {
-  if (status === "playing") return "⚡ Playing now";
-  if (status === "played") return "✅ Played";
-  if (status === "skipped") return "⏭️ Skipped";
+function songStatusLabel(song: Pick<MySong, "status" | "skipReason" | "skipPercent">, ended: boolean) {
+  if (song.status === "playing") return "⚡ Playing now";
+  if (song.status === "played") return "✅ Played";
+  if (song.status === "skipped" && song.skipReason === "boos") return song.skipPercent === null ? "👻 Booed off" : `👻 Booed off at ${song.skipPercent}%`;
+  if (song.status === "skipped" && song.skipReason === "host") return "⏭️ Skipped by host";
+  if (song.status === "skipped") return "⏭️ Skipped";
   return ended ? "📦 Left unplayed" : "🤫 Still waiting";
 }
 
@@ -223,7 +225,7 @@ export default function PartyRoom({ code }: { code: string }) {
             <div className="my-column-title"><div><span>{ended ? "📦" : "🤫"}</span><div><h3>{ended ? "Left in my queue" : "Still in my queue"}</h3><p>{ended ? "The party ended before these escaped." : "The room still hides when they’ll play."}</p></div></div><b>{waitingSongs.length}</b></div>
             <div className="my-track-list">{waitingSongs.map((song) => <div className="my-track-row" key={song.queueId}>
               <span className={`my-track-art ${song.color}`} aria-hidden="true">♪</span>
-              <div className="my-track-copy"><strong dir="auto">{song.title}</strong><span dir="auto">{song.artist} · {song.duration}</span><small>{songStatusLabel(song.status, ended)}</small></div>
+              <div className="my-track-copy"><strong dir="auto">{song.title}</strong><span dir="auto">{song.artist} · {song.duration}</span><small>{songStatusLabel(song, ended)}</small></div>
               {!ended && (removeConfirmId === song.queueId ? <div className="remove-confirm" aria-label={`Confirm removal of ${song.title}`}><button type="button" onClick={() => setRemoveConfirmId("")} disabled={busy}>Keep</button><button className="remove-now" type="button" onClick={() => void removeSong(song)} disabled={busy}>{busy ? "Removing…" : "Remove"}</button></div> : <button className="remove-song-button" type="button" onClick={() => setRemoveConfirmId(song.queueId)} disabled={busy} aria-label={`Remove ${song.title} from your queue`}>Remove</button>)}
             </div>)}{waitingSongs.length === 0 && <p className="my-music-empty">{ended ? "📭 Nothing was stranded. Clean exit." : "🕳️ No secret picks waiting. Suspicious."}</p>}</div>
           </article>
@@ -231,14 +233,14 @@ export default function PartyRoom({ code }: { code: string }) {
           <article className="my-music-column">
             <div className="my-column-title"><div><span>📼</span><div><h3>My played songs</h3><p>What happened to the songs you smuggled in.</p></div></div><b>{submittedHistory.length}</b></div>
             <div className="my-track-list">{submittedHistory.map((song) => <a className="my-track-row my-track-link" href={spotifyTrackUrl(song.id)} target="_blank" rel="noreferrer" key={song.queueId}>
-              <span className={`my-track-art ${song.color}`} aria-hidden="true">♪</span><span className="my-track-copy"><strong dir="auto">{song.title}</strong><span dir="auto">{song.artist} · {song.duration}</span><small>{songStatusLabel(song.status, ended)}</small></span><span className="my-track-arrow" aria-hidden="true">↗</span>
+              <span className={`my-track-art ${song.color}`} aria-hidden="true">♪</span><span className="my-track-copy"><strong dir="auto">{song.title}</strong><span dir="auto">{song.artist} · {song.duration}</span><small>{songStatusLabel(song, ended)}</small></span><span className="my-track-arrow" aria-hidden="true">↗</span>
             </a>)}{submittedHistory.length === 0 && <p className="my-music-empty">🎚️ Your songs have not reached the speaker yet.</p>}</div>
           </article>
 
           <article className="my-music-column my-reactions-column">
             <div className="my-column-title"><div><span>🫣</span><div><h3>My reactions</h3><p>Your cheers—and your privately remembered boos.</p></div></div><b>{party.myReactionHistory.length}</b></div>
             <div className="my-track-list">{party.myReactionHistory.map((reaction) => <a className={`my-track-row my-track-link my-reaction-history ${reaction.tone}`} href={spotifyTrackUrl(reaction.id)} target="_blank" rel="noreferrer" key={reaction.reactionId}>
-              <span className="my-reaction-mark" aria-hidden="true">{reaction.tone === "up" ? "🙌" : "👻"}</span><span className="my-track-copy"><strong dir="auto">{reaction.title}</strong><span dir="auto">{reaction.artist}</span><small>{reaction.tone === "up" ? "You cheered" : "You booed anonymously"} · {songStatusLabel(reaction.songStatus, ended)}</small></span><span className="my-track-arrow" aria-hidden="true">↗</span>
+              <span className="my-reaction-mark" aria-hidden="true">{reaction.tone === "up" ? "🙌" : "👻"}</span><span className="my-track-copy"><strong dir="auto">{reaction.title}</strong><span dir="auto">{reaction.artist}</span><small>{reaction.tone === "up" ? "You cheered" : "You booed anonymously"} · {songStatusLabel({ status: reaction.songStatus, skipReason: reaction.skipReason, skipPercent: reaction.skipPercent }, ended)}</small></span><span className="my-track-arrow" aria-hidden="true">↗</span>
             </a>)}{party.myReactionHistory.length === 0 && <p className="my-music-empty">🧘 No opinions recorded. Astonishing restraint.</p>}</div>
           </article>
         </div>

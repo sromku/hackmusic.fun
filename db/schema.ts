@@ -37,6 +37,8 @@ export const submissions = sqliteTable("submissions", {
   duration: text("duration").notNull(),
   color: text("color").notNull(),
   status: text("status").notNull().default("pending"),
+  skipReason: text("skip_reason"),
+  skipPercent: integer("skip_percent"),
   submittedAt: text("submitted_at").notNull(),
 }, (table) => [
   uniqueIndex("submissions_event_track_unique").on(table.eventId, table.providerTrackId),

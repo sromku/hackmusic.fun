@@ -55,7 +55,15 @@ type QueuedSubmissionRow = SubmissionRow & {
 
 type MySubmissionRow = SubmissionRow & {
   status: "pending" | "playing" | "played" | "skipped";
+  skip_reason: "boos" | "host" | null;
+  skip_percent: number | null;
   submitted_at: string;
+};
+
+type SongHistoryRow = MySubmissionRow & {
+  display_name: string;
+  initials: string;
+  started_at: string | null;
 };
 
 type MyReactionHistoryRow = {
@@ -66,6 +74,8 @@ type MyReactionHistoryRow = {
   title: string;
   artist: string;
   status: "pending" | "playing" | "played" | "skipped";
+  skip_reason: "boos" | "host" | null;
+  skip_percent: number | null;
 };
 
 type ReactionRow = {
@@ -210,15 +220,27 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
         ORDER BY s.submitted_at ASC`)
       .bind(event.id).all<QueuedSubmissionRow>()
     : null;
+  const songHistory = isHost
+    ? await d1.prepare(`SELECT s.id, s.participant_id, s.provider_track_id, s.title, s.artist, s.duration, s.color,
+        s.status, s.skip_reason, s.skip_percent, s.submitted_at, p.display_name, p.initials,
+        MIN(a.created_at) AS started_at
+        FROM submissions s
+        JOIN participants p ON p.id = s.participant_id
+        LEFT JOIN activity_events a ON a.submission_id = s.id AND a.kind = 'song_start'
+        WHERE s.event_id = ? AND s.status IN ('played', 'skipped')
+        GROUP BY s.id
+        ORDER BY COALESCE(MIN(a.created_at), s.submitted_at) DESC`)
+      .bind(event.id).all<SongHistoryRow>()
+    : null;
   const mySongs = !isHost
-    ? await d1.prepare(`SELECT id, participant_id, provider_track_id, title, artist, duration, color, status, submitted_at
+    ? await d1.prepare(`SELECT id, participant_id, provider_track_id, title, artist, duration, color, status, skip_reason, skip_percent, submitted_at
         FROM submissions
         WHERE event_id = ? AND participant_id = ?
         ORDER BY submitted_at DESC`)
       .bind(event.id, viewerId).all<MySubmissionRow>()
     : null;
   const myReactionHistory = !isHost
-    ? await d1.prepare(`SELECT r.id, r.kind, r.created_at, s.provider_track_id, s.title, s.artist, s.status
+    ? await d1.prepare(`SELECT r.id, r.kind, r.created_at, s.provider_track_id, s.title, s.artist, s.status, s.skip_reason, s.skip_percent
         FROM reactions r JOIN submissions s ON s.id = r.submission_id
         WHERE r.event_id = ? AND r.participant_id = ?
         ORDER BY r.created_at DESC`)
@@ -332,6 +354,20 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
       submittedBy: track.participant_id === viewerId ? "You" : track.display_name,
       submitterInitials: track.initials,
     })) } : {}),
+    ...(songHistory ? { songHistory: songHistory.results.map((track) => ({
+      queueId: track.id,
+      id: track.provider_track_id,
+      title: track.title,
+      artist: track.artist,
+      duration: track.duration,
+      color: track.color,
+      status: track.status,
+      skipReason: track.skip_reason,
+      skipPercent: track.skip_percent,
+      startedAt: track.started_at,
+      submittedBy: track.participant_id === viewerId ? "You" : track.display_name,
+      submitterInitials: track.initials,
+    })) } : {}),
     ...(mySongs ? { mySongs: mySongs.results.map((track) => ({
       queueId: track.id,
       id: track.provider_track_id,
@@ -340,6 +376,8 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
       duration: track.duration,
       color: track.color,
       status: track.status,
+      skipReason: track.skip_reason,
+      skipPercent: track.skip_percent,
       submittedAt: track.submitted_at,
     })) } : {}),
     ...(myReactionHistory ? { myReactionHistory: myReactionHistory.results.map((reaction) => ({
@@ -349,12 +387,31 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
       artist: reaction.artist,
       tone: reaction.kind,
       songStatus: reaction.status,
+      skipReason: reaction.skip_reason,
+      skipPercent: reaction.skip_percent,
       reactedAt: reaction.created_at,
     })) } : {}),
   };
 }
 
-async function advanceCurrent(event: EventRow, finishedStatus: "skipped" | "played") {
+function durationMilliseconds(value: string) {
+  const match = value.match(/^(\d+):(\d{2})$/);
+  return match ? (Number(match[1]) * 60 + Number(match[2])) * 1_000 : 0;
+}
+
+async function estimateSkipPercent(event: EventRow, current: SubmissionRow) {
+  const duration = durationMilliseconds(current.duration);
+  if (!duration) return null;
+  const start = await getD1().prepare(`SELECT created_at FROM activity_events
+    WHERE event_id = ? AND submission_id = ? AND kind = 'song_start'
+    ORDER BY created_at DESC LIMIT 1`)
+    .bind(event.id, current.id).first<{ created_at: string }>();
+  const startedAt = start ? new Date(start.created_at).getTime() : Number.NaN;
+  if (!Number.isFinite(startedAt)) return null;
+  return Math.max(0, Math.min(100, Math.round(((Date.now() - startedAt) / duration) * 100)));
+}
+
+async function advanceCurrent(event: EventRow, finishedStatus: "skipped" | "played", skipReason: "boos" | "host" | null = null, skipPercent: number | null = null) {
   const d1 = getD1();
   const next = event.queue_mode === "random"
     ? await d1.prepare("SELECT id FROM submissions WHERE event_id = ? AND status = 'pending' ORDER BY RANDOM() LIMIT 1")
@@ -377,7 +434,8 @@ async function advanceCurrent(event: EventRow, finishedStatus: "skipped" | "play
         .bind(event.id).first<{ id: string }>();
   const statements = [];
   if (event.current_submission_id) {
-    statements.push(d1.prepare("UPDATE submissions SET status = ? WHERE id = ?").bind(finishedStatus, event.current_submission_id));
+    statements.push(d1.prepare("UPDATE submissions SET status = ?, skip_reason = ?, skip_percent = ? WHERE id = ?")
+      .bind(finishedStatus, finishedStatus === "skipped" ? skipReason : null, finishedStatus === "skipped" ? skipPercent : null, event.current_submission_id));
   }
   if (next) {
     statements.push(d1.prepare("UPDATE submissions SET status = 'playing' WHERE id = ?").bind(next.id));
@@ -446,7 +504,7 @@ export async function reactToCurrent(code: string, participantId: string, kind: 
   const booCount = await d1.prepare("SELECT COUNT(*) AS count FROM reactions WHERE submission_id = ? AND kind = 'down'")
     .bind(current.id).first<{ count: number }>();
   const skipped = (booCount?.count ?? 0) >= 3;
-  if (skipped) await advanceCurrent(event, "skipped");
+  if (skipped) await advanceCurrent(event, "skipped", "boos", await estimateSkipPercent(event, current));
   return { skipped };
 }
 
@@ -538,5 +596,16 @@ export async function hostControl(code: string, hostKey: string, action: "start"
   }
   if (event.status === "lobby") throw new PublicError("Start the party before controlling playback.");
   if (!event.current_submission_id) throw new PublicError("Nothing is playing yet. Add a song first.");
-  await advanceCurrent(event, action === "advance" ? "played" : "skipped");
+  await advanceCurrent(event, action === "advance" ? "played" : "skipped", action === "skip" ? "host" : null);
+}
+
+export async function recordBooSkipProgress(code: string, hostKey: string, providerTrackId: string, percentInput: number) {
+  const event = await getEvent(code);
+  if (!event || event.host_pin !== hostKey) throw new PublicError("Host controls belong to the browser that created this room.", 403);
+  const trackId = parseSpotifyTrackReference(providerTrackId).uri;
+  if (!Number.isFinite(percentInput)) throw new PublicError("That playback position was invalid. Refresh the host page and try again.");
+  const percent = Math.max(0, Math.min(100, Math.round(percentInput)));
+  await getD1().prepare(`UPDATE submissions SET skip_percent = ?
+    WHERE event_id = ? AND provider_track_id = ? AND status = 'skipped' AND skip_reason = 'boos'`)
+    .bind(percent, event.id, trackId).run();
 }

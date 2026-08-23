@@ -341,6 +341,9 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /setInterval\(updateProgress, 500\)/);
   assert.match(source, /host-playback-progress/);
   assert.match(source, /role="progressbar"/);
+  assert.match(source, /action: "skipProgress"/);
+  assert.match(source, /BOOED OFF AT/);
+  assert.match(source, /SONG OUTCOMES/);
   assert.match(source, /READY TO START/);
   assert.match(source, /LOADING TRACK/);
   assert.match(source, /Disable funny sounds/);
@@ -375,9 +378,15 @@ test("renders a code-specific host control surface", async () => {
   assert.match(partySource, /INSERT INTO activity_events/);
   assert.match(partySource, /activityAfter !== undefined/);
   assert.match(partySource, /tone: "song"/);
+  assert.match(partySource, /skip_reason = 'boos'/);
+  assert.match(partySource, /export async function recordBooSkipProgress/);
+  assert.match(partySource, /skipPercent: track\.skip_percent/);
   const historyMigration = await readFile(new URL("drizzle/0002_eager_mole_man.sql", projectRoot), "utf8");
   assert.match(historyMigration, /CREATE TABLE `activity_events`/);
   assert.match(historyMigration, /legacy-reaction-/);
+  const skipStatsMigration = await readFile(new URL("drizzle/0006_omniscient_onslaught.sql", projectRoot), "utf8");
+  assert.match(skipStatsMigration, /ADD `skip_reason` text/);
+  assert.match(skipStatsMigration, /ADD `skip_percent` integer/);
   const spotifyLoginSource = await readFile(new URL("app/api/spotify/login/route.ts", projectRoot), "utf8");
   assert.match(spotifyLoginSource, /code_challenge_method: "S256"/);
   assert.match(spotifyLoginSource, /"streaming"/);
@@ -388,6 +397,7 @@ test("renders a code-specific host control surface", async () => {
   assert.match(spotifyAuthSource, /AES-GCM/);
   assert.match(spotifyAuthSource, /SPOTIFY_COOKIE_SECRET/);
   const participantSource = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
+  assert.match(participantSource, /Booed off at/);
   assert.match(participantSource, /Checking Spotify/);
   assert.match(participantSource, /Add to the secret queue/);
 });
