@@ -1,4 +1,5 @@
 import { ensurePartySchema, getD1 } from ".";
+import { PublicError } from "../lib/public-error";
 
 type CountRow = {
   rooms: number;
@@ -72,16 +73,16 @@ export async function readAdminRoom(codeInput: string) {
   await ensurePartySchema();
   const d1 = getD1();
   const code = roomCode(codeInput);
-  if (code.length !== 6) throw new Error("Use a six-character room code.");
+  if (code.length !== 6) throw new PublicError("Use a six-character room code.");
 
   const room = await d1.prepare(`SELECT code, title, status, scheduled_for, queue_mode, created_at
     FROM events WHERE code = ?`).bind(code).first<{
       code: string; title: string; status: string; scheduled_for: string | null; queue_mode: string; created_at: string;
     }>();
-  if (!room) throw new Error("Room not found.");
+  if (!room) throw new PublicError("Room not found. Check the six-character code and try again.", 404);
 
   const event = await d1.prepare("SELECT id FROM events WHERE code = ?").bind(code).first<{ id: string }>();
-  if (!event) throw new Error("Room not found.");
+  if (!event) throw new PublicError("Room not found. Check the six-character code and try again.", 404);
 
   const [participants, submissions, reactions, activity] = await Promise.all([
     d1.prepare(`SELECT display_name, initials, color, score, created_at

@@ -1,5 +1,6 @@
 import { ensurePartySchema, getD1 } from ".";
 import { MAX_PARTICIPANTS_PER_ROOM, MAX_PENDING_TRACKS_PER_PERSON } from "../lib/party-rules";
+import { PublicError } from "../lib/public-error";
 import { hashRoomPasscode, verifyRoomPasscode } from "../lib/room-passcode";
 import { parseSpotifyTrackReference, resolveSpotifyTrack } from "../lib/spotify-track";
 
@@ -103,15 +104,15 @@ export async function createRoom(titleInput: string, hostNameInput: string, opti
   await ensurePartySchema();
   const title = cleanName(titleInput);
   const hostName = cleanName(hostNameInput);
-  if (title.length < 3 || title.length > 60) throw new Error("Use an event name between 3 and 60 characters.");
-  if (hostName.length < 2 || hostName.length > 24) throw new Error("Use a host name between 2 and 24 characters.");
+  if (title.length < 3 || title.length > 60) throw new PublicError("Use an event name between 3 and 60 characters.");
+  if (hostName.length < 2 || hostName.length > 24) throw new PublicError("Use a host name between 2 and 24 characters.");
   let scheduledFor: string | null = null;
   if (options.preParty) {
     const scheduledDate = new Date(options.scheduledFor ?? "");
     const now = Date.now();
     const latest = now + (90 * 24 * 60 * 60 * 1000);
     if (Number.isNaN(scheduledDate.getTime()) || scheduledDate.getTime() <= now || scheduledDate.getTime() > latest) {
-      throw new Error("Choose a future start time within 90 days.");
+      throw new PublicError("Choose a future start time within 90 days.");
     }
     scheduledFor = scheduledDate.toISOString();
   }
@@ -123,7 +124,7 @@ export async function createRoom(titleInput: string, hostNameInput: string, opti
     const exists = await d1.prepare("SELECT id FROM events WHERE code = ?").bind(candidate).first<{ id: string }>();
     if (!exists) { code = candidate; break; }
   }
-  if (!code) throw new Error("Could not reserve a room code. Try again.");
+  if (!code) throw new PublicError("We could not reserve a room code. Wait a moment and try again.", 503);
 
   const eventId = `event-${crypto.randomUUID()}`;
   const participantId = `p-${crypto.randomUUID()}`;
@@ -144,13 +145,13 @@ export async function createRoom(titleInput: string, hostNameInput: string, opti
 
 export async function readRoomSummary(codeInput: string) {
   const event = await getEvent(codeInput);
-  if (!event) throw new Error("Room not found.");
+  if (!event) throw new PublicError("Room not found. Check the six-character code and try again.", 404);
   return { code: event.code, title: event.title, status: event.status, scheduledFor: event.scheduled_for, createdAt: event.created_at, requiresPasscode: Boolean(event.join_passcode_hash) };
 }
 
 export async function readParty(codeInput: string, viewerId: string, hostKey = "", activityAfter?: string) {
   const event = await getEvent(codeInput);
-  if (!event) throw new Error("Room not found.");
+  if (!event) throw new PublicError("Room not found. Check the six-character code and try again.", 404);
   const d1 = getD1();
   const isHost = Boolean(hostKey && hostKey === event.host_pin);
   const revealScores = event.status === "ended" || isHost;
@@ -224,7 +225,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
   }));
   const viewerIndex = peopleResult.results.findIndex((person) => person.id === viewerId);
   const viewer = viewerIndex >= 0 ? people[viewerIndex] : undefined;
-  if (!viewer) throw new Error("Join this room first.");
+  if (!viewer) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);
 
   return {
     code: event.code,
@@ -344,16 +345,16 @@ async function advanceCurrent(event: EventRow, finishedStatus: "skipped" | "play
 
 export async function setQueueMode(code: string, hostKey: string, queueMode: QueueMode) {
   const event = await getEvent(code);
-  if (!event || event.host_pin !== hostKey) throw new Error("This phone is not the host for that room.");
-  if (event.status === "ended") throw new Error("This party has ended.");
-  if (!(["ordered", "random", "fair"] as const).includes(queueMode)) throw new Error("Choose a valid queue mode.");
+  if (!event || event.host_pin !== hostKey) throw new PublicError("Host controls belong to the browser that created this room.", 403);
+  if (event.status === "ended") throw new PublicError("This party has ended, so its settings are frozen.");
+  if (!(["ordered", "random", "fair"] as const).includes(queueMode)) throw new PublicError("Choose one of the available queue modes.");
   await getD1().prepare("UPDATE events SET queue_mode = ? WHERE id = ?").bind(queueMode, event.id).run();
 }
 
 export async function setRoomPasscode(code: string, hostKey: string, passcodeInput: string) {
   const event = await getEvent(code);
-  if (!event || event.host_pin !== hostKey) throw new Error("This phone is not the host for that room.");
-  if (event.status === "ended") throw new Error("This party has ended.");
+  if (!event || event.host_pin !== hostKey) throw new PublicError("Host controls belong to the browser that created this room.", 403);
+  if (event.status === "ended") throw new PublicError("This party has ended, so its passcode cannot be changed.");
   const passcode = await hashRoomPasscode(passcodeInput);
   await getD1().prepare("UPDATE events SET join_passcode_hash = ?, join_passcode_salt = ? WHERE id = ?")
     .bind(passcode.hash, passcode.salt, event.id).run();
@@ -361,16 +362,16 @@ export async function setRoomPasscode(code: string, hostKey: string, passcodeInp
 
 export async function reactToCurrent(code: string, participantId: string, kind: "up" | "down") {
   const event = await getEvent(code);
-  if (event?.status === "lobby") throw new Error("Reactions unlock when the host starts the party.");
-  if (!event?.current_submission_id) throw new Error("Nothing is playing.");
-  if (event.status === "ended") throw new Error("This party has ended.");
+  if (event?.status === "lobby") throw new PublicError("Reactions unlock when the host starts the party.");
+  if (!event?.current_submission_id) throw new PublicError("Nothing is playing yet. Wait for the host to start a song.");
+  if (event.status === "ended") throw new PublicError("This party has ended, so reactions are closed.");
   const d1 = getD1();
   const current = await d1.prepare("SELECT id, participant_id, provider_track_id, title, artist, duration, color FROM submissions WHERE id = ?")
     .bind(event.current_submission_id).first<SubmissionRow>();
-  if (!current) throw new Error("Nothing is playing.");
-  if (current.participant_id === participantId) throw new Error("You cannot vote on your own song.");
+  if (!current) throw new PublicError("Nothing is playing yet. Wait for the host to start a song.");
+  if (current.participant_id === participantId) throw new PublicError("You cannot vote on your own song—but everyone else still can.");
   const member = await d1.prepare("SELECT id FROM participants WHERE id = ? AND event_id = ?").bind(participantId, event.id).first<{ id: string }>();
-  if (!member) throw new Error("Join this room first.");
+  if (!member) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);
 
   const existing = await d1.prepare("SELECT id, kind FROM reactions WHERE submission_id = ? AND participant_id = ?")
     .bind(current.id, participantId).first<{ id: string; kind: string }>();
@@ -404,15 +405,15 @@ export async function reactToCurrent(code: string, participantId: string, kind: 
 export async function submitTrack(code: string, participantId: string, track: TrackInput) {
   const normalizedTrack = parseSpotifyTrackReference(track.id);
   const event = await getEvent(code);
-  if (!event) throw new Error("Room not found.");
-  if (event.status === "ended") throw new Error("This party has ended.");
+  if (!event) throw new PublicError("Room not found. Check the six-character code and try again.", 404);
+  if (event.status === "ended") throw new PublicError("This party has ended, so no more songs can be added.");
   const d1 = getD1();
   const member = await d1.prepare("SELECT id FROM participants WHERE id = ? AND event_id = ?").bind(participantId, event.id).first<{ id: string }>();
-  if (!member) throw new Error("Join this room first.");
+  if (!member) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);
   const pending = await d1.prepare("SELECT COUNT(*) AS count FROM submissions WHERE event_id = ? AND participant_id = ? AND status = 'pending'")
     .bind(event.id, participantId).first<{ count: number }>();
-  if ((pending?.count ?? 0) >= MAX_PENDING_TRACKS_PER_PERSON) throw new Error(`You already have ${MAX_PENDING_TRACKS_PER_PERSON} secret picks waiting.`);
-  if (!track.title || !track.artist) throw new Error("Choose a valid song.");
+  if ((pending?.count ?? 0) >= MAX_PENDING_TRACKS_PER_PERSON) throw new PublicError(`You already have ${MAX_PENDING_TRACKS_PER_PERSON} secret picks waiting. Wait for one to play before adding another.`);
+  if (!track.title || !track.artist) throw new PublicError("Spotify did not return enough song information. Copy the track link again.");
 
   const submissionId = crypto.randomUUID();
   const status = event.status === "lobby" || event.current_submission_id ? "pending" : "playing";
@@ -433,40 +434,40 @@ export async function submitTrack(code: string, participantId: string, track: Tr
       if (refreshed?.status === "live" && !refreshed.current_submission_id) await advanceCurrent(refreshed, "played");
     }
   } catch (error) {
-    if (error instanceof Error && error.message.includes("UNIQUE")) throw new Error("That song is already hiding in the queue.");
+    if (error instanceof Error && error.message.includes("UNIQUE")) throw new PublicError("That song is already hiding in this room’s queue.");
     throw error;
   }
 }
 
 export async function assertPartyParticipant(code: string, participantId: string) {
   const event = await getEvent(code);
-  if (!event) throw new Error("Room not found.");
+  if (!event) throw new PublicError("Room not found. Check the six-character code and try again.", 404);
   const member = await getD1().prepare("SELECT id FROM participants WHERE id = ? AND event_id = ?").bind(participantId, event.id).first<{ id: string }>();
-  if (!member) throw new Error("Join this room first.");
+  if (!member) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);
 }
 
 export async function joinParty(code: string, participantId: string, displayName: string, passcodeInput: string) {
   const event = await getEvent(code);
-  if (!event) throw new Error("Room not found.");
-  if (event.status === "ended") throw new Error("This party has ended.");
-  if (event.join_passcode_hash && (!event.join_passcode_salt || !await verifyRoomPasscode(passcodeInput, event.join_passcode_hash, event.join_passcode_salt))) throw new Error("Room code or passcode is incorrect.");
+  if (!event) throw new PublicError("Room not found. Check the room code and passcode, then try again.", 404);
+  if (event.status === "ended") throw new PublicError("This party has already ended, so new guests cannot join.");
+  if (event.join_passcode_hash && (!event.join_passcode_salt || !await verifyRoomPasscode(passcodeInput, event.join_passcode_hash, event.join_passcode_salt))) throw new PublicError("That room code and passcode do not match. Ask the host for the latest invite.", 401);
   const name = cleanName(displayName);
-  if (name.length < 2 || name.length > 24) throw new Error("Use a name between 2 and 24 characters.");
-  if (!/^p-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(participantId)) throw new Error("Invalid participant.");
+  if (name.length < 2 || name.length > 24) throw new PublicError("Use a party name between 2 and 24 characters.");
+  if (!/^p-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(participantId)) throw new PublicError("We could not prepare this browser to join. Refresh the page and try again.");
   const profile = profileFor(name);
   const publicId = `person-${crypto.randomUUID()}`;
   const result = await getD1().prepare(`INSERT OR IGNORE INTO participants (id, public_id, event_id, display_name, initials, color, score, created_at)
     SELECT ?, ?, ?, ?, ?, ?, 30, ?
     WHERE (SELECT COUNT(*) FROM participants WHERE event_id = ?) < ?`)
     .bind(participantId, publicId, event.id, name, profile.initials, profile.color, new Date().toISOString(), event.id, MAX_PARTICIPANTS_PER_ROOM).run();
-  if (!result.meta.changes) throw new Error(`This room already has ${MAX_PARTICIPANTS_PER_ROOM} people.`);
+  if (!result.meta.changes) throw new PublicError(`This room is full at ${MAX_PARTICIPANTS_PER_ROOM} people. Ask the host to start another room.`);
 }
 
 export async function hostControl(code: string, hostKey: string, action: "start" | "skip" | "advance" | "end") {
   const event = await getEvent(code);
-  if (!event || event.host_pin !== hostKey) throw new Error("This phone is not the host for that room.");
+  if (!event || event.host_pin !== hostKey) throw new PublicError("Host controls belong to the browser that created this room.", 403);
   if (action === "start") {
-    if (event.status !== "lobby") throw new Error("This party has already started.");
+    if (event.status !== "lobby") throw new PublicError("This party has already started.");
     await getD1().prepare("UPDATE events SET status = 'live' WHERE id = ?").bind(event.id).run();
     await advanceCurrent(event, "played");
     return;
@@ -475,7 +476,7 @@ export async function hostControl(code: string, hostKey: string, action: "start"
     await getD1().prepare("UPDATE events SET status = 'ended' WHERE id = ?").bind(event.id).run();
     return;
   }
-  if (event.status === "lobby") throw new Error("Start the party before controlling playback.");
-  if (!event.current_submission_id) throw new Error("Nothing is playing yet.");
+  if (event.status === "lobby") throw new PublicError("Start the party before controlling playback.");
+  if (!event.current_submission_id) throw new PublicError("Nothing is playing yet. Add a song first.");
   await advanceCurrent(event, action === "advance" ? "played" : "skipped");
 }

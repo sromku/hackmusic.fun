@@ -1,3 +1,5 @@
+import { PublicError } from "./public-error";
+
 export type ResolvedSpotifyTrack = {
   id: string;
   trackId: string;
@@ -36,16 +38,16 @@ export function parseSpotifyTrackReference(value: string) {
   try {
     url = new URL(reference);
   } catch {
-    throw new Error("Paste a valid Spotify track link.");
+    throw new PublicError("Paste a valid Spotify track link.");
   }
   if (url.protocol !== "https:" || url.hostname.toLowerCase() !== "open.spotify.com") {
-    throw new Error("Use a track link from open.spotify.com.");
+    throw new PublicError("Use a track link from open.spotify.com.");
   }
 
   const parts = url.pathname.split("/").filter(Boolean);
   const trackIndex = parts.indexOf("track");
   const trackId = trackIndex >= 0 ? parts[trackIndex + 1] : "";
-  if (!trackId || !trackIdPattern.test(trackId)) throw new Error("That link does not contain a valid Spotify track token.");
+  if (!trackId || !trackIdPattern.test(trackId)) throw new PublicError("That link does not contain a valid Spotify track token.");
 
   return { trackId, uri: `spotify:track:${trackId}`, canonicalUrl: `https://open.spotify.com/track/${trackId}` };
 }
@@ -91,12 +93,12 @@ export async function resolveSpotifyTrack(value: string): Promise<ResolvedSpotif
     fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(canonicalUrl)}`),
     fetch(`https://open.spotify.com/embed/track/${trackId}`),
   ]);
-  if (!response.ok) throw new Error("Spotify could not find or play that track.");
+  if (!response.ok) throw new PublicError("Spotify could not find or play that track. Check the link in Spotify, then try again.");
   const data = await response.json() as SpotifyOEmbed;
-  if (!data.title) throw new Error("Spotify did not return details for that track.");
+  if (!data.title) throw new PublicError("Spotify did not return details for that track. Try copying its song link again.");
 
   const embeddedTrackId = data.iframe_url ? extractSpotifyTrackId(data.iframe_url) : trackId;
-  if (embeddedTrackId && embeddedTrackId !== trackId) throw new Error("Spotify returned a different track token. Copy the song link again.");
+  if (embeddedTrackId && embeddedTrackId !== trackId) throw new PublicError("Spotify returned a different track token. Copy the song link again.");
   const embedMetadata = embedResponse.ok ? parseSpotifyEmbedMetadata(await embedResponse.text(), trackId) : null;
   const artist = embedMetadata?.artists.join(", ") || (data.author_name && data.author_name !== "Spotify" ? data.author_name.trim() : "Artist unavailable");
 

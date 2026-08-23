@@ -17,42 +17,49 @@ function hostRedirect(request: Request, roomCode: string, result: "connected" | 
 }
 
 export async function GET(request: Request) {
-  const requestUrl = new URL(request.url);
-  const cookieStore = await cookies();
-  const oauth = await decodeCookie<SpotifyOAuthState>(cookieStore.get(SPOTIFY_OAUTH_COOKIE)?.value);
-  if (!oauth) return new Response("Spotify login expired. Return to the host page and try again.", { status: 400 });
-  cookieStore.delete(SPOTIFY_OAUTH_COOKIE);
+  let roomCode = "";
+  try {
+    const requestUrl = new URL(request.url);
+    const cookieStore = await cookies();
+    const oauth = await decodeCookie<SpotifyOAuthState>(cookieStore.get(SPOTIFY_OAUTH_COOKIE)?.value);
+    if (!oauth) return new Response("Spotify login expired. Return to the host page and choose Connect Spotify again.", { status: 400 });
+    roomCode = oauth.roomCode;
+    cookieStore.delete(SPOTIFY_OAUTH_COOKIE);
 
-  const returnedState = requestUrl.searchParams.get("state") ?? "";
-  const code = requestUrl.searchParams.get("code") ?? "";
-  const spotifyError = requestUrl.searchParams.get("error");
-  if (spotifyError) return Response.redirect(hostRedirect(request, oauth.roomCode, "error", spotifyError), 302);
-  if (!code || returnedState !== oauth.state) return new Response("Spotify login could not be verified.", { status: 400 });
+    const returnedState = requestUrl.searchParams.get("state") ?? "";
+    const code = requestUrl.searchParams.get("code") ?? "";
+    const spotifyError = requestUrl.searchParams.get("error");
+    if (spotifyError) return Response.redirect(hostRedirect(request, oauth.roomCode, "error", "Spotify connection was cancelled. Choose Connect Spotify when you are ready."), 302);
+    if (!code || returnedState !== oauth.state) return new Response("Spotify login could not be verified. Return to the host page and connect again.", { status: 400 });
 
-  const tokenResponse = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: oauth.clientId,
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: oauth.redirectUri,
-      code_verifier: oauth.verifier,
-    }),
-  });
-  const token = await tokenResponse.json() as TokenResponse;
-  if (!tokenResponse.ok || !token.access_token || !token.refresh_token) {
-    return Response.redirect(hostRedirect(request, oauth.roomCode, "error", token.error ?? "token_exchange_failed"), 302);
+    const tokenResponse = await fetch("https://accounts.spotify.com/api/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: oauth.clientId,
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: oauth.redirectUri,
+        code_verifier: oauth.verifier,
+      }),
+    });
+    const token = await tokenResponse.json() as TokenResponse;
+    if (!tokenResponse.ok || !token.access_token || !token.refresh_token) {
+      return Response.redirect(hostRedirect(request, oauth.roomCode, "error", "Spotify could not finish connecting. Return here and try Connect Spotify again."), 302);
+    }
+
+    const session: SpotifySession = {
+      accessToken: token.access_token,
+      refreshToken: token.refresh_token,
+      expiresAt: Date.now() + (token.expires_in ?? 3600) * 1000,
+      clientId: oauth.clientId,
+      roomCode: oauth.roomCode,
+      scope: token.scope ?? "",
+    };
+    cookieStore.set(SPOTIFY_SESSION_COOKIE, await encodeCookie(session), spotifyCookieOptions(request, 30 * 24 * 60 * 60));
+    return Response.redirect(hostRedirect(request, oauth.roomCode, "connected"), 302);
+  } catch {
+    if (roomCode) return Response.redirect(hostRedirect(request, roomCode, "error", "Spotify could not be reached. Check the connection and try again in a moment."), 302);
+    return new Response("Spotify could not be reached. Return to the host page and try again in a moment.", { status: 503 });
   }
-
-  const session: SpotifySession = {
-    accessToken: token.access_token,
-    refreshToken: token.refresh_token,
-    expiresAt: Date.now() + (token.expires_in ?? 3600) * 1000,
-    clientId: oauth.clientId,
-    roomCode: oauth.roomCode,
-    scope: token.scope ?? "",
-  };
-  cookieStore.set(SPOTIFY_SESSION_COOKIE, await encodeCookie(session), spotifyCookieOptions(request, 30 * 24 * 60 * 60));
-  return Response.redirect(hostRedirect(request, oauth.roomCode, "connected"), 302);
 }

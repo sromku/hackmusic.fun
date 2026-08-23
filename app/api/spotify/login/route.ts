@@ -20,29 +20,33 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const clientId = (url.searchParams.get("clientId") ?? "").trim();
   const roomCode = (url.searchParams.get("roomCode") ?? "").trim().toUpperCase();
-  if (!/^[A-Za-z0-9]{20,64}$/.test(clientId)) return new Response("Invalid Spotify Client ID.", { status: 400 });
-  if (!/^[A-Z0-9]{6}$/.test(roomCode)) return new Response("Invalid HackMusic room code.", { status: 400 });
+  if (!/^[A-Za-z0-9]{20,64}$/.test(clientId)) return new Response("That Spotify Client ID does not look right. Copy it from your Spotify Developer Dashboard and try again.", { status: 400 });
+  if (!/^[A-Z0-9]{6}$/.test(roomCode)) return new Response("Open Spotify from a valid six-character HackMusic host room.", { status: 400 });
 
-  const verifier = randomBase64Url(64);
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
-  let digestBinary = "";
-  for (const byte of new Uint8Array(digest)) digestBinary += String.fromCharCode(byte);
-  const challenge = btoa(digestBinary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-  const state = randomBase64Url(24);
-  const redirectUri = spotifyCallbackUrl(request);
-  const oauthState: SpotifyOAuthState = { state, verifier, clientId, roomCode, redirectUri };
-  const cookieStore = await cookies();
-  cookieStore.set(SPOTIFY_OAUTH_COOKIE, await encodeCookie(oauthState), spotifyCookieOptions(request, 10 * 60));
+  try {
+    const verifier = randomBase64Url(64);
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+    let digestBinary = "";
+    for (const byte of new Uint8Array(digest)) digestBinary += String.fromCharCode(byte);
+    const challenge = btoa(digestBinary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+    const state = randomBase64Url(24);
+    const redirectUri = spotifyCallbackUrl(request);
+    const oauthState: SpotifyOAuthState = { state, verifier, clientId, roomCode, redirectUri };
+    const cookieStore = await cookies();
+    cookieStore.set(SPOTIFY_OAUTH_COOKIE, await encodeCookie(oauthState), spotifyCookieOptions(request, 10 * 60));
 
-  const authorizeUrl = new URL("https://accounts.spotify.com/authorize");
-  authorizeUrl.search = new URLSearchParams({
-    client_id: clientId,
-    response_type: "code",
-    redirect_uri: redirectUri,
-    state,
-    scope: scopes.join(" "),
-    code_challenge_method: "S256",
-    code_challenge: challenge,
-  }).toString();
-  return Response.redirect(authorizeUrl, 302);
+    const authorizeUrl = new URL("https://accounts.spotify.com/authorize");
+    authorizeUrl.search = new URLSearchParams({
+      client_id: clientId,
+      response_type: "code",
+      redirect_uri: redirectUri,
+      state,
+      scope: scopes.join(" "),
+      code_challenge_method: "S256",
+      code_challenge: challenge,
+    }).toString();
+    return Response.redirect(authorizeUrl, 302);
+  } catch {
+    return new Response("Spotify connection is temporarily unavailable. Return to the host page and try again in a moment.", { status: 503 });
+  }
 }

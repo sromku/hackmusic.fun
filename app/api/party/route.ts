@@ -2,9 +2,35 @@ import { assertPartyParticipant, createRoom, hostControl, joinParty, reactToCurr
 import { resolveSpotifyTrack, type ResolvedSpotifyTrack } from "../../../lib/spotify-track";
 import { protectPartyAction, protectRoomCreation, protectRoomLookup, RoomCreationGuardError } from "../../../lib/room-creation-guard";
 import { readBoundedJson, RequestSecurityError } from "../../../lib/request-security";
+import { PublicError, publicErrorDetails } from "../../../lib/public-error";
 
-function messageFrom(error: unknown) {
-  return error instanceof Error ? error.message : "Unexpected party error.";
+type PartyAction = "create" | "join" | "react" | "submit" | "start" | "skip" | "advance" | "end" | "queueMode" | "passcode";
+
+type PartyRequest = {
+  action?: PartyAction;
+  code?: string;
+  participantId?: string;
+  kind?: "up" | "down";
+  pin?: string;
+  queueMode?: QueueMode;
+  name?: string;
+  title?: string;
+  passcode?: string;
+  website?: string;
+  preParty?: boolean;
+  scheduledFor?: string;
+  trackUrl?: string;
+  track?: { id: string; title: string; artist: string; duration: string; color: string };
+};
+
+function actionFallback(action?: PartyAction) {
+  if (action === "create") return "We could not create the room right now. Wait a moment and try again.";
+  if (action === "join") return "We could not join the room. Check the room code and passcode, then try again.";
+  if (action === "submit") return "We could not check that Spotify song right now. Check the link and try again in a moment.";
+  if (action === "react") return "Your reaction did not go through. Check your connection and try again.";
+  if (action === "passcode") return "We could not update the room passcode. Try again—the current passcode is still active.";
+  if (action === "queueMode") return "We could not change the queue mode. Refresh the host page and try again.";
+  return "That host action did not finish. Refresh the host page and try again.";
 }
 
 function json(data: unknown, status = 200, extraHeaders?: HeadersInit) {
@@ -26,29 +52,16 @@ export async function GET(request: Request) {
     return json({ party: await readParty(code, participantId, hostKey, activityAfter) });
   } catch (error) {
     if (error instanceof RequestSecurityError) return json({ error: error.message }, error.status, error.retryAfter ? { "retry-after": String(error.retryAfter) } : undefined);
-    const message = messageFrom(error);
-    return json({ error: message }, message.includes("Room not found") ? 404 : message.includes("Join this room") ? 401 : 500);
+    const detail = publicErrorDetails(error, "We could not load this room right now. Refresh the page and try again.");
+    return json({ error: detail.message }, detail.status);
   }
 }
 
 export async function POST(request: Request) {
+  let attemptedAction: PartyAction | undefined;
   try {
-    const body = await readBoundedJson<{
-      action?: "create" | "join" | "react" | "submit" | "start" | "skip" | "advance" | "end" | "queueMode" | "passcode";
-      code?: string;
-      participantId?: string;
-      kind?: "up" | "down";
-      pin?: string;
-      queueMode?: QueueMode;
-      name?: string;
-      title?: string;
-      passcode?: string;
-      website?: string;
-      preParty?: boolean;
-      scheduledFor?: string;
-      trackUrl?: string;
-      track?: { id: string; title: string; artist: string; duration: string; color: string };
-    }>(request);
+    const body = await readBoundedJson<PartyRequest>(request);
+    attemptedAction = body.action;
     const code = body.code ?? "";
     const participantId = body.participantId ?? "";
     let skipped = false;
@@ -67,7 +80,7 @@ export async function POST(request: Request) {
       await protectPartyAction(request, body.action, code, participantId);
       await assertPartyParticipant(code, participantId);
       const trackReference = body.trackUrl ?? body.track?.id ?? "";
-      if (trackReference.length > 512) throw new Error("That Spotify link is too long.");
+      if (trackReference.length > 512) throw new PublicError("That Spotify link is too long. Copy the track link directly from Spotify and try again.");
       submittedTrack = await resolveSpotifyTrack(trackReference);
       await submitTrack(code, participantId, submittedTrack);
     } else if ((body.action === "start" || body.action === "skip" || body.action === "advance" || body.action === "end") && body.pin) {
@@ -89,8 +102,7 @@ export async function POST(request: Request) {
       const headers = error.retryAfter ? { "retry-after": String(error.retryAfter) } : undefined;
       return json({ error: error.message }, error.status, headers);
     }
-    const message = messageFrom(error);
-    const status = message.includes("not the host") ? 403 : message.includes("passcode is incorrect") || message.includes("Join this room") ? 401 : message.includes("Room not found") ? 404 : message.includes("cannot") || message.includes("already") || message.includes("valid") || message.includes("Choose") || message.includes("Nothing") || message.includes("unlock") || message.includes("Start the party") || message.includes("Use a") || message.includes("Spotify") || message.includes("track link") || message.includes("too long") || message.includes("ended") || message.includes("people") ? 400 : 500;
-    return json({ error: message }, status);
+    const detail = publicErrorDetails(error, actionFallback(attemptedAction));
+    return json({ error: detail.message }, detail.status);
   }
 }

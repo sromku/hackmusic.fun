@@ -1,5 +1,7 @@
+import { PublicError } from "./public-error";
+
 const encoder = new TextEncoder();
-const iterations = 120_000;
+const iterations = 100_000;
 
 function base64Url(bytes: Uint8Array) {
   let binary = "";
@@ -18,7 +20,7 @@ export function normalizeRoomPasscode(value: string) {
 
 export function validateRoomPasscode(value: string) {
   const passcode = normalizeRoomPasscode(value);
-  if (!/^[A-Z0-9]{4,12}$/.test(passcode)) throw new Error("Use a 4–12 character room passcode with letters and numbers only.");
+  if (!/^[A-Z0-9]{4,12}$/.test(passcode)) throw new PublicError("Use a 4–12 character room passcode with letters and numbers only.");
   return passcode;
 }
 

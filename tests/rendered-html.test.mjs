@@ -19,7 +19,13 @@ async function render(pathname = "/", requestHeaders = {}, bindings = {}) {
 
 async function loadTypeScriptModule(pathname) {
   const source = await readFile(new URL(pathname, projectRoot), "utf8");
-  const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+  let output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+  if (output.includes('"./public-error"')) {
+    const dependencySource = await readFile(new URL("lib/public-error.ts", projectRoot), "utf8");
+    const dependencyOutput = ts.transpileModule(dependencySource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+    const dependencyUrl = `data:text/javascript;base64,${Buffer.from(dependencyOutput).toString("base64")}`;
+    output = output.replace('"./public-error"', JSON.stringify(dependencyUrl));
+  }
   return import(`data:text/javascript;base64,${Buffer.from(output).toString("base64")}`);
 }
 
@@ -43,11 +49,20 @@ test("normalizes Spotify share links to their actual track token", async () => {
 
 test("hashes room passcodes and compares them without storing plaintext", async () => {
   const passcodes = await loadTypeScriptModule("lib/room-passcode.ts");
+  const passcodeSource = await readFile(new URL("lib/room-passcode.ts", projectRoot), "utf8");
+  assert.match(passcodeSource, /iterations = 100_000/);
+  assert.doesNotMatch(passcodeSource, /120_000/);
   const secured = await passcodes.hashRoomPasscode("vibe42");
   assert.notEqual(secured.hash, "VIBE42");
   assert.equal(await passcodes.verifyRoomPasscode("VIBE42", secured.hash, secured.salt), true);
   assert.equal(await passcodes.verifyRoomPasscode("WRONG1", secured.hash, secured.salt), false);
   assert.throws(() => passcodes.validateRoomPasscode("123"), /4–12/);
+});
+
+test("shows helpful product errors without leaking internal exceptions", async () => {
+  const errors = await loadTypeScriptModule("lib/public-error.ts");
+  assert.deepEqual(errors.publicErrorDetails(new errors.PublicError("Try the room code again.", 400), "Fallback"), { message: "Try the room code again.", status: 400 });
+  assert.deepEqual(errors.publicErrorDetails(new Error("Pbkdf2 failed: internal runtime detail"), "Please try again."), { message: "Please try again.", status: 500 });
 });
 
 test("renders the create and join landing page", async () => {

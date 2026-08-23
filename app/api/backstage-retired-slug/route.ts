@@ -1,6 +1,7 @@
 import { readAdminOverview, readAdminRoom } from "../../../db/admin";
 import { adminAccessForEmail } from "../../admin-auth";
 import { getChatGPTUser } from "../../chatgpt-auth";
+import { publicErrorDetails } from "../../../lib/public-error";
 
 export const dynamic = "force-dynamic";
 
@@ -28,8 +29,7 @@ export async function GET(request: Request) {
     const code = new URL(request.url).searchParams.get("code")?.trim();
     return json(code ? await readAdminRoom(code) : await readAdminOverview());
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not read admin data.";
-    const status = message.includes("not found") ? 404 : message.includes("six-character") ? 400 : 500;
-    return json({ error: message }, status);
+    const detail = publicErrorDetails(error, "We could not load the owner dashboard right now. Refresh and try again.");
+    return json({ error: detail.message }, detail.status);
   }
 }
