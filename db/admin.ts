@@ -12,6 +12,7 @@ type RoomRow = {
   code: string;
   title: string;
   status: string;
+  scheduled_for: string | null;
   queue_mode: string;
   created_at: string;
   current_track: string | null;
@@ -34,7 +35,7 @@ export async function readAdminOverview() {
     (SELECT COUNT(*) FROM submissions) AS tracks,
     (SELECT COUNT(*) FROM reactions) AS reactions`).first<CountRow>();
   const rooms = await d1.prepare(`SELECT
-    e.code, e.title, e.status, e.queue_mode, e.created_at,
+    e.code, e.title, e.status, e.scheduled_for, e.queue_mode, e.created_at,
     (SELECT s.title FROM submissions s WHERE s.id = e.current_submission_id) AS current_track,
     (SELECT COUNT(*) FROM participants p WHERE p.event_id = e.id) AS participants,
     (SELECT COUNT(*) FROM submissions s WHERE s.event_id = e.id) AS tracks,
@@ -56,6 +57,7 @@ export async function readAdminOverview() {
       code: room.code,
       title: room.title,
       status: room.status,
+      scheduledFor: room.scheduled_for,
       queueMode: room.queue_mode,
       createdAt: room.created_at,
       currentTrack: room.current_track,
@@ -72,9 +74,9 @@ export async function readAdminRoom(codeInput: string) {
   const code = roomCode(codeInput);
   if (code.length !== 6) throw new Error("Use a six-character room code.");
 
-  const room = await d1.prepare(`SELECT code, title, status, queue_mode, created_at
+  const room = await d1.prepare(`SELECT code, title, status, scheduled_for, queue_mode, created_at
     FROM events WHERE code = ?`).bind(code).first<{
-      code: string; title: string; status: string; queue_mode: string; created_at: string;
+      code: string; title: string; status: string; scheduled_for: string | null; queue_mode: string; created_at: string;
     }>();
   if (!room) throw new Error("Room not found.");
 
@@ -114,6 +116,7 @@ export async function readAdminRoom(codeInput: string) {
       code: room.code,
       title: room.title,
       status: room.status,
+      scheduledFor: room.scheduled_for,
       queueMode: room.queue_mode,
       createdAt: room.created_at,
     },

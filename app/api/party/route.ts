@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json() as {
-      action?: "create" | "join" | "react" | "submit" | "skip" | "advance" | "end" | "queueMode";
+      action?: "create" | "join" | "react" | "submit" | "start" | "skip" | "advance" | "end" | "queueMode";
       code?: string;
       participantId?: string;
       kind?: "up" | "down";
@@ -33,6 +33,8 @@ export async function POST(request: Request) {
       name?: string;
       title?: string;
       website?: string;
+      preParty?: boolean;
+      scheduledFor?: string;
       trackUrl?: string;
       track?: { id: string; title: string; artist: string; duration: string; color: string };
     };
@@ -43,7 +45,7 @@ export async function POST(request: Request) {
 
     if (body.action === "create" && body.title && body.name) {
       await protectRoomCreation(request, body.website);
-      return Response.json({ room: await createRoom(body.title, body.name) }, { status: 201 });
+      return Response.json({ room: await createRoom(body.title, body.name, { preParty: body.preParty, scheduledFor: body.scheduledFor }) }, { status: 201 });
     } else if (body.action === "join" && body.name) {
       await joinParty(code, participantId, body.name);
     } else if (body.action === "react" && body.kind) {
@@ -51,7 +53,7 @@ export async function POST(request: Request) {
     } else if (body.action === "submit" && (body.trackUrl || body.track?.id)) {
       submittedTrack = await resolveSpotifyTrack(body.trackUrl ?? body.track?.id ?? "");
       await submitTrack(code, participantId, submittedTrack);
-    } else if ((body.action === "skip" || body.action === "advance" || body.action === "end") && body.pin) {
+    } else if ((body.action === "start" || body.action === "skip" || body.action === "advance" || body.action === "end") && body.pin) {
       await hostControl(code, body.pin, body.action);
     } else if (body.action === "queueMode" && body.queueMode && body.pin) {
       await setQueueMode(code, body.pin, body.queueMode);
@@ -66,7 +68,7 @@ export async function POST(request: Request) {
       return Response.json({ error: error.message }, { status: error.status, headers });
     }
     const message = messageFrom(error);
-    const status = message.includes("not the host") ? 403 : message.includes("Room not found") ? 404 : message.includes("cannot") || message.includes("already") || message.includes("valid") || message.includes("Use a") || message.includes("Spotify") || message.includes("track link") || message.includes("ended") ? 400 : 500;
+    const status = message.includes("not the host") ? 403 : message.includes("Room not found") ? 404 : message.includes("cannot") || message.includes("already") || message.includes("valid") || message.includes("Choose") || message.includes("Nothing") || message.includes("unlock") || message.includes("Start the party") || message.includes("Use a") || message.includes("Spotify") || message.includes("track link") || message.includes("ended") ? 400 : 500;
     return Response.json({ error: message }, { status });
   }
 }

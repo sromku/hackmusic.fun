@@ -19,7 +19,9 @@ export function getD1() {
   return env.DB;
 }
 
-export async function ensurePartySchema() {
+let partySchemaPromise: Promise<void> | null = null;
+
+async function initializePartySchema() {
   const d1 = getD1();
   await d1.batch([
     d1.prepare(`CREATE TABLE IF NOT EXISTS events (
@@ -27,6 +29,7 @@ export async function ensurePartySchema() {
       code TEXT NOT NULL UNIQUE,
       title TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'live',
+      scheduled_for TEXT,
       queue_mode TEXT NOT NULL DEFAULT 'ordered',
       current_submission_id TEXT,
       host_pin TEXT NOT NULL,
@@ -82,4 +85,28 @@ export async function ensurePartySchema() {
     d1.prepare("CREATE INDEX IF NOT EXISTS activity_events_event_created_idx ON activity_events(event_id, created_at, id)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS room_creation_limits_expires_idx ON room_creation_limits(expires_at)"),
   ]);
+  const eventColumns = await d1.prepare("PRAGMA table_info(events)").all<{ name: string }>();
+  const existingEventColumns = new Set(eventColumns.results.map((column) => column.name));
+  const missingEventColumns = [
+    ["queue_mode", "ALTER TABLE events ADD COLUMN queue_mode TEXT NOT NULL DEFAULT 'ordered'"],
+    ["scheduled_for", "ALTER TABLE events ADD COLUMN scheduled_for TEXT"],
+  ] as const;
+  for (const [column, statement] of missingEventColumns) {
+    if (existingEventColumns.has(column)) continue;
+    try {
+      await d1.prepare(statement).run();
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("duplicate column")) throw error;
+    }
+  }
+}
+
+export function ensurePartySchema() {
+  if (!partySchemaPromise) {
+    partySchemaPromise = initializePartySchema().catch((error) => {
+      partySchemaPromise = null;
+      throw error;
+    });
+  }
+  return partySchemaPromise;
 }

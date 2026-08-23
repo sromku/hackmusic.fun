@@ -84,6 +84,17 @@ body {
 .bot-trap { position: absolute !important; left: -10000px !important; top: auto !important; width: 1px !important; height: 1px !important; overflow: hidden !important; pointer-events: none !important; }
 .entry-card button { min-height: 52px; border: 2px solid var(--ink); background: var(--blue); cursor: pointer; font-weight: 900; }
 .create-card button { margin-top: 18px; box-shadow: 4px 4px 0 var(--ink); }
+.room-start-picker { margin: 16px 0 0; border: 0; padding: 0; }
+.room-start-picker legend { margin-bottom: 8px; padding: 0; font-size: 10px; font-weight: 900; letter-spacing: .1em; }
+.room-start-picker > div { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.create-card .room-start-picker button { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: center; min-height: 70px; margin: 0; border: 2px solid var(--ink); background: var(--white); box-shadow: none; padding: 10px; text-align: left; }
+.create-card .room-start-picker button.active { background: var(--mint); box-shadow: 4px 4px 0 var(--ink); transform: translate(-2px, -2px); }
+.room-start-picker button > span { grid-row: 1 / 3; font-size: 24px; }
+.room-start-picker button strong, .room-start-picker button small { display: block; }
+.room-start-picker button strong { font-size: 12px; }
+.room-start-picker button small { font-size: 9px; font-weight: 700; line-height: 1.25; }
+.schedule-field { display: grid; margin-top: 8px; }
+.schedule-field small { margin-top: 7px; font-size: 9px; font-weight: 750; line-height: 1.35; }
 .join-room-card { display: grid; grid-template-columns: 1fr 116px 88px; gap: 12px; align-items: end; background: var(--mint); padding: 20px; }
 .join-room-card h2 { margin: 2px 0 0; font-size: 26px; }
 .join-room-card .eyebrow { margin: 0; }
@@ -115,6 +126,8 @@ body {
   .create-card { padding: 22px 18px; }
   .entry-card h2 { margin-bottom: 17px; font-size: 34px; }
   .entry-card-top > span { font-size: 7px; }
+  .room-start-picker > div { grid-template-columns: 1fr; }
+  .create-card .room-start-picker button { min-height: 62px; }
   .join-room-card { padding: 18px; }
   .landing-energy { grid-template-columns: 38px 1fr; }
   .energy-bars { display: none; }
@@ -191,6 +204,8 @@ button { color: inherit; }
   background: var(--coral);
   animation: pulse 1.4s infinite;
 }
+.room-pill.lobby { background: var(--blue); }
+.live-dot.lobby { background: var(--sun); animation: pulse 2.4s infinite; }
 
 .event-heading { justify-content: space-between; gap: 24px; margin-bottom: 28px; }
 .event-heading h1, .host-heading h1 { animation: headline-pop .65s cubic-bezier(.2, .85, .25, 1.2) both; }
@@ -341,6 +356,13 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 .ended-banner { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 24px; border: 2px solid var(--ink); background: var(--coral); box-shadow: 5px 5px 0 var(--ink); padding: 16px 18px; }
 .ended-banner strong { font-size: 13px; }
 .ended-banner span { font-size: 12px; font-weight: 700; }
+.lobby-banner { display: flex; justify-content: space-between; gap: 28px; align-items: center; margin-bottom: 24px; border: 2px solid var(--ink); background: var(--blue); box-shadow: 5px 5px 0 var(--ink); padding: 18px 20px; }
+.lobby-banner strong, .lobby-banner span { display: block; }
+.lobby-banner > div:first-child > strong { font-size: 18px; }
+.lobby-banner > div:first-child > span { margin-top: 5px; font-size: 11px; font-weight: 750; }
+.lobby-count { min-width: 112px; border: 2px solid var(--ink); background: var(--sun); box-shadow: 3px 3px 0 var(--ink); padding: 10px 12px; text-align: center; }
+.lobby-count strong { font-size: 30px; line-height: .9; }
+.lobby-count span { margin-top: 5px; font-size: 8px; font-weight: 950; letter-spacing: .1em; }
 .live-dot.ended { background: #777168; animation: none; }
 .missing-room, .loading-room { display: grid; min-height: 100dvh; place-content: center; justify-items: start; gap: 14px; width: min(720px, calc(100% - 40px)); margin: 0 auto; }
 .missing-room h1 { margin: 0; font-size: clamp(46px, 8vw, 90px); }
@@ -497,6 +519,10 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
   .topbar { margin-bottom: 30px; }
   .event-heading { align-items: flex-end; gap: 14px; margin-bottom: 20px; }
   .event-heading h1 { max-width: 300px; }
+  .lobby-banner { align-items: stretch; flex-direction: column; gap: 14px; padding: 15px; }
+  .lobby-count { display: flex; min-width: 0; gap: 9px; align-items: center; justify-content: center; }
+  .lobby-count strong { font-size: 24px; }
+  .lobby-count span { margin-top: 0; }
   .room-pill { padding: 7px 9px; }
   .add-song-button { position: fixed; z-index: 10; right: 14px; bottom: 14px; min-height: 48px; padding: 0 16px; }
   .party-grid, .party-sidebar { gap: 16px; }
@@ -597,6 +623,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .host-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
 .host-status { border: 2px solid var(--ink); padding: 10px 13px; font-size: 10px; font-weight: 900; letter-spacing: .1em; }
 .host-status.live { background: var(--mint); }
+.host-status.lobby { background: var(--blue); }
 .host-status.ended { background: var(--coral); }
 .share-room-card { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-top: 32px; border: 2px solid var(--ink); background: var(--sun); box-shadow: 7px 7px 0 var(--ink); padding: 22px 24px; animation: card-arrive .58s cubic-bezier(.2, .75, .25, 1) both; }
 .share-code > span { display: block; font-size: 10px; font-weight: 900; letter-spacing: .12em; }
@@ -607,6 +634,15 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .share-code button:last-child { background: var(--blue); }
 .share-room-card img { border: 2px solid var(--ink); background: var(--white); padding: 7px; }
 .participant-link { color: var(--ink); font-size: 12px; font-weight: 900; }
+.host-lobby-card { display: grid; grid-template-columns: 1fr minmax(300px, .65fr); gap: 28px; align-items: center; margin-top: 28px; border: 2px solid var(--ink); background: var(--blue); box-shadow: 7px 7px 0 var(--ink); padding: 22px 24px; animation: card-arrive .58s .05s cubic-bezier(.2, .75, .25, 1) both; }
+.host-lobby-card h2 { margin: 2px 0 10px; font-size: clamp(34px, 5vw, 52px); line-height: .95; letter-spacing: -.055em; }
+.host-lobby-card p { margin: 0; font-size: 13px; }
+.host-lobby-card small { display: block; margin-top: 8px; font-size: 10px; font-weight: 750; line-height: 1.4; }
+.host-lobby-action { display: grid; gap: 10px; border: 2px solid var(--ink); background: var(--white); box-shadow: 4px 4px 0 var(--ink); padding: 16px; }
+.host-lobby-action > span { font-size: 11px; font-weight: 850; text-align: center; }
+.host-lobby-action button { min-height: 54px; border: 2px solid var(--ink); background: var(--sun); box-shadow: 4px 4px 0 var(--ink); cursor: pointer; font-weight: 950; }
+.host-lobby-action button:disabled { box-shadow: none; cursor: wait; opacity: .65; }
+.host-lobby-action small { margin: 0; text-align: center; }
 .spotify-connect-card { margin-top: 28px; border: 2px solid var(--ink); background: var(--white); box-shadow: 7px 7px 0 var(--ink); padding: 22px 24px; animation: card-arrive .58s .08s cubic-bezier(.2, .75, .25, 1) both; }
 .spotify-connect-card.spotify-ready { background: var(--mint); }
 .spotify-connect-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
@@ -735,7 +771,8 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
   .share-room-card img { width: 132px; height: 132px; }
   .spotify-connect-card { margin-top: 22px; padding: 18px; }
   .host-grid { gap: 18px; margin-top: 24px; }
-  .host-now-card, .host-controls-card, .host-queue-card, .leaderboard-card, .share-room-card, .spotify-connect-card { box-shadow: 5px 5px 0 var(--ink); }
+  .host-now-card, .host-controls-card, .host-queue-card, .leaderboard-card, .share-room-card, .spotify-connect-card, .host-lobby-card { box-shadow: 5px 5px 0 var(--ink); }
+  .host-lobby-card { grid-template-columns: 1fr; gap: 18px; margin-top: 22px; padding: 18px; }
   .host-track { grid-template-columns: 76px 1fr; gap: 14px; padding: 14px; }
   .host-art { width: 76px; height: 76px; font-size: 34px; }
   .host-track h2 { font-size: 24px; }

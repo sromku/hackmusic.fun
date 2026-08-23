@@ -7,6 +7,7 @@ Canonical site: https://hackmusic.fun
 ## How it works
 
 - A host creates a temporary room and shares its six-character code or invite URL.
+- The host can start immediately or open a pre-party lobby so guests can join and queue songs ahead of time; only the host starts playback.
 - Guests join from any modern browser without installing an app.
 - Every participant starts with 30 points and can submit secret songs.
 - A cheer plays a happy sound and awards the song submitter 3 points.

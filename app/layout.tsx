@@ -106,6 +106,7 @@ const structuredData = {
         url: "https://sromku.com",
       },
       featureList: [
+        "Pre-party lobby for collecting songs ahead of time",
         "Secret song submissions",
         "Live cheers and anonymous boos",
         "Crowd-powered song skipping",

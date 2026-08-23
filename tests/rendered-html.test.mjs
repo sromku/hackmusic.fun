@@ -60,6 +60,10 @@ test("renders the create and join landing page", async () => {
   assert.match(html, /href="\/terms"/);
   assert.match(html, /By creating or joining a room/);
   assert.match(html, /name="website"/);
+  const landingSource = await readFile(new URL("app/page.tsx", projectRoot), "utf8");
+  assert.match(landingSource, /Pre-party lobby/);
+  assert.match(landingSource, /type="datetime-local"/);
+  assert.match(landingSource, /preParty, scheduledFor/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/);
 });
 
@@ -112,6 +116,9 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /Add to my Spotify/);
   assert.match(source, /MAX_PENDING_TRACKS_PER_PERSON - party\.pendingCount/);
   assert.match(source, /Played and skipped songs free their slots/);
+  assert.match(source, /PRE-PARTY LOBBY/);
+  assert.match(source, /The queue is undercover/);
+  assert.match(source, /Reactions unlock when the host starts the party/);
   assert.match(source, /art-variant-/);
   assert.doesNotMatch(source, /Playback lives on the host speaker/);
   assert.match(source, /ended && <span className="person-score"/);
@@ -123,6 +130,11 @@ test("renders a code-specific participant room", async () => {
   assert.match(partySource, /newEffect - oldEffect/);
   assert.match(partySource, /current\.artist === "Spotify"/);
   assert.match(partySource, /pending\?\.count \?\? 0\) >= MAX_PENDING_TRACKS_PER_PERSON/);
+  assert.match(partySource, /event\.status === "lobby" \|\| event\.current_submission_id/);
+  assert.match(partySource, /UPDATE events SET status = 'live'/);
+  assert.match(partySource, /action: "start" \| "skip"/);
+  const lobbyMigration = await readFile(new URL("drizzle/0004_lean_kronos.sql", projectRoot), "utf8");
+  assert.match(lobbyMigration, /ADD `scheduled_for` text/);
   const roomGuardSource = await readFile(new URL("lib/room-creation-guard.ts", projectRoot), "utf8");
   assert.match(roomGuardSource, /maximum: 5/);
   assert.match(roomGuardSource, /maximum: 20/);
@@ -202,6 +214,9 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /visibilitychange/);
   assert.match(source, /Keep this screen awake/);
   assert.match(source, /Android auto-lock is blocked/);
+  assert.match(source, /PRE-PARTY LOBBY IS OPEN/);
+  assert.match(source, /Start the party now/);
+  assert.match(source, /Let the queue marinate/);
   assert.doesNotMatch(source, /speechSynthesis|SpeechSynthesisUtterance/);
   const partySource = await readFile(new URL("db/party.ts", projectRoot), "utf8");
   assert.match(partySource, /const queuedTracks = isHost/);

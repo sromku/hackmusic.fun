@@ -9,6 +9,8 @@ export default function Home() {
   const [eventName, setEventName] = useState("");
   const [hostName, setHostName] = useState("");
   const [roomCode, setRoomCode] = useState("");
+  const [preParty, setPreParty] = useState(false);
+  const [scheduledFor, setScheduledFor] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -18,10 +20,14 @@ export default function Home() {
     setBusy(true);
     setMessage("");
     try {
+      const scheduledDate = preParty ? new Date(scheduledFor) : null;
+      if (preParty && (!scheduledFor || !scheduledDate || Number.isNaN(scheduledDate.getTime()))) {
+        throw new Error("Choose when the party is expected to start.");
+      }
       const response = await fetch("/api/party", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "create", title: eventName, name: hostName, website: String(form.get("website") ?? "") }),
+        body: JSON.stringify({ action: "create", title: eventName, name: hostName, preParty, scheduledFor: scheduledDate?.toISOString(), website: String(form.get("website") ?? "") }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Could not create the room.");
@@ -85,8 +91,13 @@ export default function Home() {
             <div className="entry-card-top"><p className="eyebrow">⚡ START THE CHAOS</p><span>NO APP NEEDED</span></div><h2>Create a room</h2>
             <label htmlFor="event-name">EVENT NAME</label><input id="event-name" value={eventName} onChange={(event) => setEventName(event.target.value)} maxLength={60} placeholder="Friday night hackathon" required />
             <label htmlFor="host-name">YOUR NAME</label><input id="host-name" value={hostName} onChange={(event) => setHostName(event.target.value)} maxLength={24} placeholder="The brave host" required />
+            <fieldset className="room-start-picker"><legend>WHEN DOES THE MUSIC START?</legend><div>
+              <button className={!preParty ? "active" : ""} type="button" aria-pressed={!preParty} onClick={() => setPreParty(false)}><span>⚡</span><strong>Start now</strong><small>First song plays immediately.</small></button>
+              <button className={preParty ? "active" : ""} type="button" aria-pressed={preParty} onClick={() => setPreParty(true)}><span>🌙</span><strong>Pre-party lobby</strong><small>Collect songs before the event.</small></button>
+            </div></fieldset>
+            {preParty && <div className="schedule-field"><label htmlFor="scheduled-for">EXPECTED START TIME</label><input id="scheduled-for" type="datetime-local" value={scheduledFor} onChange={(event) => setScheduledFor(event.target.value)} required /><small>Guests can join and add secret songs now. You still press Start when everyone is ready.</small></div>}
             <div className="bot-trap" aria-hidden="true"><label htmlFor="website">Website</label><input id="website" name="website" type="text" tabIndex={-1} autoComplete="off" /></div>
-            <button type="submit" disabled={busy}>{busy ? "🛠️ Making room…" : "🎉 Create my room →"}</button>
+            <button type="submit" disabled={busy}>{busy ? "🛠️ Making room…" : preParty ? "🌙 Open the pre-party lobby →" : "🎉 Create my room →"}</button>
           </form>
           <form className="entry-card join-room-card" onSubmit={joinRoom}>
             <div><p className="eyebrow">🎟️ GOT A CODE?</p><h2>Join the room</h2></div>

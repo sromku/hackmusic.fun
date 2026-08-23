@@ -98,7 +98,8 @@ async function loadRoom(code) {
     elements.detail.hidden = false;
     elements["detail-code"].textContent = `ROOM ${data.room.code}`;
     elements["detail-title"].textContent = data.room.title;
-    elements["detail-meta"].textContent = `${data.room.status.toUpperCase()} · ${data.room.queueMode} queue · created ${date(data.room.createdAt)}`;
+    const scheduled = data.room.scheduledFor ? ` · expected ${date(data.room.scheduledFor)}` : "";
+    elements["detail-meta"].textContent = `${data.room.status.toUpperCase()} · ${data.room.queueMode} queue${scheduled} · created ${date(data.room.createdAt)}`;
     elements["participants-count"].textContent = `${data.participants.length} rows`;
     elements["tracks-count"].textContent = `${data.submissions.length} rows`;
     elements["reactions-count"].textContent = `${data.reactions.length} rows`;

@@ -36,6 +36,7 @@ button,input { font:inherit; }
 .room-copy span,.room-stats { display:block; margin-top:6px; color:var(--muted); font-size:13px; }
 .status { align-self:start; border:2px solid var(--ink); padding:6px 9px; font-size:10px; font-weight:950; letter-spacing:.08em; text-transform:uppercase; }
 .status.live { background:var(--mint); }
+.status.lobby { background:var(--blue); }
 .status.ended { background:#ddd7ca; }
 .empty { padding:32px; color:var(--muted); font-weight:800; }
 .detail { margin-top:36px; }

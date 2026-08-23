@@ -15,6 +15,7 @@ type EventRow = {
   code: string;
   title: string;
   status: string;
+  scheduled_for: string | null;
   queue_mode: QueueMode;
   current_submission_id: string | null;
   host_pin: string;
@@ -89,16 +90,26 @@ function randomCode() {
 
 async function getEvent(code: string) {
   await ensurePartySchema();
-  return getD1().prepare("SELECT id, code, title, status, queue_mode, current_submission_id, host_pin FROM events WHERE code = ?")
+  return getD1().prepare("SELECT id, code, title, status, scheduled_for, queue_mode, current_submission_id, host_pin FROM events WHERE code = ?")
     .bind(cleanCode(code)).first<EventRow>();
 }
 
-export async function createRoom(titleInput: string, hostNameInput: string) {
+export async function createRoom(titleInput: string, hostNameInput: string, options: { preParty?: boolean; scheduledFor?: string } = {}) {
   await ensurePartySchema();
   const title = cleanName(titleInput);
   const hostName = cleanName(hostNameInput);
   if (title.length < 3 || title.length > 60) throw new Error("Use an event name between 3 and 60 characters.");
   if (hostName.length < 2 || hostName.length > 24) throw new Error("Use a host name between 2 and 24 characters.");
+  let scheduledFor: string | null = null;
+  if (options.preParty) {
+    const scheduledDate = new Date(options.scheduledFor ?? "");
+    const now = Date.now();
+    const latest = now + (90 * 24 * 60 * 60 * 1000);
+    if (Number.isNaN(scheduledDate.getTime()) || scheduledDate.getTime() <= now || scheduledDate.getTime() > latest) {
+      throw new Error("Choose a future start time within 90 days.");
+    }
+    scheduledFor = scheduledDate.toISOString();
+  }
 
   const d1 = getD1();
   let code = "";
@@ -114,9 +125,10 @@ export async function createRoom(titleInput: string, hostNameInput: string) {
   const hostKey = `host-${crypto.randomUUID()}-${crypto.randomUUID()}`;
   const profile = profileFor(hostName);
   const now = new Date().toISOString();
+  const status = options.preParty ? "lobby" : "live";
   await d1.batch([
-    d1.prepare("INSERT INTO events (id, code, title, status, current_submission_id, host_pin, created_at) VALUES (?, ?, ?, 'live', NULL, ?, ?)")
-      .bind(eventId, code, title, hostKey, now),
+    d1.prepare("INSERT INTO events (id, code, title, status, scheduled_for, current_submission_id, host_pin, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)")
+      .bind(eventId, code, title, status, scheduledFor, hostKey, now),
     d1.prepare("INSERT INTO participants (id, event_id, display_name, initials, color, score, created_at) VALUES (?, ?, ?, ?, ?, 30, ?)")
       .bind(participantId, eventId, hostName, profile.initials, profile.color, now),
   ]);
@@ -126,7 +138,7 @@ export async function createRoom(titleInput: string, hostNameInput: string) {
 export async function readRoomSummary(codeInput: string) {
   const event = await getEvent(codeInput);
   if (!event) throw new Error("Room not found.");
-  return { code: event.code, title: event.title, status: event.status };
+  return { code: event.code, title: event.title, status: event.status, scheduledFor: event.scheduled_for };
 }
 
 export async function readParty(codeInput: string, viewerId: string, hostKey = "", activityAfter?: string) {
@@ -210,6 +222,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
     code: event.code,
     title: event.title,
     status: event.status,
+    scheduledFor: event.scheduled_for,
     viewer,
     people,
     currentTrack: current ? {
@@ -323,12 +336,14 @@ async function advanceCurrent(event: EventRow, finishedStatus: "skipped" | "play
 export async function setQueueMode(code: string, hostKey: string, queueMode: QueueMode) {
   const event = await getEvent(code);
   if (!event || event.host_pin !== hostKey) throw new Error("This phone is not the host for that room.");
+  if (event.status === "ended") throw new Error("This party has ended.");
   if (!(["ordered", "random", "fair"] as const).includes(queueMode)) throw new Error("Choose a valid queue mode.");
   await getD1().prepare("UPDATE events SET queue_mode = ? WHERE id = ?").bind(queueMode, event.id).run();
 }
 
 export async function reactToCurrent(code: string, participantId: string, kind: "up" | "down") {
   const event = await getEvent(code);
+  if (event?.status === "lobby") throw new Error("Reactions unlock when the host starts the party.");
   if (!event?.current_submission_id) throw new Error("Nothing is playing.");
   if (event.status === "ended") throw new Error("This party has ended.");
   const d1 = getD1();
@@ -382,19 +397,23 @@ export async function submitTrack(code: string, participantId: string, track: Tr
   if (!track.title || !track.artist) throw new Error("Choose a valid song.");
 
   const submissionId = crypto.randomUUID();
-  const status = event.current_submission_id ? "pending" : "playing";
+  const status = event.status === "lobby" || event.current_submission_id ? "pending" : "playing";
   const now = new Date().toISOString();
   try {
     const statements = [
       d1.prepare("INSERT INTO submissions (id, event_id, participant_id, provider_track_id, title, artist, duration, color, status, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(submissionId, event.id, participantId, normalizedTrack.uri, track.title.slice(0, 160), track.artist.slice(0, 160), track.duration.slice(0, 12), track.color, status, now),
     ];
-    if (!event.current_submission_id) {
+    if (event.status !== "lobby" && !event.current_submission_id) {
       statements.push(d1.prepare("UPDATE events SET current_submission_id = ? WHERE id = ?").bind(submissionId, event.id));
       statements.push(d1.prepare("INSERT INTO activity_events (id, event_id, submission_id, participant_id, kind, created_at) VALUES (?, ?, ?, NULL, 'song_start', ?)")
         .bind(`activity-${crypto.randomUUID()}`, event.id, submissionId, now));
     }
     await d1.batch(statements);
+    if (event.status === "lobby") {
+      const refreshed = await getEvent(code);
+      if (refreshed?.status === "live" && !refreshed.current_submission_id) await advanceCurrent(refreshed, "played");
+    }
   } catch (error) {
     if (error instanceof Error && error.message.includes("UNIQUE")) throw new Error("That song is already hiding in the queue.");
     throw error;
@@ -413,13 +432,20 @@ export async function joinParty(code: string, participantId: string, displayName
     .bind(participantId, event.id, name, profile.initials, profile.color, new Date().toISOString()).run();
 }
 
-export async function hostControl(code: string, hostKey: string, action: "skip" | "advance" | "end") {
+export async function hostControl(code: string, hostKey: string, action: "start" | "skip" | "advance" | "end") {
   const event = await getEvent(code);
   if (!event || event.host_pin !== hostKey) throw new Error("This phone is not the host for that room.");
+  if (action === "start") {
+    if (event.status !== "lobby") throw new Error("This party has already started.");
+    await getD1().prepare("UPDATE events SET status = 'live' WHERE id = ?").bind(event.id).run();
+    await advanceCurrent(event, "played");
+    return;
+  }
   if (action === "end") {
     await getD1().prepare("UPDATE events SET status = 'ended' WHERE id = ?").bind(event.id).run();
     return;
   }
+  if (event.status === "lobby") throw new Error("Start the party before controlling playback.");
   if (!event.current_submission_id) throw new Error("Nothing is playing yet.");
   await advanceCurrent(event, action === "advance" ? "played" : "skipped");
 }

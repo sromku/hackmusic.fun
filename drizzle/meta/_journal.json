@@ -29,6 +29,13 @@
       "when": 1787449136906,
       "tag": "0003_slow_norrin_radd",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1787452106612,
+      "tag": "0004_lean_kronos",
+      "breakpoints": true
     }
   ]
 }
