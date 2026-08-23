@@ -214,6 +214,10 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /action: "remove"/);
   assert.match(source, /action: "avatar"/);
   assert.match(source, /Boolean\(myReaction\)/);
+  assert.match(source, /const hasPlayedSong = .*item\.tone === "song"/);
+  assert.match(source, /The last song left the chat/);
+  assert.match(source, /Add another secret song and keep the speaker employed/);
+  assert.match(source, /Add another song →/);
   assert.match(source, /x-hackmusic-participant/);
   assert.doesNotMatch(source, /participantId=\$\{encodeURIComponent/);
   const participantStyles = await readFile(new URL("app/globals.css", projectRoot), "utf8");
