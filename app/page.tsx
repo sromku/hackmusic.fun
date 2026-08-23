@@ -168,7 +168,7 @@ export default function Home() {
         <div className="landing-copy">
           <p className="eyebrow">🎮 THE PLAYLIST IS NOW A PARTY GAME</p>
           <h1>Let the room<br />pick the vibe.</h1>
-          <p className="landing-lede">Create a room, invite the humans, and hand everyone a tiny amount of power over the speaker.</p>
+          <p className="landing-lede"><span className="lede-play lede-room">Create a room</span>, invite the <span className="lede-play lede-humans">humans</span>, and hand <span className="lede-play lede-everyone">everyone</span> a <span className="lede-play lede-tiny">tiny</span> amount of <span className="lede-play lede-power">power</span> over the <span className="lede-play lede-speaker">speaker</span>.</p>
           <div className="landing-energy" aria-label="Made for six to thirty people sharing one speaker">
             <span className="energy-orb" aria-hidden="true">🪩</span>
             <div><strong>SOME HUMANS · ONE SPEAKER</strong><small>Zero playlist dictators.</small></div>

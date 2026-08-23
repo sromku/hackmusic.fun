@@ -76,6 +76,8 @@ test("renders the create and join landing page", async () => {
   assert.match(landingSource, /localStorage\.key\(index\)/);
   assert.match(landingSource, /hackmusic:\(\[A-Z0-9\]/);
   assert.match(landingSource, /Clear this browser’s site data/);
+  assert.match(landingSource, /lede-play lede-room/);
+  assert.match(landingSource, /lede-play lede-speaker/);
   assert.equal((landingSource.match(/className="rule-connector"/g) ?? []).length, 2);
   assert.doesNotMatch(landingSource, /next\/link/);
   const globalStyles = await readFile(new URL("app/globals.css", projectRoot), "utf8");

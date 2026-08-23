@@ -36,6 +36,23 @@ body {
 .landing-copy { padding-top: clamp(64px, 7vh, 84px); }
 .landing-copy h1 { color: transparent; background: linear-gradient(100deg, var(--ink) 0 24%, var(--coral) 38%, var(--blue) 52%, var(--mint) 60%, var(--ink) 74% 100%); background-size: 230% 100%; background-clip: text; -webkit-background-clip: text; -webkit-text-stroke: 1.5px var(--ink); padding-bottom: .12em; margin-bottom: -.12em; font-size: clamp(62px, 8vw, 108px); animation: headline-pop .75s cubic-bezier(.2, .85, .25, 1.2) both, headline-ink 8s 1s ease-in-out infinite; }
 .landing-lede { max-width: 580px; margin: 25px 0 18px; font-size: clamp(18px, 2vw, 24px); font-weight: 700; line-height: 1.32; letter-spacing: -.025em; }
+.lede-play { position: relative; z-index: 0; display: inline-block; transform-origin: center bottom; transition: color .18s ease, transform .22s cubic-bezier(.2, .85, .25, 1.25); }
+.lede-play::before { content: ""; position: absolute; z-index: -1; inset: 54% -.08em -.02em; border: 1.5px solid var(--ink); background: var(--sun); transform: scaleX(0); transform-origin: left center; transition: transform .22s cubic-bezier(.2, .8, .25, 1); }
+.lede-play:hover::before, .lede-play:active::before { transform: scaleX(1); }
+.lede-room::before { background: var(--blue); }
+.lede-room:hover, .lede-room:active { transform: translateY(-2px) rotate(-1.5deg); }
+.lede-humans::before { inset: 8% -.08em -.03em; background: var(--mint); transform-origin: center; }
+.lede-humans:hover, .lede-humans:active { animation: lede-wobble .48s cubic-bezier(.2, .8, .25, 1); }
+.lede-everyone::before { background: var(--coral); transform-origin: right center; }
+.lede-everyone:hover, .lede-everyone:active { transform: translateY(-3px) scale(1.04); }
+.lede-tiny::before { background: var(--mint); }
+.lede-tiny:hover, .lede-tiny:active { transform: scale(.76) rotate(3deg); }
+.lede-power::before { inset: 5% -.1em -.02em; background: var(--sun); transform-origin: center; }
+.lede-power:hover, .lede-power:active { animation: lede-power-pop .5s cubic-bezier(.2, .85, .25, 1.2); }
+.lede-speaker::before { background: var(--coral); }
+.lede-speaker::after { content: "♪"; position: absolute; right: -.42em; top: -.52em; color: var(--coral); font-size: .72em; opacity: 0; transform: translateY(7px) rotate(-12deg); transition: opacity .16s ease, transform .28s cubic-bezier(.2, .85, .25, 1.25); -webkit-text-stroke: 1px var(--ink); }
+.lede-speaker:hover, .lede-speaker:active { animation: lede-speaker-shake .34s linear; }
+.lede-speaker:hover::after, .lede-speaker:active::after { opacity: 1; transform: translateY(0) rotate(8deg); }
 .landing-energy { display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: center; max-width: 580px; border: 2px solid var(--ink); background: var(--mint); box-shadow: 4px 4px 0 var(--ink); padding: 10px 12px; transform: rotate(-.5deg); }
 .energy-orb { display: grid; width: 38px; height: 38px; place-items: center; border: 2px solid var(--ink); border-radius: 50%; background: var(--blue); font-size: 19px; animation: energy-orb 3.2s ease-in-out infinite; }
 .landing-energy strong, .landing-energy small { display: block; }
@@ -516,6 +533,9 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 @keyframes energy-orb { 0%, 100% { transform: rotate(-6deg) scale(1); } 50% { transform: rotate(7deg) scale(1.08); } }
 @keyframes energy-bar { to { transform: scaleY(.35); opacity: .7; } }
 @keyframes rule-icon-bop { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-4px) rotate(4deg); } }
+@keyframes lede-wobble { 0%, 100% { transform: none; } 25% { transform: rotate(-2.5deg) translateY(-2px); } 55% { transform: rotate(2deg) translateY(1px); } 78% { transform: rotate(-1deg) translateY(-1px); } }
+@keyframes lede-power-pop { 0%, 100% { transform: none; } 45% { transform: translateY(-4px) scale(1.12) rotate(-2deg); } 72% { transform: translateY(1px) scale(.98) rotate(1deg); } }
+@keyframes lede-speaker-shake { 0%, 100% { transform: none; } 20% { transform: translateX(-2px) rotate(-1deg); } 40% { transform: translateX(2px) rotate(1deg); } 60% { transform: translateX(-1px) rotate(-.5deg); } 80% { transform: translateX(1px) rotate(.5deg); } }
 @keyframes sticker-spin { to { transform: rotate(360deg); } }
 @keyframes album-circle-drift { 0%, 100% { transform: translate(0) scale(1); } 50% { transform: translate(-8%, 9%) scale(.9); } }
 @keyframes album-stair-wobble { 0%, 100% { transform: rotate(-8deg) translate(0); } 50% { transform: rotate(-2deg) translate(4%, -5%); } }
