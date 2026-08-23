@@ -64,8 +64,8 @@ type SpotifyPlayer = {
   };
 };
 
-const REACTION_DUCK_VOLUME = 0.16;
-const REACTION_SOUND_VERSION = "2026-08-23-4";
+const REACTION_DUCK_VOLUME = 0.28;
+const REACTION_SOUND_VERSION = "2026-08-23-5";
 const waitForAudioFade = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
 
 function formatPlaybackTime(milliseconds: number) {
@@ -106,6 +106,7 @@ declare global {
   interface Window {
     Spotify?: { Player: SpotifyConstructor };
     onSpotifyWebPlaybackSDKReady?: () => void;
+    webkitAudioContext?: typeof AudioContext;
   }
 }
 
@@ -135,14 +136,17 @@ export default function HostRoom({ code }: { code: string }) {
   const audioEnabledRef = useRef(false);
   const cheerAudioRef = useRef<HTMLAudioElement | null>(null);
   const booAudioRef = useRef<HTMLAudioElement | null>(null);
+  const reactionAudioContextRef = useRef<AudioContext | null>(null);
+  const reactionAudioBuffersRef = useRef<{ up: AudioBuffer; down: AudioBuffer } | null>(null);
+  const activeReactionSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const activeReactionCountRef = useRef(0);
+  const reactionEffectTimersRef = useRef<Set<number>>(new Set());
   const knownSoundActivityRef = useRef<Set<string> | null>(null);
   const soundActivityCursorRef = useRef("");
   const cancelEndRef = useRef<HTMLButtonElement | null>(null);
   const spotifyPlayerRef = useRef<SpotifyPlayer | null>(null);
   const spotifyVolumeBeforeDuckRef = useRef<number | null>(null);
-  const spotifyPausedForReactionRef = useRef(false);
   const reactionSoundTokenRef = useRef(0);
-  const reactionRestoreTimerRef = useRef<number | null>(null);
   const activeReactionAudioRef = useRef<Set<HTMLAudioElement>>(new Set());
   const lastSpotifyTrackRef = useRef("");
   const previousPartyTrackRef = useRef("");
@@ -204,38 +208,52 @@ export default function HostRoom({ code }: { code: string }) {
     if (announce) setMessage(`💤 Screen wake lock released. This ${hostDeviceName} may sleep again.`);
   }, [hostDeviceName]);
 
+  const prepareReactionAudio = useCallback(async () => {
+    const AudioContextConstructor = window.AudioContext ?? window.webkitAudioContext;
+    if (!AudioContextConstructor) throw new Error("This browser cannot create the reaction sound mixer.");
+    const context = reactionAudioContextRef.current ?? new AudioContextConstructor();
+    reactionAudioContextRef.current = context;
+    if (context.state === "suspended") await context.resume();
+    if (!reactionAudioBuffersRef.current) {
+      const [cheerResponse, booResponse] = await Promise.all([
+        fetch(`/sounds/woohoo-crowd.wav?v=${REACTION_SOUND_VERSION}`),
+        fetch(`/sounds/boo.wav?v=${REACTION_SOUND_VERSION}`),
+      ]);
+      if (!cheerResponse.ok || !booResponse.ok) throw new Error("The funny sounds could not be loaded.");
+      const [cheerBytes, booBytes] = await Promise.all([cheerResponse.arrayBuffer(), booResponse.arrayBuffer()]);
+      const [up, down] = await Promise.all([context.decodeAudioData(cheerBytes), context.decodeAudioData(booBytes)]);
+      reactionAudioBuffersRef.current = { up, down };
+    }
+    return context;
+  }, []);
+
   const playReactionSound = useCallback((kind: "up" | "down") => {
     if (!audioEnabledRef.current) return;
     const template = kind === "up" ? cheerAudioRef.current : booAudioRef.current;
-    if (!template) return;
-    const sound = template.cloneNode(true) as HTMLAudioElement;
-    sound.preload = "auto";
-    sound.volume = 1;
-    activeReactionAudioRef.current.add(sound);
+    const context = reactionAudioContextRef.current;
+    const buffer = reactionAudioBuffersRef.current?.[kind];
+    if ((!context || !buffer) && !template) return;
 
     reactionSoundTokenRef.current += 1;
-    if (reactionRestoreTimerRef.current) {
-      window.clearTimeout(reactionRestoreTimerRef.current);
-      reactionRestoreTimerRef.current = null;
-    }
-
+    const firstActiveReaction = activeReactionCountRef.current === 0;
+    activeReactionCountRef.current += 1;
+    let sound: HTMLAudioElement | null = null;
+    let source: AudioBufferSourceNode | null = null;
+    let effectTimer = 0;
     let finished = false;
     const restoreMusic = () => {
       if (finished) return;
       finished = true;
-      activeReactionAudioRef.current.delete(sound);
-      if (activeReactionAudioRef.current.size) return;
-      if (reactionRestoreTimerRef.current) {
-        window.clearTimeout(reactionRestoreTimerRef.current);
-        reactionRestoreTimerRef.current = null;
+      if (effectTimer) {
+        window.clearTimeout(effectTimer);
+        reactionEffectTimersRef.current.delete(effectTimer);
       }
+      if (sound) activeReactionAudioRef.current.delete(sound);
+      if (source) activeReactionSourcesRef.current.delete(source);
+      activeReactionCountRef.current = Math.max(0, activeReactionCountRef.current - 1);
+      if (activeReactionCountRef.current) return;
       const restoreToken = reactionSoundTokenRef.current;
       const player = spotifyPlayerRef.current;
-      if (spotifyPausedForReactionRef.current) {
-        spotifyPausedForReactionRef.current = false;
-        if (player) void player.resume().catch(() => undefined);
-        return;
-      }
       const originalVolume = spotifyVolumeBeforeDuckRef.current;
       if (!player || originalVolume === null) return;
       void (async () => {
@@ -253,37 +271,47 @@ export default function HostRoom({ code }: { code: string }) {
 
     const playOverDuckedMusic = async () => {
       const player = spotifyPlayerRef.current;
-      if (player) {
-        if (hostDevice === "ios") {
-          if (!spotifyPausedForReactionRef.current && lastPlaybackStateRef.current && !lastPlaybackStateRef.current.paused) {
-            spotifyPausedForReactionRef.current = true;
-            await player.pause().catch(() => undefined);
-          }
-        } else {
-          let originalVolume = spotifyVolumeBeforeDuckRef.current;
-          if (originalVolume === null) {
-            originalVolume = await player.getVolume().catch(() => 0.8);
-            spotifyVolumeBeforeDuckRef.current = originalVolume;
-            const firstDip = originalVolume + ((Math.min(originalVolume, REACTION_DUCK_VOLUME) - originalVolume) * 0.65);
-            await player.setVolume(firstDip).catch(() => undefined);
-            await waitForAudioFade(45);
-          }
-          if (player !== spotifyPlayerRef.current) return;
+      if (player && firstActiveReaction) {
+        let originalVolume = spotifyVolumeBeforeDuckRef.current;
+        if (originalVolume === null) {
+          originalVolume = await player.getVolume().catch(() => 0.8);
+          spotifyVolumeBeforeDuckRef.current = originalVolume;
+          const firstDip = originalVolume + ((Math.min(originalVolume, REACTION_DUCK_VOLUME) - originalVolume) * 0.65);
+          await player.setVolume(firstDip).catch(() => undefined);
+          await waitForAudioFade(45);
+        }
+        if (player === spotifyPlayerRef.current) {
           await player.setVolume(Math.min(originalVolume, REACTION_DUCK_VOLUME)).catch(() => undefined);
         }
       }
-      sound.onended = restoreMusic;
-      sound.onerror = restoreMusic;
-      await sound.play();
-      const fallbackDuration = Number.isFinite(sound.duration) ? sound.duration * 1_000 + 250 : 3_500;
-      reactionRestoreTimerRef.current = window.setTimeout(restoreMusic, fallbackDuration);
+      if (context && buffer) {
+        if (context.state === "suspended") await context.resume();
+        source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(context.destination);
+        source.onended = restoreMusic;
+        activeReactionSourcesRef.current.add(source);
+        source.start(0);
+        effectTimer = window.setTimeout(restoreMusic, buffer.duration * 1_000 + 500);
+      } else if (template) {
+        sound = template.cloneNode(true) as HTMLAudioElement;
+        sound.preload = "auto";
+        sound.volume = 1;
+        sound.onended = restoreMusic;
+        sound.onerror = restoreMusic;
+        activeReactionAudioRef.current.add(sound);
+        await sound.play();
+        const fallbackDuration = Number.isFinite(sound.duration) ? sound.duration * 1_000 + 500 : 4_000;
+        effectTimer = window.setTimeout(restoreMusic, fallbackDuration);
+      }
+      if (effectTimer) reactionEffectTimersRef.current.add(effectTimer);
     };
 
     void playOverDuckedMusic().catch(() => {
       restoreMusic();
       setMessage("The phone blocked reaction audio. Tap Enable & test funny sounds again.");
     });
-  }, [hostDevice]);
+  }, []);
 
   useEffect(() => {
     const participant = window.localStorage.getItem(`hackmusic:${code}:participant`) ?? "";
@@ -321,6 +349,8 @@ export default function HostRoom({ code }: { code: string }) {
 
   useEffect(() => {
     const activeReactionAudio = activeReactionAudioRef.current;
+    const activeReactionSources = activeReactionSourcesRef.current;
+    const reactionEffectTimers = reactionEffectTimersRef.current;
     const cheerSound = new Audio(`/sounds/woohoo-crowd.wav?v=${REACTION_SOUND_VERSION}`);
     const booSound = new Audio(`/sounds/boo.mp3?v=${REACTION_SOUND_VERSION}`);
     cheerSound.preload = "auto";
@@ -331,10 +361,16 @@ export default function HostRoom({ code }: { code: string }) {
     booAudioRef.current = booSound;
     return () => {
       reactionSoundTokenRef.current += 1;
-      spotifyPausedForReactionRef.current = false;
-      if (reactionRestoreTimerRef.current) window.clearTimeout(reactionRestoreTimerRef.current);
+      reactionEffectTimers.forEach((timer) => window.clearTimeout(timer));
+      reactionEffectTimers.clear();
+      activeReactionSources.forEach((source) => { try { source.stop(); } catch { /* already stopped */ } });
+      activeReactionSources.clear();
       activeReactionAudio.forEach((sound) => sound.pause());
       activeReactionAudio.clear();
+      activeReactionCountRef.current = 0;
+      void reactionAudioContextRef.current?.close().catch(() => undefined);
+      reactionAudioContextRef.current = null;
+      reactionAudioBuffersRef.current = null;
       cheerSound.pause();
       booSound.pause();
       cheerAudioRef.current = null;
@@ -630,42 +666,41 @@ export default function HostRoom({ code }: { code: string }) {
     }
   }, [currentSpotifyId, party?.status, playSpotifyTrack, speakerArmed, spotifyDeviceId, spotifyStatus]);
 
-  function enableAudio() {
-    audioEnabledRef.current = true;
-    setAudioEnabled(true);
-    setMessage("Funny sounds are armed. You should hear a quick cheer and boo test now.");
-    const booSound = booAudioRef.current;
-    if (booSound) {
-      booSound.volume = 0;
-      void booSound.play().then(() => {
-        booSound.pause();
-        booSound.currentTime = 0;
-        booSound.volume = 1;
-      }).catch(() => undefined);
+  async function enableAudio() {
+    setBusy(true);
+    setMessage("🎛️ Building the reaction sound mixer…");
+    try {
+      await prepareReactionAudio();
+      audioEnabledRef.current = true;
+      setAudioEnabled(true);
+      setMessage("✅ Funny sounds are armed. You should hear a cheer and boo test now.");
+      playReactionSound("up");
+      window.setTimeout(() => playReactionSound("down"), 650);
+    } catch (reason) {
+      audioEnabledRef.current = false;
+      setAudioEnabled(false);
+      setMessage(reason instanceof Error ? reason.message : "The funny sounds could not be armed. Reload and try once more.");
+    } finally {
+      setBusy(false);
     }
-    playReactionSound("up");
-    window.setTimeout(() => playReactionSound("down"), 650);
   }
 
   function disableAudio() {
     audioEnabledRef.current = false;
     setAudioEnabled(false);
     reactionSoundTokenRef.current += 1;
-    if (reactionRestoreTimerRef.current) {
-      window.clearTimeout(reactionRestoreTimerRef.current);
-      reactionRestoreTimerRef.current = null;
-    }
+    reactionEffectTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    reactionEffectTimersRef.current.clear();
+    activeReactionSourcesRef.current.forEach((source) => { try { source.stop(); } catch { /* already stopped */ } });
+    activeReactionSourcesRef.current.clear();
     cheerAudioRef.current?.pause();
     booAudioRef.current?.pause();
     activeReactionAudioRef.current.forEach((sound) => sound.pause());
     activeReactionAudioRef.current.clear();
+    activeReactionCountRef.current = 0;
     if (cheerAudioRef.current) cheerAudioRef.current.currentTime = 0;
     if (booAudioRef.current) booAudioRef.current.currentTime = 0;
     const player = spotifyPlayerRef.current;
-    if (spotifyPausedForReactionRef.current) {
-      spotifyPausedForReactionRef.current = false;
-      if (player) void player.resume().catch(() => undefined);
-    }
     const originalVolume = spotifyVolumeBeforeDuckRef.current;
     spotifyVolumeBeforeDuckRef.current = null;
     if (player && originalVolume !== null) void player.setVolume(originalVolume).catch(() => undefined);
