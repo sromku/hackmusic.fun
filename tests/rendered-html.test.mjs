@@ -225,7 +225,7 @@ test("renders a code-specific participant room", async () => {
   assert.match(html, /noindex/);
   assert.doesNotMatch(html, /og(?:-v2)?\.png/);
   const source = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
-  for (const copy of ["CHEER", "BOO", "Add a song", "YOUR FINAL SCORE", "🔊 ROOM NOISE", "FULL PARTY HISTORY", "🎧 My music", "Pick your party face", "Rename your human", "YOUR PARTY NAME", "Paste a full track or short /s/ link…", "Show me how", "Borrow the link. Keep the chaos.", "Copy link", "I found the link"]) {
+  for (const copy of ["CHEER", "BOO", "Add a song", "YOUR FINAL SCORE", "🔊 ROOM NOISE", "FULL PARTY HISTORY", "🎧 My music", "Pick your party face", "Rename your human", "YOUR PARTY NAME", "YOUR NAME — SHOWN TO EVERYONE", "This is how other humans will see you. It is not the room code.", "ROOM PASSCODE — ASK THE HOST", "Paste a full track or short /s/ link…", "Show me how", "Borrow the link. Keep the chaos.", "Copy link", "I found the link"]) {
     assert.match(source, new RegExp(copy));
   }
   assert.match(source, /spotifyHelpOpen/);
