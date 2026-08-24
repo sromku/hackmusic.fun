@@ -66,6 +66,7 @@ export type ParticipantParty = {
   code: string;
   title: string;
   viewer: PartyPerson;
+  viewerDisplayName: string;
   people: PartyPerson[];
   currentTrack: PartyTrack | null;
   reactions: PartyReaction[];
@@ -129,6 +130,7 @@ export type PartyAction =
   | "submit"
   | "remove"
   | "avatar"
+  | "profileName"
   | "start"
   | "skip"
   | "advance"

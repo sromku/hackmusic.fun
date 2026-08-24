@@ -23,6 +23,8 @@ export default function PartyRoom({ code }: { code: string }) {
   const [busy, setBusy] = useState(false);
   const [removeConfirmId, setRemoveConfirmId] = useState("");
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [nameOpen, setNameOpen] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
   const [spotifyHelpOpen, setSpotifyHelpOpen] = useState(false);
   const spotifyHelpCloseRef = useRef<HTMLButtonElement>(null);
 
@@ -188,6 +190,36 @@ export default function PartyRoom({ code }: { code: string }) {
     }
   }
 
+  function openNameEditor() {
+    setNameDraft(party?.viewerDisplayName ?? "");
+    setNameOpen(true);
+  }
+
+  async function changeName(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextName = nameDraft.trim();
+    if (busy) return;
+    if (nextName.length < 2 || nextName.length > 24) {
+      setNotice("🎟️ Use a party name between 2 and 24 characters.");
+      return;
+    }
+    if (nextName === party?.viewerDisplayName) {
+      setNameOpen(false);
+      return;
+    }
+    setBusy(true);
+    try {
+      const data = await postAction({ action: "profileName", name: nextName });
+      setParty((current) => ({ ...data.party, activity: current?.activity ?? [] }));
+      setNameOpen(false);
+      setNotice(`🎤 You are now ${data.party.viewerDisplayName}. Identity remixed.`);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Your party name refused to cooperate. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function surpriseAvatar() {
     const alternatives = AVATAR_EMOJIS.filter((option) => option.emoji !== party?.viewer.initials);
     const choice = alternatives[Math.floor(Math.random() * alternatives.length)] ?? AVATAR_EMOJIS[0];
@@ -234,7 +266,14 @@ export default function PartyRoom({ code }: { code: string }) {
         </section>
 
         <aside className={`party-sidebar ${ended ? "scores-revealed" : "scores-hidden"}`}>{ended && <section className="sidebar-card score-card"><div className="score-topline"><span>🏆 YOUR FINAL SCORE</span><span>⭐</span></div><strong className="big-score">{party.viewer.score ?? "—"}</strong><p>🧊 Frozen forever. Brag responsibly.</p></section>}
-          <section className="sidebar-card crowd-card"><div className="card-title-row"><h2>{ended ? "🏆 FINAL SCORES" : "🪩 THE CROWD"}</h2><span>{ended ? "👀 REVEALED" : `🎉 ${party.people.length} HERE`}</span></div><button className="party-avatar-trigger" type="button" onClick={() => setAvatarOpen(true)}><span className={`avatar ${party.viewer.color}`}>{party.viewer.initials}</span><span><small>YOUR PARTY FACE</small><strong>Tap to unleash an emoji</strong></span><b>CHANGE →</b></button><div className="people-list">{visiblePeople.map((person) => <div className="person-row" key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><strong>{person.name}</strong>{ended && <span className="person-score">{person.score ?? "—"}</span>}</div>)}</div>{!ended && party.people.length > 4 && <button className="text-button" type="button" onClick={() => setShowEveryone((value) => !value)}>{showEveryone ? "Show less ↑" : "Show everybody →"}</button>}</section>
+          <section className="sidebar-card crowd-card">
+            <div className="card-title-row"><h2>{ended ? "🏆 FINAL SCORES" : "🪩 THE CROWD"}</h2><span>{ended ? "👀 REVEALED" : `🎉 ${party.people.length} HERE`}</span></div>
+            <div className="party-identity-actions">
+              <button className="party-avatar-trigger" type="button" onClick={() => setAvatarOpen(true)}><span className={`avatar ${party.viewer.color}`}>{party.viewer.initials}</span><span><small>YOUR PARTY FACE</small><strong>Tap to unleash an emoji</strong></span><b>CHANGE →</b></button>
+              <button className="party-name-trigger" type="button" onClick={openNameEditor}><span aria-hidden="true">✎</span><span><small>YOUR PARTY NAME</small><strong>{party.viewerDisplayName}</strong></span><b>EDIT →</b></button>
+            </div>
+            <div className="people-list">{visiblePeople.map((person) => <div className="person-row" key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><strong>{person.name}</strong>{ended && <span className="person-score">{person.score ?? "—"}</span>}</div>)}</div>{!ended && party.people.length > 4 && <button className="text-button" type="button" onClick={() => setShowEveryone((value) => !value)}>{showEveryone ? "Show less ↑" : "Show everybody →"}</button>}
+          </section>
         </aside>
       </div>}
 
@@ -285,6 +324,8 @@ export default function PartyRoom({ code }: { code: string }) {
       </div><div className="spotify-help-finish"><span>🎉</span><div><strong>That’s it. Your song enters anonymously.</strong><small>Nobody sees the queue. Your suspiciously specific taste remains a surprise.</small></div><button type="button" onClick={closeSpotifyHelp}>I found the link →</button></div></section></div>}
 
       {avatarOpen && party && <div className="modal-backdrop avatar-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setAvatarOpen(false)}><section className="avatar-picker-card" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title"><div className="modal-topline"><div><p className="eyebrow">🎭 IDENTITY, BUT LOUDER</p><h2 id="avatar-picker-title">Pick your party face</h2></div><button className="close-button" type="button" onClick={() => setAvatarOpen(false)} aria-label="Close avatar picker">×</button></div><p className="avatar-picker-intro">Choose wisely. This tiny face will represent your enormous musical opinions.</p><div className="avatar-grid" role="group" aria-label="Party face emojis">{AVATAR_EMOJIS.map((option) => <button className={party.viewer.initials === option.emoji ? "selected" : ""} type="button" onClick={() => void changeAvatar(option.emoji)} disabled={busy} aria-label={`Use ${option.label} as my party face`} aria-pressed={party.viewer.initials === option.emoji} key={option.emoji}><span aria-hidden="true">{option.emoji}</span><small>{option.label}</small></button>)}</div><button className="avatar-surprise" type="button" onClick={surpriseAvatar} disabled={busy}>{busy ? "✨ Summoning chaos…" : "🎲 Surprise me, algorithm →"}</button><p className="avatar-privacy-note">🔐 Only your avatar changes. Your anonymous boos remain delightfully anonymous.</p></section></div>}
+
+      {nameOpen && party && <div className="modal-backdrop name-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setNameOpen(false)}><form className="name-picker-card" role="dialog" aria-modal="true" aria-labelledby="name-picker-title" onSubmit={(event) => void changeName(event)}><div className="modal-topline"><div><p className="eyebrow">🎤 WITNESS PROTECTION, BUT FESTIVE</p><h2 id="name-picker-title">Rename your human</h2></div><button className="close-button" type="button" onClick={() => setNameOpen(false)} aria-label="Close name editor">×</button></div><p className="name-picker-intro">New nickname, same suspicious music taste. Everyone in this room will see the update.</p><label htmlFor="party-name-edit">YOUR NEW PARTY NAME</label><input id="party-name-edit" value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} minLength={2} maxLength={24} autoComplete="nickname" autoFocus required /><div className="name-picker-count"><span>Keep it recognizable-ish.</span><b>{nameDraft.length}/24</b></div><button className="name-save-button" type="submit" disabled={busy}>{busy ? "🎛️ Remixing identity…" : "✨ Save my new legend →"}</button><p className="avatar-privacy-note">👻 Your boos remain anonymous. Even from your new identity.</p></form></div>}
 
       {!participantId && !ended && <div className="modal-backdrop join-backdrop"><form className="join-card" onSubmit={join}><span className="join-mark">HM</span><p className="eyebrow">🎟️ ROOM {room.code}</p><h2>{lobby ? "The pre-party is open 🌙" : "Who just walked in? 👀"}</h2><p>You’re joining <strong>{room.title}</strong>. {lobby ? "Pick a name and start hiding songs in the queue." : "Pick a name and collect your 30 points ⭐"}</p><label htmlFor="join-name">YOUR PARTY NAME</label><input id="join-name" value={joinName} onChange={(event) => setJoinName(event.target.value)} maxLength={24} autoComplete="nickname" placeholder="e.g. Dance Floor Dave" required />{room.requiresPasscode && <><label htmlFor="join-passcode">ROOM PASSCODE</label><input id="join-passcode" value={joinPasscode} onChange={(event) => setJoinPasscode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} minLength={4} maxLength={12} autoComplete="one-time-code" placeholder="Ask the host" required /></>}<button type="submit" disabled={busy}>{busy ? "🔐 Checking the guest list…" : lobby ? "🌙 Enter the lobby →" : "🥳 Enter the party →"}</button><small>🔐 Room code + passcode keeps random party crashers outside.</small></form></div>}
       {notice && <div className="toast" role="status">{notice}</div>}

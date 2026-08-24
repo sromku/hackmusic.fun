@@ -210,6 +210,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
   }));
   const viewerIndex = peopleResult.results.findIndex((person) => person.id === viewerId);
   const viewer = viewerIndex >= 0 ? people[viewerIndex] : undefined;
+  const viewerDisplayName = viewerIndex >= 0 ? peopleResult.results[viewerIndex].display_name : undefined;
   if (!viewer) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);
 
   return {
@@ -219,6 +220,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
     scheduledFor: event.scheduled_for,
     requiresPasscode: Boolean(event.join_passcode_hash),
     viewer,
+    viewerDisplayName,
     people,
     currentTrack: current ? {
       id: current.provider_track_id,
@@ -512,6 +514,19 @@ export async function setParticipantAvatar(code: string, participantId: string, 
   const result = await getD1().prepare("UPDATE participants SET initials = ? WHERE id = ? AND event_id = ?")
     .bind(emoji, participantId, event.id).run();
   if (!result.meta.changes) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);
+}
+
+export async function setParticipantName(code: string, participantId: string, displayName: string) {
+  const event = await loadEvent(code);
+  if (!event) throw new PublicError("Room not found. Check the six-character code and try again.", 404);
+  const name = normalizeDisplayName(displayName);
+  if (name.length < 2 || name.length > 24) throw new PublicError("Use a party name between 2 and 24 characters.");
+  const participant = await getD1().prepare("SELECT initials FROM participants WHERE id = ? AND event_id = ?")
+    .bind(participantId, event.id).first<{ initials: string }>();
+  if (!participant) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);
+  const initials = isAvatarEmoji(participant.initials) ? participant.initials : profileForName(name).initials;
+  await getD1().prepare("UPDATE participants SET display_name = ?, initials = ? WHERE id = ? AND event_id = ?")
+    .bind(name, initials, participantId, event.id).run();
 }
 
 export async function assertPartyParticipant(code: string, participantId: string) {

@@ -12,6 +12,7 @@ import {
   recordBooSkipProgress,
   removePendingTrack,
   setParticipantAvatar,
+  setParticipantName,
   setQueueMode,
   setRoomPasscode,
   submitTrack,
@@ -28,6 +29,7 @@ export function partyActionFallback(action?: PartyAction) {
   if (action === "react") return "Your reaction did not go through. Check your connection and try again.";
   if (action === "remove") return "We could not remove that song. Refresh your list and try again.";
   if (action === "avatar") return "Your party face did not change. Try another emoji.";
+  if (action === "profileName") return "Your party name did not change. Your previous masterpiece is still intact.";
   if (action === "rename") return "We could not rename the event. The current name is still safely intact.";
   if (action === "passcode") return "We could not update the room passcode. Try again—the current passcode is still active.";
   if (action === "prepareHostTransfer") return "We could not prepare the host handoff. The current host still has control.";
@@ -92,6 +94,11 @@ export async function executePartyAction(request: Request, input: PartyRequest):
       if (!input.avatarEmoji) invalidAction();
       await protectPartyAction(request, input.action, code, participantId);
       await setParticipantAvatar(code, participantId, input.avatarEmoji);
+      break;
+    case "profileName":
+      if (!input.name) invalidAction();
+      await protectPartyAction(request, input.action, code, participantId);
+      await setParticipantName(code, participantId, input.name);
       break;
     case "start":
     case "skip":

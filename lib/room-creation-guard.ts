@@ -87,6 +87,11 @@ export async function protectPartyAction(request: Request, action: string, code:
     if (participantId) await consumeRequestLimit(request, { bucket: "avatar-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 20 });
     return;
   }
+  if (action === "profileName") {
+    await consumeRequestLimit(request, { bucket: "profile-name-room", subject: normalizedCode, windowMs: 60_000, maximum: 120 });
+    if (participantId) await consumeRequestLimit(request, { bucket: "profile-name-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 10 });
+    return;
+  }
   if (action === "react") {
     await consumeRequestLimit(request, { bucket: "react-room", subject: normalizedCode, windowMs: 60_000, maximum: 120 });
     if (participantId) await consumeRequestLimit(request, { bucket: "react-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 12 });

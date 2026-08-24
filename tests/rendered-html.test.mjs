@@ -225,7 +225,7 @@ test("renders a code-specific participant room", async () => {
   assert.match(html, /noindex/);
   assert.doesNotMatch(html, /og(?:-v2)?\.png/);
   const source = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
-  for (const copy of ["CHEER", "BOO", "Add a song", "YOUR FINAL SCORE", "🔊 ROOM NOISE", "FULL PARTY HISTORY", "🎧 My music", "Pick your party face", "Paste a full track or short /s/ link…", "Show me how", "Borrow the link. Keep the chaos.", "Copy link", "I found the link"]) {
+  for (const copy of ["CHEER", "BOO", "Add a song", "YOUR FINAL SCORE", "🔊 ROOM NOISE", "FULL PARTY HISTORY", "🎧 My music", "Pick your party face", "Rename your human", "YOUR PARTY NAME", "Paste a full track or short /s/ link…", "Show me how", "Borrow the link. Keep the chaos.", "Copy link", "I found the link"]) {
     assert.match(source, new RegExp(copy));
   }
   assert.match(source, /spotifyHelpOpen/);
@@ -240,6 +240,8 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /formatMusicDuration/);
   assert.match(source, /action: "remove"/);
   assert.match(source, /action: "avatar"/);
+  assert.match(source, /action: "profileName"/);
+  assert.match(source, /viewerDisplayName/);
   assert.match(source, /Boolean\(myReaction\)/);
   assert.match(source, /const hasPlayedSong = .*item\.tone === "song"/);
   assert.match(source, /The last song left the chat/);
@@ -248,6 +250,8 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /x-hackmusic-participant/);
   assert.doesNotMatch(source, /participantId=\$\{encodeURIComponent/);
   const participantStyles = await readFile(new URL("app/globals.css", projectRoot), "utf8");
+  assert.match(participantStyles, /\.party-name-trigger/);
+  assert.match(participantStyles, /\.name-picker-card/);
   assert.match(participantStyles, /\.my-track-list \{[^}]*overscroll-behavior-y: auto/);
   assert.match(participantStyles, /\.activity-list \{[^}]*overscroll-behavior-y: auto/);
   const partyRulesSource = await readFile(new URL("lib/party-rules.ts", projectRoot), "utf8");

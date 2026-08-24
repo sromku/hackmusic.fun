@@ -55,7 +55,28 @@ test("party API enforces passcodes, membership, score visibility, and one reacti
   const joined = await joinRoom(db, room, "Guest Human");
   assert.equal(joined.response.status, 200, JSON.stringify(joined.data));
   assert.equal(joined.data.party.viewer.name, "You");
+  assert.equal(joined.data.party.viewerDisplayName, "Guest Human");
   assert.equal(joined.data.party.people.every((person) => person.score === null), true);
+
+  const avatar = await action(db, { action: "avatar", code: room.code, participantId: joined.participantId, avatarEmoji: "🦊" });
+  assert.equal(avatar.response.status, 200, JSON.stringify(avatar.data));
+  const renamedHuman = await action(db, { action: "profileName", code: room.code, participantId: joined.participantId, name: "  Disco Alias  " });
+  assert.equal(renamedHuman.response.status, 200, JSON.stringify(renamedHuman.data));
+  assert.equal(renamedHuman.data.party.viewerDisplayName, "Disco Alias");
+  assert.equal(renamedHuman.data.party.viewer.name, "You");
+  const storedHuman = db.first("SELECT display_name, initials FROM participants WHERE id = ?", joined.participantId);
+  assert.equal(storedHuman.display_name, "Disco Alias");
+  assert.equal(storedHuman.initials, "🦊");
+  const hostViewResponse = await requestWorker(`/api/party?code=${room.code}`, { headers: { "x-hackmusic-participant": room.participantId, "cf-connecting-ip": "203.0.113.12" } }, { DB: db });
+  const hostView = await hostViewResponse.json();
+  assert.equal(hostView.party.people.some((person) => person.name === "Disco Alias"), true);
+
+  const invalidName = await action(db, { action: "profileName", code: room.code, participantId: joined.participantId, name: "X" });
+  assert.equal(invalidName.response.status, 400);
+  assert.match(invalidName.data.error, /between 2 and 24/i);
+
+  const impostorRename = await action(db, { action: "profileName", code: room.code, participantId: `p-${crypto.randomUUID()}`, name: "Not Invited" });
+  assert.equal(impostorRename.response.status, 401);
 
   seedTrack(db, room, room.participantId);
   const cheer = await action(db, { action: "react", code: room.code, participantId: joined.participantId, kind: "up" });
