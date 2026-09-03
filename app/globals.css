@@ -1847,3 +1847,70 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .lab-footer { display: grid; gap: 4px; margin-top: 18px; font-size: 11px; font-weight: 750; }
 .lab-footer code { font-size: 11px; user-select: all; }
 @media (max-width: 760px) { .lab-shell { padding: 12px; } .lab-grid { grid-template-columns: 1fr; } .lab-frame iframe { height: 640px; } }
+
+
+/* ---------- Two flavors of room (landing) ---------- */
+.landing-sources { margin-top: 26px; }
+.source-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 12px; }
+.source-card { display: grid; grid-template-columns: 54px 1fr; gap: 12px; align-items: start; border: 2px solid var(--ink); box-shadow: 6px 6px 0 var(--ink); padding: 16px; transition: transform .2s cubic-bezier(.2, .8, .25, 1.15), box-shadow .2s ease; }
+.source-card:hover { box-shadow: 8px 8px 0 var(--ink); transform: translate(-2px, -2px) rotate(-.3deg); }
+.source-spotify { background: var(--mint); transform: rotate(-.4deg); }
+.source-youtube { background: var(--coral); transform: rotate(.4deg); }
+.source-icon { display: grid; width: 54px; height: 54px; place-items: center; border: 2px solid var(--ink); border-radius: 50%; background: var(--white); font-size: 26px; }
+.source-card h3 { margin: 0; font-size: 20px; letter-spacing: -.04em; }
+.source-card p { margin: 6px 0 0; font-size: 12px; font-weight: 750; line-height: 1.4; }
+.source-card small { display: block; margin-top: 8px; font-size: 9px; font-weight: 950; letter-spacing: .08em; }
+@media (max-width: 640px) { .source-cards { grid-template-columns: 1fr; } }
+
+/* ---------- YouTube walkthrough (guest) ---------- */
+.youtube-help-card .modal-topline .eyebrow { color: #a3001f; }
+.youtube-help-steps .spotify-help-step:nth-child(1) { background: var(--coral); }
+.youtube-help-steps .spotify-help-step:nth-child(2) { background: var(--white); }
+.youtube-help-steps .spotify-help-step:nth-child(3) { background: var(--sun); }
+.youtube-help-steps .spotify-step-top > span { background: #ff0033; color: var(--white); }
+.youtube-video-screen { display: grid; grid-template-rows: auto 1fr auto auto; background: #0f0f0f; }
+.mini-youtube-bar { display: flex; gap: 6px; align-items: center; padding: 11px 12px; font-size: 9px; font-weight: 950; letter-spacing: .02em; }
+.mini-youtube-bar b { display: grid; width: 22px; height: 15px; place-items: center; border-radius: 4px; background: #ff0033; color: #fff; font-size: 9px; }
+.mini-video { display: grid; place-items: center; margin: 0 10px; aspect-ratio: 16 / 9; border-radius: 8px; background: linear-gradient(135deg, #2b2b2b, #4a4a4a); }
+.mini-video i { display: grid; width: 42px; height: 30px; place-items: center; border-radius: 8px; background: #ff0033; color: #fff; font-size: 14px; font-style: normal; }
+.mini-video-title { padding: 8px 12px 0; }
+.mini-video-title strong { display: block; font-size: 11px; }
+.mini-video-title small { display: block; margin-top: 2px; color: #aaa; font-size: 8px; }
+.mini-video-actions { display: flex; gap: 6px; align-items: center; padding: 8px 12px 12px; }
+.mini-video-actions span, .mini-video-actions em { border-radius: 999px; background: #272727; padding: 5px 9px; font-size: 9px; font-style: normal; }
+.mini-video-actions em { border: 2px solid #fff; background: #fff; color: #0f0f0f; font-weight: 950; transform: rotate(-3deg); }
+.youtube-share-screen { display: grid; align-content: start; gap: 14px; padding: 12px 12px 16px; background: #212121; }
+.youtube-share-screen > i { display: block; width: 38px; height: 4px; margin: 0 auto 4px; border-radius: 999px; background: #777; }
+.youtube-share-row { display: flex; gap: 10px; align-items: center; border: 2px solid #ff0033; border-radius: 12px; background: rgba(255, 0, 51, .14); padding: 12px; }
+.youtube-share-row span { font-size: 18px; }
+.youtube-share-row strong { font-size: 14px; }
+.youtube-share-apps { display: flex; gap: 10px; opacity: .45; }
+.youtube-share-apps b { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 12px; background: #3a3a3a; font-size: 17px; }
+.youtube-paste-screen { display: grid; align-content: center; gap: 12px; padding: 16px; background: var(--paper); color: var(--ink); }
+.mini-paste-field { border: 2px solid var(--ink); background: var(--white); padding: 12px; font-size: 12px; font-weight: 800; }
+.mini-paste-field span { animation: paste-blink 1.2s steps(2) infinite; }
+.mini-paste-button { border: 2px solid var(--ink); background: var(--blue); box-shadow: 3px 3px 0 var(--ink); padding: 11px; text-align: center; font-size: 11px; font-weight: 950; }
+@keyframes paste-blink { 50% { border-right: 2px solid var(--ink); } }
+.youtube-help-finish { background: var(--sun); }
+
+/* ---------- YouTube room setup (host) ---------- */
+.youtube-setup-grid { margin-top: 16px; }
+.youtube-setup-aside { display: grid; gap: 6px; border: 2px solid var(--ink); background: var(--coral); box-shadow: 4px 4px 0 var(--ink); padding: 14px; }
+.youtube-setup-aside strong { font-size: 13px; }
+.youtube-setup-aside span { font-size: 11px; font-weight: 750; line-height: 1.4; }
+@media (max-width: 820px) {
+  .mini-youtube-bar { padding: 8px 9px; font-size: 8px; }
+  .mini-video { margin: 0 7px; }
+  .mini-video i { width: 32px; height: 22px; font-size: 11px; }
+  .mini-video-title { padding: 6px 9px 0; }
+  .mini-video-title strong { font-size: 9px; }
+  .mini-video-actions { gap: 4px; padding: 6px 9px 9px; }
+  .mini-video-actions span, .mini-video-actions em { padding: 4px 6px; font-size: 7px; }
+  .youtube-share-screen { gap: 9px; padding: 9px 9px 12px; }
+  .youtube-share-row { padding: 8px; }
+  .youtube-share-row strong { font-size: 11px; }
+  .youtube-share-apps b { width: 30px; height: 30px; font-size: 13px; }
+  .youtube-paste-screen { gap: 8px; padding: 10px; }
+  .mini-paste-field { padding: 8px; font-size: 10px; }
+  .mini-paste-button { padding: 8px; font-size: 9px; }
+}

@@ -38,11 +38,13 @@ export default function PartyRoom({ code }: { code: string }) {
   const [nameOpen, setNameOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [spotifyHelpOpen, setSpotifyHelpOpen] = useState(false);
+  const [youtubeHelpOpen, setYoutubeHelpOpen] = useState(false);
   const [boostArmed, setBoostArmed] = useState(false);
   const [guessBusy, setGuessBusy] = useState(false);
   const [recapBusy, setRecapBusy] = useState(false);
   const [flyaways, setFlyaways] = useState<Array<{ id: string; emoji: string; x: number }>>([]);
   const spotifyHelpCloseRef = useRef<HTMLButtonElement>(null);
+  const youtubeHelpCloseRef = useRef<HTMLButtonElement>(null);
 
   const myReaction = party?.reactions.find((reaction) => reaction.mine)?.tone;
   const boos = party?.reactions.filter((reaction) => reaction.tone === "down").length ?? 0;
@@ -113,18 +115,21 @@ export default function PartyRoom({ code }: { code: string }) {
   }, [notice]);
 
   useEffect(() => {
-    if (!spotifyHelpOpen) return;
+    if (!spotifyHelpOpen && !youtubeHelpOpen) return;
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSpotifyHelpOpen(false);
+      if (event.key === "Escape") {
+        setSpotifyHelpOpen(false);
+        setYoutubeHelpOpen(false);
+      }
     };
-    window.queueMicrotask(() => spotifyHelpCloseRef.current?.focus());
+    window.queueMicrotask(() => (youtubeHelpOpen ? youtubeHelpCloseRef : spotifyHelpCloseRef).current?.focus());
     window.addEventListener("keydown", closeOnEscape);
     return () => {
       window.removeEventListener("keydown", closeOnEscape);
       if (previouslyFocused?.isConnected) previouslyFocused.focus();
     };
-  }, [spotifyHelpOpen]);
+  }, [spotifyHelpOpen, youtubeHelpOpen]);
 
   async function postAction(payload: Record<string, unknown>) {
     if (!participantId) throw new Error("Join the room first.");
@@ -341,6 +346,11 @@ export default function PartyRoom({ code }: { code: string }) {
     window.setTimeout(() => document.getElementById("song-link")?.focus(), 0);
   }
 
+  function closeYoutubeHelp() {
+    setYoutubeHelpOpen(false);
+    window.setTimeout(() => document.getElementById("song-link")?.focus(), 0);
+  }
+
   if (error) return <main className="missing-room"><span className="brand-mark">HM</span><p className="eyebrow">ROOM LOST</p><h1>{error}</h1><a href="/">Try another code →</a></main>;
   if (!room) return <main className="loading-room"><span className="brand-mark">HM</span><p>Finding room {code}…</p></main>;
   const roomIsYouTube = (party?.musicSource ?? room.musicSource) === "youtube";
@@ -425,18 +435,26 @@ export default function PartyRoom({ code }: { code: string }) {
       {!ended && addOpen && party && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
         if (event.currentTarget === event.target) {
           setSpotifyHelpOpen(false);
+          setYoutubeHelpOpen(false);
           setAddOpen(false);
         }
-      }}><section className="song-modal spotify-song-modal" role="dialog" aria-modal="true" aria-hidden={spotifyHelpOpen || undefined} aria-labelledby="add-song-title"><div className="modal-topline"><div><p className="eyebrow">🤫 SECRET WEAPON</p><h2 id="add-song-title">{roomIsYouTube ? "▶️ Add a YouTube video" : "🎵 Add a Spotify song"}</h2></div><button className="close-button" type="button" onClick={() => {
+      }}><section className="song-modal spotify-song-modal" role="dialog" aria-modal="true" aria-hidden={spotifyHelpOpen || youtubeHelpOpen || undefined} aria-labelledby="add-song-title"><div className="modal-topline"><div><p className="eyebrow">🤫 SECRET WEAPON</p><h2 id="add-song-title">{roomIsYouTube ? "▶️ Add a YouTube video" : "🎵 Add a Spotify song"}</h2></div><button className="close-button" type="button" onClick={() => {
         setSpotifyHelpOpen(false);
+        setYoutubeHelpOpen(false);
         setAddOpen(false);
-      }} aria-label="Close">×</button></div>{party.theme && <p className="theme-hint">🎯 Round theme: <strong dir="auto">{party.theme}</strong></p>}<div className="spotify-add-guide"><div><strong>{roomIsYouTube ? "▶️ YouTube → Share → Copy link" : "🟢 Spotify → Share → Copy song link"}</strong><span>{roomIsYouTube ? "This room plays YouTube only. Paste the video link below; its title is checked before it joins the secret queue." : "This room plays Spotify only. Paste the track below; its title is checked before it joins the secret queue."}</span></div>{!roomIsYouTube && <button className="spotify-how-button" type="button" aria-haspopup="dialog" onClick={() => setSpotifyHelpOpen(true)}>🤔 Show me how</button>}</div><form className="link-form spotify-link-form" onSubmit={(event) => void submitLink(event)}><label htmlFor="song-link">{roomIsYouTube ? "YOUTUBE VIDEO LINK" : "SPOTIFY TRACK LINK"}</label><input id="song-link" name="song-link" type="url" inputMode="url" autoComplete="off" placeholder={roomIsYouTube ? "Paste a YouTube video link…" : "Paste a full track or short /s/ link…"} required /><button type="submit" disabled={busy || party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON}>{busy ? "🔎 Checking the link…" : party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON ? "🚧 Your waiting queue is full" : "🤫 Add to the secret queue →"}</button></form><p className="queue-note">🕵️ The queue stays secret. You have {Math.max(0, MAX_PENDING_TRACKS_PER_PERSON - party.pendingCount)} of {MAX_PENDING_TRACKS_PER_PERSON} waiting slots left. Played and skipped songs free their slots.</p></section></div>}
+      }} aria-label="Close">×</button></div>{party.theme && <p className="theme-hint">🎯 Round theme: <strong dir="auto">{party.theme}</strong></p>}<div className="spotify-add-guide"><div><strong>{roomIsYouTube ? "▶️ YouTube → Share → Copy link" : "🟢 Spotify → Share → Copy song link"}</strong><span>{roomIsYouTube ? "This room plays YouTube only. Paste the video link below; its title is checked before it joins the secret queue." : "This room plays Spotify only. Paste the track below; its title is checked before it joins the secret queue."}</span></div><button className="spotify-how-button" type="button" aria-haspopup="dialog" onClick={() => roomIsYouTube ? setYoutubeHelpOpen(true) : setSpotifyHelpOpen(true)}>🤔 Show me how</button></div><form className="link-form spotify-link-form" onSubmit={(event) => void submitLink(event)}><label htmlFor="song-link">{roomIsYouTube ? "YOUTUBE VIDEO LINK" : "SPOTIFY TRACK LINK"}</label><input id="song-link" name="song-link" type="url" inputMode="url" autoComplete="off" placeholder={roomIsYouTube ? "Paste a YouTube video link…" : "Paste a full track or short /s/ link…"} required /><button type="submit" disabled={busy || party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON}>{busy ? "🔎 Checking the link…" : party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON ? "🚧 Your waiting queue is full" : "🤫 Add to the secret queue →"}</button></form><p className="queue-note">🕵️ The queue stays secret. You have {Math.max(0, MAX_PENDING_TRACKS_PER_PERSON - party.pendingCount)} of {MAX_PENDING_TRACKS_PER_PERSON} waiting slots left. Played and skipped songs free their slots.</p></section></div>}
 
       {spotifyHelpOpen && <div className="modal-backdrop spotify-help-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && closeSpotifyHelp()}><section className="spotify-help-card" role="dialog" aria-modal="true" aria-labelledby="spotify-help-title"><div className="modal-topline"><div><p className="eyebrow">🟢 THREE TAPS · ZERO DJ DEGREE</p><h2 id="spotify-help-title">Borrow the link. Keep the chaos.</h2></div><button className="close-button" type="button" onClick={closeSpotifyHelp} aria-label="Close Spotify instructions" ref={spotifyHelpCloseRef}>×</button></div><p className="spotify-help-intro">Spotify buried the useful button under a tiny menu. Naturally. Here is the escape route.</p><div className="spotify-help-steps">
         <article className="spotify-help-step step-song"><div className="spotify-step-top"><span>01</span><strong>Find the actual song</strong></div><div className="spotify-mini-screen spotify-song-screen" aria-hidden="true"><div className="mini-spotify-bar"><b>●</b><span>SPOTIFY</span></div><div className="mini-song-row"><i>♪</i><span><strong>Your excellent song</strong><small>Mystery artist</small></span><b>•••</b></div><em>tap the dots ↗</em></div><p>Open the song itself, then tap the <strong>•••</strong> menu. A playlist link is not invited to this party.</p></article>
         <article className="spotify-help-step step-share"><div className="spotify-step-top"><span>02</span><strong>Tap Share</strong></div><div className="spotify-mini-screen spotify-menu-screen" aria-hidden="true"><i /><div><span>↗</span><strong>Share</strong></div><div className="menu-ghost"><span>＋</span><b>Add to playlist</b></div></div><p>Scroll the song menu if needed. Find <strong>Share</strong>. It is usually pretending not to be important.</p></article>
         <article className="spotify-help-step step-copy"><div className="spotify-step-top"><span>03</span><strong>Copy the link</strong></div><div className="spotify-mini-screen spotify-share-screen" aria-hidden="true"><div className="share-bubbles"><i>↗</i><i>💬</i><i>⋯</i></div><div className="copy-link-tile"><span>🔗</span><strong>Copy link</strong></div></div><p>Tap <strong>Copy link</strong>, return here, and paste. Full links and short <strong>/s/</strong> links both work.</p></article>
       </div><div className="spotify-help-finish"><span>🎉</span><div><strong>That’s it. Your song enters anonymously.</strong><small>Nobody sees the queue. Your suspiciously specific taste remains a surprise.</small></div><button type="button" onClick={closeSpotifyHelp}>I found the link →</button></div></section></div>}
+
+      {youtubeHelpOpen && <div className="modal-backdrop spotify-help-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && closeYoutubeHelp()}><section className="spotify-help-card youtube-help-card" role="dialog" aria-modal="true" aria-labelledby="youtube-help-title"><div className="modal-topline"><div><p className="eyebrow">▶️ THREE TAPS · ZERO SUBSCRIPTIONS</p><h2 id="youtube-help-title">Steal the link. Keep the mystery.</h2></div><button className="close-button" type="button" onClick={closeYoutubeHelp} aria-label="Close YouTube instructions" ref={youtubeHelpCloseRef}>×</button></div><p className="spotify-help-intro">YouTube hides nothing; it just surrounds the useful button with nine others. Here is the shortest path.</p><div className="spotify-help-steps youtube-help-steps">
+        <article className="spotify-help-step step-song"><div className="spotify-step-top"><span>01</span><strong>Open the actual video</strong></div><div className="spotify-mini-screen youtube-video-screen" aria-hidden="true"><div className="mini-youtube-bar"><b>▶</b><span>YouTube</span></div><div className="mini-video"><i>▶</i></div><div className="mini-video-title"><strong>Your excellent video</strong><small>Mystery channel · 2.3M views</small></div><div className="mini-video-actions"><span>👍</span><span>👎</span><em>↗ Share</em><span>⤓</span></div></div><p>Tap the video so it is playing, not just sitting in a feed. A playlist link is not invited; a Short is fine.</p></article>
+        <article className="spotify-help-step step-share"><div className="spotify-step-top"><span>02</span><strong>Tap Share</strong></div><div className="spotify-mini-screen youtube-share-screen" aria-hidden="true"><i /><div className="youtube-share-row"><span>🔗</span><strong>Copy link</strong></div><div className="youtube-share-apps"><b>💬</b><b>✉️</b><b>📋</b><b>⋯</b></div></div><p>Find <strong>Share</strong> under the video. The share sheet opens with <strong>Copy link</strong> front and center. Ignore the 14 apps pretending to be helpful.</p></article>
+        <article className="spotify-help-step step-copy"><div className="spotify-step-top"><span>03</span><strong>Paste it here</strong></div><div className="spotify-mini-screen youtube-paste-screen" aria-hidden="true"><div className="mini-paste-field"><span>youtu.be/dQw4…</span></div><div className="mini-paste-button">🤫 Add to the secret queue →</div></div><p>Come back and paste. Long links, <strong>youtu.be</strong> links, and Shorts all work. We even tolerate the tracking junk after the <strong>?</strong>.</p></article>
+      </div><div className="spotify-help-finish youtube-help-finish"><span>🎬</span><div><strong>That’s it. The video plays on the host screen.</strong><small>Nobody sees the queue. Your questionable taste stays classified until it plays.</small></div><button type="button" onClick={closeYoutubeHelp}>I found the link →</button></div></section></div>}
 
       {avatarOpen && party && <div className="modal-backdrop avatar-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setAvatarOpen(false)}><section className="avatar-picker-card" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title"><div className="modal-topline"><div><p className="eyebrow">🎭 IDENTITY, BUT LOUDER</p><h2 id="avatar-picker-title">Pick your party face</h2></div><button className="close-button" type="button" onClick={() => setAvatarOpen(false)} aria-label="Close avatar picker">×</button></div><p className="avatar-picker-intro">Choose wisely. This tiny face will represent your enormous musical opinions.</p><div className="avatar-grid" role="group" aria-label="Party face emojis">{AVATAR_EMOJIS.map((option) => <button className={party.viewer.initials === option.emoji ? "selected" : ""} type="button" onClick={() => void changeAvatar(option.emoji)} disabled={busy} aria-label={`Use ${option.label} as my party face`} aria-pressed={party.viewer.initials === option.emoji} key={option.emoji}><span aria-hidden="true">{option.emoji}</span><small>{option.label}</small></button>)}</div><button className="avatar-surprise" type="button" onClick={surpriseAvatar} disabled={busy}>{busy ? "✨ Summoning chaos…" : "🎲 Surprise me, algorithm →"}</button><p className="avatar-privacy-note">🔐 Only your avatar changes. Your anonymous boos remain delightfully anonymous.</p></section></div>}
 

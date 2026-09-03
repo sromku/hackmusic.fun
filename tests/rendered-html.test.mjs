@@ -184,6 +184,9 @@ test("renders the create and join landing page", async () => {
   assert.match(html, /The crowd can skip/);
   assert.match(html, /SOME HUMANS · ONE SPEAKER/);
   assert.doesNotMatch(html, /6–30 HUMANS/);
+  assert.match(html, /TWO FLAVORS OF ROOM/);
+  assert.match(html, /Spotify room/);
+  assert.match(html, /YouTube room/);
   assert.match(html, /Scrambled by/);
   assert.match(html, /https:\/\/sromku\.com/);
   assert.match(html, /AGI unlocked\. Common sense still in beta/);
@@ -195,6 +198,8 @@ test("renders the create and join landing page", async () => {
   assert.match(html, /name="website"/);
   const landingSource = await readFile(new URL("app/page.tsx", projectRoot), "utf8");
   assert.match(landingSource, /Pre-party lobby/);
+  assert.match(landingSource, /SPOTIFY OR YOUTUBE LINK/);
+  assert.match(landingSource, /WHERE DOES THE MUSIC COME FROM\?/);
   assert.match(landingSource, /type="datetime-local"/);
   assert.match(landingSource, /preParty, scheduledFor/);
   assert.match(landingSource, /ROOM PASSCODE/);
@@ -312,7 +317,12 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /action: "shield"/);
   assert.match(source, /action: "guess"/);
   assert.match(source, /spotifyHelpOpen/);
+  assert.match(source, /youtubeHelpOpen/);
   assert.match(source, /aria-labelledby="spotify-help-title"/);
+  assert.match(source, /aria-labelledby="youtube-help-title"/);
+  assert.match(source, /Steal the link\. Keep the mystery\./);
+  assert.match(source, /a Short is fine/);
+  assert.match(source, /roomIsYouTube \? setYoutubeHelpOpen\(true\) : setSpotifyHelpOpen\(true\)/);
   assert.match(source, /event\.key === "Escape"/);
   const globalStyles = await readFile(new URL("app/globals.css", projectRoot), "utf8");
   assert.match(globalStyles, /\.spotify-help-steps \{[^}]*grid-template-columns: repeat\(3,/);
@@ -426,6 +436,8 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /party\.status !== "ended" && spotifyRoom && <section id="spotify-connect" className=\{`spotify-connect-card/);
   assert.match(source, /party\.status !== "ended" && youtubeRoom && <section className="spotify-connect-card youtube-room-card"/);
   assert.match(source, /enabled: hostReady && youtubeRoom/);
+  assert.match(source, /youtube-setup-grid/);
+  assert.match(source, /No account\. No developer dashboard\. No client ID\./);
   assert.match(source, /party\.status !== "ended" && endConfirmOpen/);
   assert.match(source, /🙌 CHEERS/);
   assert.match(source, /👻 BOOS/);

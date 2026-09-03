@@ -23,7 +23,7 @@ const partyLessons = [
     title: "Feed the mystery.",
     shout: "ADD A SONG. TELL NOBODY.",
     body: "Join the private party, pick a human name, and paste a Spotify or YouTube link. It disappears into a hidden queue. No peeking. No lobbying the DJ. No twelve-person committee meeting about tempo.",
-    equation: ["YOU", "+", "SPOTIFY LINK", "→", "SECRET QUEUE"],
+    equation: ["YOU", "+", "SPOTIFY OR YOUTUBE LINK", "→", "SECRET QUEUE"],
     footnote: "The host sees the queue. The humans see suspense.",
   },
   {
@@ -260,6 +260,13 @@ export default function Home() {
               <button type="button" className="landing-rule rule-react" aria-haspopup="dialog" onClick={(event) => openLesson(1, event.currentTarget)}><span className="rule-step">02</span><span className="rule-icon" aria-hidden="true">🙌</span><div><strong>React out loud</strong><small>Cheers give +3. Boos stay completely anonymous.</small></div><em>OPEN THE MANUAL ↗</em></button>
               <span className="rule-connector" aria-hidden="true">→</span>
               <button type="button" className="landing-rule rule-skip" aria-haspopup="dialog" onClick={(event) => openLesson(2, event.currentTarget)}><span className="rule-step">03</span><span className="rule-icon" aria-hidden="true">⏭️</span><div><strong>The crowd can skip</strong><small>Three boos and the next secret song starts.</small></div><em>OPEN THE MANUAL ↗</em></button>
+            </div>
+          </section>
+          <section className="landing-sources" aria-labelledby="sources-title">
+            <div className="landing-how-heading"><strong id="sources-title">TWO FLAVORS OF ROOM. ONE SPEAKER.</strong><span>🔒 pick once · locked all night</span></div>
+            <div className="source-cards">
+              <article className="source-card source-spotify"><span className="source-icon" aria-hidden="true">🟢</span><div><h3>Spotify room</h3><p>Full tracks, no previews, no ads. The host connects one Spotify Premium account and becomes the speaker. Guests paste Spotify song links. That’s the entire ritual.</p><small>HOST NEEDS PREMIUM · GUESTS NEED NOTHING</small></div></article>
+              <article className="source-card source-youtube"><span className="source-icon" aria-hidden="true">▶️</span><div><h3>YouTube room</h3><p>Videos play right on the host screen. Zero accounts, zero setup, one tap to start. Guests paste YouTube links, even the ones dragging 47 tracking parameters behind them.</p><small>NOBODY NEEDS AN ACCOUNT · PLAYLISTS POLITELY DECLINED</small></div></article>
             </div>
           </section>
         </div>
