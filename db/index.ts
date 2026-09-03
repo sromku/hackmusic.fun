@@ -32,6 +32,7 @@ async function initializePartySchema() {
       scheduled_for TEXT,
       queue_mode TEXT NOT NULL DEFAULT 'ordered',
       music_source TEXT NOT NULL DEFAULT 'spotify',
+      theme TEXT,
       current_submission_id TEXT,
       host_pin TEXT NOT NULL,
       join_passcode_hash TEXT,
@@ -46,6 +47,8 @@ async function initializePartySchema() {
       initials TEXT NOT NULL,
       color TEXT NOT NULL,
       score INTEGER NOT NULL DEFAULT 30,
+      shield_used INTEGER NOT NULL DEFAULT 0,
+      boost_used INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
     )`),
     d1.prepare(`CREATE TABLE IF NOT EXISTS submissions (
@@ -60,6 +63,8 @@ async function initializePartySchema() {
       status TEXT NOT NULL DEFAULT 'pending',
       skip_reason TEXT,
       skip_percent INTEGER,
+      shielded INTEGER NOT NULL DEFAULT 0,
+      shield_absorbed INTEGER NOT NULL DEFAULT 0,
       submitted_at TEXT NOT NULL
     )`),
     d1.prepare(`CREATE TABLE IF NOT EXISTS reactions (
@@ -68,6 +73,24 @@ async function initializePartySchema() {
       submission_id TEXT NOT NULL,
       participant_id TEXT NOT NULL,
       kind TEXT NOT NULL,
+      weight INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL
+    )`),
+    d1.prepare(`CREATE TABLE IF NOT EXISTS flair_events (
+      id TEXT PRIMARY KEY,
+      event_id TEXT NOT NULL,
+      submission_id TEXT,
+      participant_id TEXT NOT NULL,
+      emoji TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`),
+    d1.prepare(`CREATE TABLE IF NOT EXISTS song_guesses (
+      id TEXT PRIMARY KEY,
+      event_id TEXT NOT NULL,
+      submission_id TEXT NOT NULL,
+      participant_id TEXT NOT NULL,
+      guessed_participant_id TEXT NOT NULL,
+      correct INTEGER,
       created_at TEXT NOT NULL
     )`),
     d1.prepare(`CREATE TABLE IF NOT EXISTS activity_events (
@@ -108,6 +131,9 @@ async function initializePartySchema() {
     d1.prepare("CREATE INDEX IF NOT EXISTS participants_event_idx ON participants(event_id)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS submissions_event_participant_status_idx ON submissions(event_id, participant_id, status)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS activity_events_event_created_idx ON activity_events(event_id, created_at, id)"),
+    d1.prepare("CREATE INDEX IF NOT EXISTS flair_events_event_created_idx ON flair_events(event_id, created_at, id)"),
+    d1.prepare("CREATE UNIQUE INDEX IF NOT EXISTS song_guesses_submission_participant_unique ON song_guesses(submission_id, participant_id)"),
+    d1.prepare("CREATE INDEX IF NOT EXISTS song_guesses_event_idx ON song_guesses(event_id)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS host_transfers_expires_idx ON host_transfers(expires_at)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS room_creation_limits_expires_idx ON room_creation_limits(expires_at)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS analytics_pageviews_day_idx ON analytics_pageviews(day)"),
@@ -119,6 +145,7 @@ async function initializePartySchema() {
   const missingEventColumns = [
     ["queue_mode", "ALTER TABLE events ADD COLUMN queue_mode TEXT NOT NULL DEFAULT 'ordered'"],
     ["music_source", "ALTER TABLE events ADD COLUMN music_source TEXT NOT NULL DEFAULT 'spotify'"],
+    ["theme", "ALTER TABLE events ADD COLUMN theme TEXT"],
     ["scheduled_for", "ALTER TABLE events ADD COLUMN scheduled_for TEXT"],
     ["join_passcode_hash", "ALTER TABLE events ADD COLUMN join_passcode_hash TEXT"],
     ["join_passcode_salt", "ALTER TABLE events ADD COLUMN join_passcode_salt TEXT"],
@@ -132,8 +159,20 @@ async function initializePartySchema() {
     }
   }
   const participantColumns = await d1.prepare("PRAGMA table_info(participants)").all<{ name: string }>();
-  if (!participantColumns.results.some((column) => column.name === "public_id")) {
-    try { await d1.prepare("ALTER TABLE participants ADD COLUMN public_id TEXT").run(); }
+  const existingParticipantColumns = new Set(participantColumns.results.map((column) => column.name));
+  const missingParticipantColumns = [
+    ["public_id", "ALTER TABLE participants ADD COLUMN public_id TEXT"],
+    ["shield_used", "ALTER TABLE participants ADD COLUMN shield_used INTEGER NOT NULL DEFAULT 0"],
+    ["boost_used", "ALTER TABLE participants ADD COLUMN boost_used INTEGER NOT NULL DEFAULT 0"],
+  ] as const;
+  for (const [column, statement] of missingParticipantColumns) {
+    if (existingParticipantColumns.has(column)) continue;
+    try { await d1.prepare(statement).run(); }
+    catch (error) { if (!(error instanceof Error) || !error.message.includes("duplicate column")) throw error; }
+  }
+  const reactionColumns = await d1.prepare("PRAGMA table_info(reactions)").all<{ name: string }>();
+  if (!reactionColumns.results.some((column) => column.name === "weight")) {
+    try { await d1.prepare("ALTER TABLE reactions ADD COLUMN weight INTEGER NOT NULL DEFAULT 1").run(); }
     catch (error) { if (!(error instanceof Error) || !error.message.includes("duplicate column")) throw error; }
   }
   await d1.prepare("UPDATE participants SET public_id = 'person-' || lower(hex(randomblob(12))) WHERE public_id IS NULL").run();
@@ -142,6 +181,8 @@ async function initializePartySchema() {
   const missingSubmissionColumns = [
     ["skip_reason", "ALTER TABLE submissions ADD COLUMN skip_reason TEXT"],
     ["skip_percent", "ALTER TABLE submissions ADD COLUMN skip_percent INTEGER"],
+    ["shielded", "ALTER TABLE submissions ADD COLUMN shielded INTEGER NOT NULL DEFAULT 0"],
+    ["shield_absorbed", "ALTER TABLE submissions ADD COLUMN shield_absorbed INTEGER NOT NULL DEFAULT 0"],
   ] as const;
   for (const [column, statement] of missingSubmissionColumns) {
     if (existingSubmissionColumns.has(column)) continue;

@@ -71,6 +71,13 @@
       "when": 1788463814352,
       "tag": "0009_gorgeous_redwing",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788469332830,
+      "tag": "0010_reflective_juggernaut",
+      "breakpoints": true
     }
   ]
 }

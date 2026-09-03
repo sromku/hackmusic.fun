@@ -4,10 +4,12 @@ import {
   cancelHostTransfer,
   claimHostTransfer,
   createRoom,
+  guessSubmitter,
   hostControl,
   joinParty,
   reactToCurrent,
   readParty,
+  recordFlair,
   readRoomSummary,
   prepareHostTransfer,
   renameParty,
@@ -17,6 +19,8 @@ import {
   setParticipantName,
   setQueueMode,
   setRoomPasscode,
+  setRoundTheme,
+  shieldCurrentSong,
   submitTrack,
 } from "../../../db/party";
 import type { PartyAction, PartyRequest } from "../../../lib/party-contract";
@@ -38,6 +42,10 @@ export function partyActionFallback(action?: PartyAction) {
   if (action === "cancelHostTransfer") return "We could not cancel the host handoff. Create a new handoff link to replace it.";
   if (action === "claimHost") return "That host handoff could not be accepted. Ask the current host for a fresh link.";
   if (action === "queueMode") return "We could not change the queue mode. Refresh the host page and try again.";
+  if (action === "flair") return "That emoji did not reach the host screen. Try again.";
+  if (action === "shield") return "The shield did not activate. Try again while your song is still playing.";
+  if (action === "guess") return "Your guess did not go through. Try again.";
+  if (action === "theme") return "The theme did not save. Try again.";
   return "That host action did not finish. Refresh the host page and try again.";
 }
 
@@ -54,6 +62,8 @@ export async function executePartyAction(request: Request, input: PartyRequest):
   const code = input.code ?? "";
   const participantId = input.participantId ?? "";
   let skipped = false;
+  let shieldAbsorbed = false;
+  let boosted = false;
   let submittedTrack: ResolvedTrack | undefined;
 
   switch (input.action) {
@@ -76,7 +86,26 @@ export async function executePartyAction(request: Request, input: PartyRequest):
     case "react":
       if (!input.kind) invalidAction();
       await protectPartyAction(request, input.action, code, participantId);
-      ({ skipped } = await reactToCurrent(code, participantId, input.kind));
+      ({ skipped, shieldAbsorbed, boosted } = await reactToCurrent(code, participantId, input.kind, Boolean(input.boost)));
+      break;
+    case "flair":
+      if (!input.emoji) invalidAction();
+      await protectPartyAction(request, input.action, code, participantId);
+      await recordFlair(code, participantId, input.emoji);
+      break;
+    case "shield":
+      await protectPartyAction(request, input.action, code, participantId);
+      await shieldCurrentSong(code, participantId);
+      break;
+    case "guess":
+      if (!input.guessParticipantId) invalidAction();
+      await protectPartyAction(request, input.action, code, participantId);
+      await guessSubmitter(code, participantId, input.guessParticipantId);
+      break;
+    case "theme":
+      if (typeof input.theme !== "string" || !input.pin) invalidAction();
+      await protectPartyAction(request, input.action, code);
+      await setRoundTheme(code, input.pin, input.theme);
       break;
     case "submit": {
       const trackReference = input.trackUrl ?? input.track?.id;
@@ -154,5 +183,5 @@ export async function executePartyAction(request: Request, input: PartyRequest):
       invalidAction();
   }
 
-  return { body: { party: await readParty(code, participantId, input.pin), skipped, submittedTrack } };
+  return { body: { party: await readParty(code, participantId, input.pin), skipped, shieldAbsorbed, boosted, submittedTrack } };
 }

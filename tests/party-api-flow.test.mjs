@@ -196,6 +196,121 @@ test("a room is locked to one music source chosen at creation", async () => {
   assert.equal(db.first("SELECT COUNT(*) AS count FROM submissions WHERE event_id = (SELECT id FROM events WHERE code = ?)", created.data.room.code).count, 0);
 });
 
+test("power-ups, guesses, flair, themes, and awards make the party more fun without breaking the rules", async () => {
+  const created = await action(db, { action: "create", title: "Fun Layer Party", name: "Host Human", passcode: "VIBE42" }, { "cf-connecting-ip": "203.0.113.100" });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  const room = created.data.room;
+  const guests = [];
+  for (const name of ["Fan One", "Fan Two", "Fan Three", "Fan Four"]) {
+    const joined = await joinRoom(db, room, name);
+    assert.equal(joined.response.status, 200, JSON.stringify(joined.data));
+    guests.push({ id: joined.participantId, publicId: joined.data.party.viewer.id, name });
+  }
+  const hostPublicId = created.data.room.participantId;
+  const guestView = async (participantId) => (await (await requestWorker(`/api/party?code=${room.code}`, { headers: { "x-hackmusic-participant": participantId, "cf-connecting-ip": "203.0.113.102" } }, { DB: db })).json()).party;
+
+  // Theme: host only, trimmed, clearable.
+  const themeRejected = await action(db, { action: "theme", code: room.code, participantId: guests[0].id, pin: "nope", theme: "Guilty pleasures" });
+  assert.equal(themeRejected.response.status, 403);
+  const themed = await action(db, { action: "theme", code: room.code, participantId: room.participantId, pin: room.hostKey, theme: "  Guilty   pleasures  " });
+  assert.equal(themed.response.status, 200, JSON.stringify(themed.data));
+  assert.equal(themed.data.party.theme, "Guilty pleasures");
+  assert.equal((await guestView(guests[0].id)).theme, "Guilty pleasures");
+
+  // Song by guest one is playing. Guest one shields it; the first boo costs nothing and a fourth boo is needed to skip.
+  const songId = seedTrack(db, room, guests[0].id, { duration: "3:00", title: "Shielded Anthem" });
+  seedTrack(db, room, guests[1].id, { status: "pending", uri: `spotify:track:${"D".repeat(22)}`, title: "Second Song" });
+  const before = db.first("SELECT score FROM participants WHERE id = ?", guests[0].id).score;
+  const ownerView = await guestView(guests[0].id);
+  assert.equal(ownerView.powerUps.shieldUsableNow, true);
+  assert.deepEqual(ownerView.guessOptions, []);
+  const notOwnerShield = await action(db, { action: "shield", code: room.code, participantId: guests[1].id });
+  assert.equal(notOwnerShield.response.status, 400);
+  const shielded = await action(db, { action: "shield", code: room.code, participantId: guests[0].id });
+  assert.equal(shielded.response.status, 200, JSON.stringify(shielded.data));
+  assert.equal(shielded.data.party.currentTrack.shielded, true);
+  assert.equal(shielded.data.party.powerUps.shieldAvailable, false);
+  const again = await action(db, { action: "shield", code: room.code, participantId: guests[0].id });
+  assert.equal(again.response.status, 400);
+
+  // Guesses: options exclude the viewer, the submitter cannot guess, guesses can change until the song ends.
+  const guesserView = await guestView(guests[1].id);
+  assert.equal(guesserView.guessOptions.some((person) => person.id === guesserView.viewer.id), false);
+  assert.ok(guesserView.guessOptions.some((person) => person.id === guests[0].publicId));
+  const ownerGuess = await action(db, { action: "guess", code: room.code, participantId: guests[0].id, guessParticipantId: guests[1].publicId });
+  assert.equal(ownerGuess.response.status, 400);
+  const wrongFirst = await action(db, { action: "guess", code: room.code, participantId: guests[1].id, guessParticipantId: guests[2].publicId });
+  assert.equal(wrongFirst.response.status, 200, JSON.stringify(wrongFirst.data));
+  assert.equal(wrongFirst.data.party.myGuess, guests[2].publicId);
+  const rightGuess = await action(db, { action: "guess", code: room.code, participantId: guests[1].id, guessParticipantId: guests[0].publicId });
+  assert.equal(rightGuess.response.status, 200, JSON.stringify(rightGuess.data));
+  assert.equal(rightGuess.data.party.myGuess, guests[0].publicId);
+  const wrongGuess = await action(db, { action: "guess", code: room.code, participantId: guests[2].id, guessParticipantId: guests[3].publicId });
+  assert.equal(wrongGuess.response.status, 200, JSON.stringify(wrongGuess.data));
+  const guesserBefore = db.first("SELECT score FROM participants WHERE id = ?", guests[1].id).score;
+
+  // Flair: allowlisted only, visible to the host after the cursor.
+  const badFlair = await action(db, { action: "flair", code: room.code, participantId: guests[2].id, emoji: "🦄" });
+  assert.equal(badFlair.response.status, 400);
+  const flair = await action(db, { action: "flair", code: room.code, participantId: guests[2].id, emoji: "🔥" });
+  assert.equal(flair.response.status, 200, JSON.stringify(flair.data));
+  const hostAfterFlair = await (await requestWorker(`/api/party?code=${room.code}&activityAfter=`, { headers: { "x-hackmusic-participant": room.participantId, "x-hackmusic-host-key": room.hostKey, "cf-connecting-ip": "203.0.113.103" } }, { DB: db })).json();
+  assert.equal(hostAfterFlair.party.flair.length, 1);
+  assert.equal(hostAfterFlair.party.flair[0].emoji, "🔥");
+
+  // Double cheer: +6 once, then spent.
+  const boosted = await action(db, { action: "react", code: room.code, participantId: guests[3].id, kind: "up", boost: true }, { "cf-connecting-ip": "203.0.113.110" });
+  assert.equal(boosted.response.status, 200, JSON.stringify(boosted.data));
+  assert.equal(boosted.data.boosted, true);
+  assert.equal(boosted.data.party.powerUps.boostAvailable, false);
+  assert.equal(db.first("SELECT score FROM participants WHERE id = ?", guests[0].id).score, before + 6);
+  assert.equal(boosted.data.party.reactions.find((reaction) => reaction.mine).boosted, true);
+
+  // Boos on a shielded song: first is absorbed (0 points), skip only at the fourth boo.
+  const boo1 = await action(db, { action: "react", code: room.code, participantId: guests[1].id, kind: "down" }, { "cf-connecting-ip": "203.0.113.111" });
+  assert.equal(boo1.response.status, 200, JSON.stringify(boo1.data));
+  assert.equal(boo1.data.shieldAbsorbed, true);
+  assert.equal(boo1.data.skipped, false);
+  assert.equal(db.first("SELECT score FROM participants WHERE id = ?", guests[0].id).score, before + 6);
+  const boo2 = await action(db, { action: "react", code: room.code, participantId: guests[2].id, kind: "down" }, { "cf-connecting-ip": "203.0.113.112" });
+  assert.equal(boo2.data.skipped, false);
+  assert.equal(boo2.data.shieldAbsorbed, false);
+  assert.equal(db.first("SELECT score FROM participants WHERE id = ?", guests[0].id).score, before + 3);
+  const hostBoo = await action(db, { action: "react", code: room.code, participantId: room.participantId, kind: "down" }, { "cf-connecting-ip": "203.0.113.113" });
+  assert.equal(hostBoo.response.status, 200, JSON.stringify(hostBoo.data));
+  assert.equal(hostBoo.data.skipped, false, "three boos must not skip a shielded song");
+  assert.equal(db.first("SELECT status FROM submissions WHERE id = ?", songId).status, "playing");
+
+  // The host skips it; guesses resolve and the correct guesser gets +2, exactly once.
+  const skipped = await action(db, { action: "skip", code: room.code, participantId: room.participantId, pin: room.hostKey });
+  assert.equal(skipped.response.status, 200, JSON.stringify(skipped.data));
+  assert.equal(db.first("SELECT score FROM participants WHERE id = ?", guests[1].id).score, guesserBefore + 2);
+  assert.equal(db.first("SELECT correct FROM song_guesses WHERE submission_id = ? AND participant_id = ?", songId, guests[2].id).correct, 0);
+  const reveal = await guestView(guests[1].id);
+  assert.equal(reveal.lastSong.title, "Shielded Anthem");
+  assert.equal(reveal.lastSong.submittedBy, "Fan One");
+  assert.equal(reveal.lastSong.totalGuesses, 2);
+  assert.equal(reveal.lastSong.correctGuesses, 1);
+  assert.equal(reveal.lastSong.myGuessCorrect, true);
+  assert.equal((await guestView(guests[0].id)).lastSong.mine, true);
+  const lateGuess = await action(db, { action: "guess", code: room.code, participantId: guests[2].id, guessParticipantId: guests[1].publicId });
+  assert.equal(lateGuess.response.status, 200);
+  assert.equal(db.first("SELECT correct FROM song_guesses WHERE submission_id = ? AND participant_id = ?", songId, guests[2].id).correct, 0, "resolved guesses stay resolved");
+
+  // Ending reveals awards to everyone.
+  const ended = await action(db, { action: "end", code: room.code, participantId: room.participantId, pin: room.hostKey });
+  assert.equal(ended.response.status, 200, JSON.stringify(ended.data));
+  const awardIds = ended.data.party.awards.map((entry) => entry.id);
+  assert.ok(awardIds.includes("crowd-pleaser"), awardIds.join(","));
+  assert.ok(awardIds.includes("most-booed"));
+  assert.ok(awardIds.includes("sharpest-guesser"));
+  assert.equal(ended.data.party.awards.find((entry) => entry.id === "sharpest-guesser").winnerName, "Fan Two");
+  const guestEnd = await guestView(guests[1].id);
+  assert.equal(guestEnd.awards.find((entry) => entry.id === "sharpest-guesser").winnerName, "You");
+  assert.equal(guestEnd.theme, "Guilty pleasures");
+  assert.ok(hostPublicId);
+});
+
 test("party API rejects cross-origin writes and malformed request bodies", async () => {
   const crossOrigin = await requestWorker("/api/party", {
     method: "POST",

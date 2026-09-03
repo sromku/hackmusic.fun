@@ -1,6 +1,8 @@
 import { ensurePartySchema, getD1 } from ".";
 import { isAvatarEmoji } from "../lib/avatar-emojis";
-import { MUSIC_SOURCES, type MusicSource } from "../lib/party-contract";
+import { MUSIC_SOURCES, type LastSongReveal, type MusicSource, type PartyColor } from "../lib/party-contract";
+import { BASE_REACTION_POINTS, BOOST_CHEER_POINTS, boosNeededToSkip, isFlairEmoji, normalizeTheme } from "../lib/party-fun";
+import { computePartyAwards } from "./party-awards";
 import { MAX_PARTICIPANTS_PER_ROOM, MAX_PENDING_TRACKS_PER_PERSON } from "../lib/party-rules";
 import { PublicError } from "../lib/public-error";
 import { hashRoomPasscode, verifyRoomPasscode } from "../lib/room-passcode";
@@ -120,7 +122,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
   const isHost = Boolean(hostKey && hostKey === event.host_pin);
   const revealScores = event.status === "ended" || isHost;
   const current = event.current_submission_id
-    ? await d1.prepare("SELECT id, participant_id, provider_track_id, title, artist, duration, color FROM submissions WHERE id = ?")
+    ? await d1.prepare("SELECT id, participant_id, provider_track_id, title, artist, duration, color, shielded, shield_absorbed FROM submissions WHERE id = ?")
       .bind(event.current_submission_id).first<SubmissionRow>()
     : null;
 
@@ -138,11 +140,11 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
   }
 
   const peopleResult = await d1.prepare(revealScores
-    ? "SELECT id, public_id, display_name, initials, color, score FROM participants WHERE event_id = ? ORDER BY score DESC, created_at ASC"
-    : "SELECT id, public_id, display_name, initials, color, score FROM participants WHERE event_id = ? ORDER BY created_at ASC")
+    ? "SELECT id, public_id, display_name, initials, color, score, shield_used, boost_used FROM participants WHERE event_id = ? ORDER BY score DESC, created_at ASC"
+    : "SELECT id, public_id, display_name, initials, color, score, shield_used, boost_used FROM participants WHERE event_id = ? ORDER BY created_at ASC")
     .bind(event.id).all<ParticipantRow>();
   const reactionResult = current
-    ? await d1.prepare(`SELECT r.id, r.participant_id, r.kind, r.created_at, p.display_name, p.initials
+    ? await d1.prepare(`SELECT r.id, r.participant_id, r.kind, r.weight, r.created_at, p.display_name, p.initials
         FROM reactions r JOIN participants p ON p.id = r.participant_id
         WHERE r.submission_id = ? ORDER BY r.created_at DESC`)
       .bind(current.id).all<ReactionRow>()
@@ -185,7 +187,47 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
         ORDER BY r.created_at DESC`)
       .bind(event.id, viewerId).all<MyReactionHistoryRow>()
     : null;
+  const myGuessRow = current && !isHost
+    ? await d1.prepare(`SELECT p.public_id FROM song_guesses g JOIN participants p ON p.id = g.guessed_participant_id
+        WHERE g.submission_id = ? AND g.participant_id = ?`).bind(current.id, viewerId).first<{ public_id: string }>()
+    : null;
+  const lastSongRow = await d1.prepare(`SELECT s.id, s.title, s.artist, s.status, s.skip_reason, s.skip_percent,
+      p.id AS submitter_id, p.display_name, p.initials, p.color,
+      (SELECT COUNT(*) FROM song_guesses g WHERE g.submission_id = s.id) AS total_guesses,
+      (SELECT COUNT(*) FROM song_guesses g WHERE g.submission_id = s.id AND g.correct = 1) AS correct_guesses,
+      (SELECT g.correct FROM song_guesses g WHERE g.submission_id = s.id AND g.participant_id = ?) AS my_guess_correct
+      FROM submissions s JOIN participants p ON p.id = s.participant_id
+      WHERE s.event_id = ? AND s.status IN ('played', 'skipped')
+      ORDER BY (SELECT MAX(a.created_at) FROM activity_events a WHERE a.submission_id = s.id AND a.kind = 'song_start') DESC, s.submitted_at DESC
+      LIMIT 1`).bind(viewerId, event.id).first<{
+        id: string; title: string; artist: string; status: "played" | "skipped"; skip_reason: "boos" | "host" | null; skip_percent: number | null;
+        submitter_id: string; display_name: string; initials: string; color: string; total_guesses: number; correct_guesses: number; my_guess_correct: number | null;
+      }>();
+  const lastSong: LastSongReveal | null = lastSongRow ? {
+    queueId: lastSongRow.id,
+    title: lastSongRow.title,
+    artist: lastSongRow.artist,
+    submittedBy: lastSongRow.submitter_id === viewerId ? "You" : lastSongRow.display_name,
+    submitterAvatar: lastSongRow.initials,
+    submitterColor: lastSongRow.color as PartyColor,
+    mine: lastSongRow.submitter_id === viewerId,
+    status: lastSongRow.status,
+    skipReason: lastSongRow.skip_reason,
+    skipPercent: lastSongRow.skip_percent,
+    totalGuesses: lastSongRow.total_guesses ?? 0,
+    correctGuesses: lastSongRow.correct_guesses ?? 0,
+    myGuessCorrect: lastSongRow.my_guess_correct === null || lastSongRow.my_guess_correct === undefined ? null : lastSongRow.my_guess_correct === 1,
+  } : null;
+  const awards = event.status === "ended" ? await computePartyAwards(event.id, viewerId) : undefined;
+  const recap = event.status === "ended"
+    ? await d1.prepare(`SELECT
+        (SELECT COUNT(*) FROM submissions WHERE event_id = ? AND status IN ('played', 'skipped')) AS songs_played,
+        (SELECT COUNT(*) FROM submissions WHERE event_id = ? AND status = 'skipped' AND skip_reason = 'boos') AS songs_booed_off,
+        (SELECT COUNT(*) FROM reactions WHERE event_id = ?) AS reactions`)
+      .bind(event.id, event.id, event.id).first<{ songs_played: number; songs_booed_off: number; reactions: number }>()
+    : null;
   let activityResult: { results: ActivityRow[] } | null = null;
+  let flairResult: { results: Array<{ id: string; emoji: string; initials: string; created_at: string }> } | null = null;
   if (activityAfter !== undefined) {
     const separator = activityAfter.lastIndexOf("|");
     const cursorAt = separator > 0 ? activityAfter.slice(0, separator) : "";
@@ -204,6 +246,14 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
           WHERE a.event_id = ?
           ORDER BY a.created_at ASC, a.id ASC`)
         .bind(event.id).all<ActivityRow>();
+    if (isHost) {
+      const flairCursorAt = cursorAt || new Date(Date.now() - 60_000).toISOString();
+      flairResult = await d1.prepare(`SELECT f.id, f.emoji, p.initials, f.created_at
+          FROM flair_events f JOIN participants p ON p.id = f.participant_id
+          WHERE f.event_id = ? AND f.created_at >= ?
+          ORDER BY f.created_at ASC, f.id ASC LIMIT 200`)
+        .bind(event.id, flairCursorAt).all<{ id: string; emoji: string; initials: string; created_at: string }>();
+    }
   }
 
   const people = peopleResult.results.map((person) => ({
@@ -215,8 +265,18 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
   }));
   const viewerIndex = peopleResult.results.findIndex((person) => person.id === viewerId);
   const viewer = viewerIndex >= 0 ? people[viewerIndex] : undefined;
-  const viewerDisplayName = viewerIndex >= 0 ? peopleResult.results[viewerIndex].display_name : undefined;
-  if (!viewer) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);
+  const viewerRow = viewerIndex >= 0 ? peopleResult.results[viewerIndex] : undefined;
+  const viewerDisplayName = viewerRow?.display_name;
+  if (!viewer || !viewerRow) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);
+  const shieldAvailable = !(viewerRow.shield_used ?? 0);
+  const powerUps = {
+    shieldAvailable,
+    shieldUsableNow: Boolean(shieldAvailable && event.status === "live" && current && current.participant_id === viewerId && !current.shielded),
+    boostAvailable: !(viewerRow.boost_used ?? 0),
+  };
+  const guessOptions = !isHost && current && current.participant_id !== viewerId && event.status === "live"
+    ? people.filter((person) => person.id !== viewer.id)
+    : [];
 
   return {
     code: event.code,
@@ -225,15 +285,23 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
     scheduledFor: event.scheduled_for,
     requiresPasscode: Boolean(event.join_passcode_hash),
     musicSource: event.music_source ?? "spotify",
+    theme: event.theme ?? null,
     viewer,
     viewerDisplayName,
     people,
+    powerUps,
+    guessOptions,
+    myGuess: myGuessRow?.public_id ?? null,
+    lastSong,
+    ...(awards ? { awards } : {}),
+    ...(recap ? { recap: { songsPlayed: recap.songs_played ?? 0, songsBooedOff: recap.songs_booed_off ?? 0, reactions: recap.reactions ?? 0 } } : {}),
     currentTrack: current ? {
       id: current.provider_track_id,
       title: current.title,
       artist: current.artist,
       duration: current.duration,
       color: current.color,
+      shielded: Boolean(current.shielded),
     } : null,
     reactions: reactionResult.results.map((reaction) => reaction.kind === "down" ? {
       id: reaction.id,
@@ -249,9 +317,10 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
       mine: reaction.participant_id === viewerId,
       avatar: reaction.initials,
       name: reaction.participant_id === viewerId ? "You" : reaction.display_name,
-      message: "cheered this song",
+      message: (reaction.weight ?? 1) > 1 ? "double-cheered this song" : "cheered this song",
       icon: "▲",
       tone: "up",
+      boosted: (reaction.weight ?? 1) > 1,
       createdAt: reaction.created_at,
     }),
     pendingCount: pending?.count ?? 0,
@@ -286,6 +355,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
       trackTitle: item.title,
       createdAt: item.created_at,
     }) } : {}),
+    ...(flairResult ? { flair: flairResult.results.map((item) => ({ id: item.id, emoji: item.emoji, avatar: item.initials, createdAt: item.created_at })) } : {}),
     ...(queuedTracks ? { queueMode: event.queue_mode, queuedTracks: queuedTracks.results.map((track) => ({
       queueId: track.id,
       id: track.provider_track_id,
@@ -422,32 +492,38 @@ export async function claimHostTransfer(code: string, participantId: string, tra
   return nextHostKey;
 }
 
-export async function reactToCurrent(code: string, participantId: string, kind: "up" | "down") {
+export async function reactToCurrent(code: string, participantId: string, kind: "up" | "down", boost = false) {
   const event = await loadEvent(code);
   if (event?.status === "lobby") throw new PublicError("Reactions unlock when the host starts the party.");
   if (!event?.current_submission_id) throw new PublicError("Nothing is playing yet. Wait for the host to start a song.");
   if (event.status === "ended") throw new PublicError("This party has ended, so reactions are closed.");
   const d1 = getD1();
-  const current = await d1.prepare("SELECT id, participant_id, provider_track_id, title, artist, duration, color FROM submissions WHERE id = ?")
+  const current = await d1.prepare("SELECT id, participant_id, provider_track_id, title, artist, duration, color, shielded, shield_absorbed FROM submissions WHERE id = ?")
     .bind(event.current_submission_id).first<SubmissionRow>();
   if (!current) throw new PublicError("Nothing is playing yet. Wait for the host to start a song.");
   if (current.participant_id === participantId) throw new PublicError("You cannot vote on your own song—but everyone else still can.");
-  const member = await d1.prepare("SELECT id FROM participants WHERE id = ? AND event_id = ?").bind(participantId, event.id).first<{ id: string }>();
+  const member = await d1.prepare("SELECT id, boost_used FROM participants WHERE id = ? AND event_id = ?").bind(participantId, event.id).first<{ id: string; boost_used: number }>();
   if (!member) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);
+  const useBoost = boost && kind === "up";
+  if (useBoost && member.boost_used) throw new PublicError("Your double cheer is already spent. Regular cheers still count.");
 
   const existing = await d1.prepare("SELECT id, kind FROM reactions WHERE submission_id = ? AND participant_id = ?")
     .bind(current.id, participantId).first<{ id: string; kind: string }>();
   if (existing) throw new PublicError("Your reaction is already locked for this song. One human, one vote—no remixes.", 409);
-  const newEffect = kind === "up" ? 3 : -3;
+  const shieldAbsorbs = kind === "down" && Boolean(current.shielded) && !current.shield_absorbed;
+  const newEffect = kind === "up" ? (useBoost ? BOOST_CHEER_POINTS : BASE_REACTION_POINTS) : shieldAbsorbs ? 0 : -BASE_REACTION_POINTS;
   const now = new Date().toISOString();
   try {
-    await d1.batch([
-      d1.prepare("INSERT INTO reactions (id, event_id, submission_id, participant_id, kind, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-        .bind(crypto.randomUUID(), event.id, current.id, participantId, kind, now),
+    const statements = [
+      d1.prepare("INSERT INTO reactions (id, event_id, submission_id, participant_id, kind, weight, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .bind(crypto.randomUUID(), event.id, current.id, participantId, kind, useBoost ? 2 : 1, now),
       d1.prepare("UPDATE participants SET score = score + ? WHERE id = ?").bind(newEffect, current.participant_id),
       d1.prepare("INSERT INTO activity_events (id, event_id, submission_id, participant_id, kind, created_at) VALUES (?, ?, ?, ?, ?, ?)")
         .bind(`activity-${crypto.randomUUID()}`, event.id, current.id, participantId, kind, now),
-    ]);
+    ];
+    if (useBoost) statements.push(d1.prepare("UPDATE participants SET boost_used = 1 WHERE id = ?").bind(participantId));
+    if (shieldAbsorbs) statements.push(d1.prepare("UPDATE submissions SET shield_absorbed = 1 WHERE id = ?").bind(current.id));
+    await d1.batch(statements);
   } catch (error) {
     if (error instanceof Error && error.message.includes("UNIQUE")) {
       throw new PublicError("Your reaction is already locked for this song. One human, one vote—no remixes.", 409);
@@ -456,9 +532,68 @@ export async function reactToCurrent(code: string, participantId: string, kind: 
   }
   const booCount = await d1.prepare("SELECT COUNT(*) AS count FROM reactions WHERE submission_id = ? AND kind = 'down'")
     .bind(current.id).first<{ count: number }>();
-  const skipped = (booCount?.count ?? 0) >= 3;
+  const skipped = (booCount?.count ?? 0) >= boosNeededToSkip(Boolean(current.shielded));
   if (skipped) await advanceCurrentTrack(event, "skipped", "boos", await estimateSkipPercent(event, current));
-  return { skipped };
+  return { skipped, shieldAbsorbed: shieldAbsorbs, boosted: useBoost };
+}
+
+export async function shieldCurrentSong(code: string, participantId: string) {
+  const event = await loadEvent(code);
+  if (!event) throw new PublicError("Room not found. Check the six-character code and try again.", 404);
+  if (event.status !== "live" || !event.current_submission_id) throw new PublicError("A shield only works on your song while it is playing.");
+  const d1 = getD1();
+  const current = await d1.prepare("SELECT id, participant_id, shielded FROM submissions WHERE id = ?")
+    .bind(event.current_submission_id).first<{ id: string; participant_id: string; shielded: number }>();
+  if (!current || current.participant_id !== participantId) throw new PublicError("You can only shield your own song, and only while it is playing.");
+  if (current.shielded) throw new PublicError("This song is already shielded.");
+  const member = await d1.prepare("SELECT shield_used FROM participants WHERE id = ? AND event_id = ?").bind(participantId, event.id).first<{ shield_used: number }>();
+  if (!member) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);
+  if (member.shield_used) throw new PublicError("Your shield is already spent. One per party, no refunds.");
+  await d1.batch([
+    d1.prepare("UPDATE participants SET shield_used = 1 WHERE id = ?").bind(participantId),
+    d1.prepare("UPDATE submissions SET shielded = 1 WHERE id = ?").bind(current.id),
+  ]);
+}
+
+export async function recordFlair(code: string, participantId: string, emoji: string) {
+  const event = await loadEvent(code);
+  if (!event) throw new PublicError("Room not found. Check the six-character code and try again.", 404);
+  if (event.status !== "live") throw new PublicError("Emoji flair unlocks when the party is live.");
+  if (!isFlairEmoji(emoji)) throw new PublicError("Pick one of the party emojis.");
+  const d1 = getD1();
+  const member = await d1.prepare("SELECT id FROM participants WHERE id = ? AND event_id = ?").bind(participantId, event.id).first<{ id: string }>();
+  if (!member) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);
+  await d1.prepare("INSERT INTO flair_events (id, event_id, submission_id, participant_id, emoji, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+    .bind(`flair-${crypto.randomUUID()}`, event.id, event.current_submission_id, participantId, emoji, new Date().toISOString()).run();
+}
+
+export async function guessSubmitter(code: string, participantId: string, guessedPublicId: string) {
+  const event = await loadEvent(code);
+  if (!event) throw new PublicError("Room not found. Check the six-character code and try again.", 404);
+  if (event.status !== "live" || !event.current_submission_id) throw new PublicError("Guessing opens while a song is playing.");
+  const d1 = getD1();
+  const current = await d1.prepare("SELECT id, participant_id FROM submissions WHERE id = ?")
+    .bind(event.current_submission_id).first<{ id: string; participant_id: string }>();
+  if (!current) throw new PublicError("Guessing opens while a song is playing.");
+  if (current.participant_id === participantId) throw new PublicError("You know exactly who picked this one.");
+  const member = await d1.prepare("SELECT id FROM participants WHERE id = ? AND event_id = ?").bind(participantId, event.id).first<{ id: string }>();
+  if (!member) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);
+  const guessed = await d1.prepare("SELECT id FROM participants WHERE public_id = ? AND event_id = ?").bind(guessedPublicId, event.id).first<{ id: string }>();
+  if (!guessed) throw new PublicError("Pick a human who is in this room.");
+  if (guessed.id === participantId) throw new PublicError("Guessing yourself is bold, but it is not allowed.");
+  await d1.prepare(`INSERT INTO song_guesses (id, event_id, submission_id, participant_id, guessed_participant_id, correct, created_at)
+    VALUES (?, ?, ?, ?, ?, NULL, ?)
+    ON CONFLICT(submission_id, participant_id) DO UPDATE SET guessed_participant_id = excluded.guessed_participant_id, created_at = excluded.created_at
+    WHERE song_guesses.correct IS NULL`)
+    .bind(`guess-${crypto.randomUUID()}`, event.id, current.id, participantId, guessed.id, new Date().toISOString()).run();
+}
+
+export async function setRoundTheme(code: string, hostKey: string, themeInput: string) {
+  const event = await loadEvent(code);
+  if (!event || event.host_pin !== hostKey) throw new PublicError("Host controls belong to the browser holding the aux cable.", 403);
+  if (event.status === "ended") throw new PublicError("This party has ended, so its theme is frozen.");
+  const theme = normalizeTheme(themeInput);
+  await getD1().prepare("UPDATE events SET theme = ? WHERE id = ?").bind(theme || null, event.id).run();
 }
 
 export function assertMusicSource(roomSource: MusicSource, linkSource: MusicSource) {

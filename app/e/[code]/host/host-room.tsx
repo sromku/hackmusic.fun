@@ -11,6 +11,9 @@ import { trackSource, type TrackSource } from "../../../../lib/track-link";
 import { extractYouTubeVideoId, youtubeThumbnailUrl } from "../../../../lib/youtube-track";
 import type { SpotifyPlaybackState, SpotifyPlayer, SpotifyProgress } from "./spotify-sdk";
 import { useReactionSounds, type MusicVolumeControl } from "./use-reaction-sounds";
+import HostEffects, { burstEmojisFor, makeBursts, type HostAlert, type HostBurst } from "./host-effects";
+import { boosNeededToSkip, MAX_THEME_LENGTH } from "../../../../lib/party-fun";
+import { shareRecapCard } from "../../../../lib/recap-card";
 import { useReadinessCheck } from "./use-readiness-check";
 import { useScreenWakeLock } from "./use-screen-wake-lock";
 import { useYouTubePlayer } from "./use-youtube-player";
@@ -49,6 +52,13 @@ export default function HostRoom({ code }: { code: string }) {
   const [handoffClaimError, setHandoffClaimError] = useState("");
   const [readinessOpen, setReadinessOpen] = useState(false);
   const [setupExpanded, setSetupExpanded] = useState(false);
+  const [bursts, setBursts] = useState<HostBurst[]>([]);
+  const [hostAlert, setHostAlert] = useState<HostAlert | null>(null);
+  const [shaking, setShaking] = useState(false);
+  const [blackout, setBlackout] = useState(false);
+  const [themeDraft, setThemeDraft] = useState("");
+  const [themeBusy, setThemeBusy] = useState(false);
+  const [recapBusy, setRecapBusy] = useState(false);
   const [spotifyClientId, setSpotifyClientId] = useState("");
   const [spotifyStatus, setSpotifyStatus] = useState<"checking" | "disconnected" | "loading" | "ready" | "error">("checking");
   const [spotifyDeviceId, setSpotifyDeviceId] = useState("");
@@ -59,6 +69,12 @@ export default function HostRoom({ code }: { code: string }) {
   const [youtubeMessage, setYoutubeMessage] = useState("");
   const [hostDevice, setHostDevice] = useState<HostDevice>("unknown");
   const knownSoundActivityRef = useRef<Set<string> | null>(null);
+  const knownFlairRef = useRef<Set<string> | null>(null);
+  const cheerStreakRef = useRef(0);
+  const previousBooCountRef = useRef<{ trackId: string; boos: number; shielded: boolean }>({ trackId: "", boos: 0, shielded: false });
+  const previousLeaderRef = useRef<string | null>(null);
+  const lastOutcomeRef = useRef<string | null>(null);
+  const alertTimerRef = useRef<number | null>(null);
   const soundActivityCursorRef = useRef("");
   const cancelEndRef = useRef<HTMLButtonElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
@@ -144,7 +160,34 @@ export default function HostRoom({ code }: { code: string }) {
       await spotifyPlayerRef.current?.setVolume(volume);
     },
   });
-  const { enabled: audioEnabled, play: playReactionSound, enableAndTest: enableReactionAudio, disable: disableReactionAudio, inspect: inspectReactionAudio } = useReactionSounds(musicControlRef, setMessage);
+  const { enabled: audioEnabled, play: playReactionSound, playEffect, enableAndTest: enableReactionAudio, disable: disableReactionAudio, inspect: inspectReactionAudio } = useReactionSounds(musicControlRef, setMessage);
+
+  const spawnBursts = useCallback((kind: "up" | "down" | "flair", emojis: string[], avatar?: string) => {
+    const fresh = makeBursts(kind, emojis, avatar);
+    setBursts((current) => [...current.slice(-60), ...fresh]);
+    const ids = new Set(fresh.map((burst) => burst.id));
+    window.setTimeout(() => setBursts((current) => current.filter((burst) => !ids.has(burst.id))), 3_200);
+    if (kind === "down") {
+      setShaking(true);
+      window.setTimeout(() => setShaking(false), 650);
+    }
+  }, []);
+
+  const showAlert = useCallback((alert: Omit<HostAlert, "id">, durationMs = 2_600) => {
+    if (alertTimerRef.current) window.clearTimeout(alertTimerRef.current);
+    setHostAlert({ ...alert, id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}` });
+    alertTimerRef.current = window.setTimeout(() => setHostAlert(null), durationMs);
+  }, []);
+
+  const pullThePlug = useCallback(() => {
+    setBlackout(true);
+    playEffect("scratch");
+    window.setTimeout(() => playEffect("slam"), 350);
+    showAlert({ kind: "plug-pulled", title: "🔌 PLUG PULLED", detail: "The crowd has spoken. Next song." }, 2_400);
+    setShaking(true);
+    window.setTimeout(() => setShaking(false), 900);
+    window.setTimeout(() => setBlackout(false), 1_400);
+  }, [playEffect, showAlert]);
   const { supported: wakeLockSupported, active: wakeLockActive, request: requestScreenWakeLock, release: releaseScreenWakeLock } = useScreenWakeLock(hostDeviceName, setMessage);
   const { running: readinessRunning, results: readinessResults, checkedAt: readinessCheckedAt, run: runReadinessCheck } = useReadinessCheck();
   const wakeLockStatus = wakeLockActive
@@ -221,12 +264,49 @@ export default function HostRoom({ code }: { code: string }) {
       const incomingActivity = data.party.activity ?? [];
       if (knownSoundActivityRef.current) {
         incomingActivity
-          .filter((item) => item.tone !== "song" && !knownSoundActivityRef.current?.has(item.id))
-          .forEach((item) => playReactionSound(item.tone as "up" | "down"));
+          .filter((item) => !knownSoundActivityRef.current?.has(item.id))
+          .forEach((item) => {
+            if (item.tone === "song") { cheerStreakRef.current = 0; return; }
+            const tone = item.tone as "up" | "down";
+            playReactionSound(tone);
+            spawnBursts(tone, burstEmojisFor(tone));
+            cheerStreakRef.current = tone === "up" ? cheerStreakRef.current + 1 : 0;
+            if (cheerStreakRef.current === 3) showAlert({ kind: "streak", title: "🔥 THREE CHEERS IN A ROW", detail: "This song is winning the room." });
+          });
       }
       const knownIds = knownSoundActivityRef.current ?? new Set<string>();
       incomingActivity.forEach((item) => knownIds.add(item.id));
       knownSoundActivityRef.current = knownIds;
+      const incomingFlair = data.party.flair ?? [];
+      if (knownFlairRef.current) {
+        incomingFlair
+          .filter((item) => !knownFlairRef.current?.has(item.id))
+          .forEach((item) => spawnBursts("flair", [item.emoji, item.emoji], item.avatar));
+      }
+      const knownFlair = knownFlairRef.current ?? new Set<string>();
+      incomingFlair.forEach((item) => knownFlair.add(item.id));
+      knownFlairRef.current = knownFlair;
+      // Boo-meter drama: warn on the penultimate boo, pull the plug when a song is booed off.
+      const trackId = data.party.currentTrack?.id ?? "";
+      const shielded = Boolean(data.party.currentTrack?.shielded);
+      const boosNow = data.party.reactions.filter((reaction) => reaction.tone === "down").length;
+      const previousBoo = previousBooCountRef.current;
+      if (trackId && previousBoo.trackId === trackId) {
+        if (shielded && !previousBoo.shielded) showAlert({ kind: "shield", title: "🛡️ SHIELD UP", detail: `This song now needs ${boosNeededToSkip(true)} boos.` });
+        if (boosNow > previousBoo.boos && boosNow === boosNeededToSkip(shielded) - 1) {
+          playEffect("sting");
+          showAlert({ kind: "boo-warning", title: "😬 ONE MORE BOO…", detail: "The plug is in someone's hand." }, 3_200);
+        }
+      }
+      previousBooCountRef.current = { trackId, boos: boosNow, shielded };
+      const latestOutcome = data.party.songHistory[0];
+      if (latestOutcome && lastOutcomeRef.current !== null && lastOutcomeRef.current !== latestOutcome.queueId && latestOutcome.skipReason === "boos") pullThePlug();
+      lastOutcomeRef.current = latestOutcome?.queueId ?? "";
+      const leader = [...data.party.people].sort((left, right) => right.score - left.score)[0];
+      if (leader && previousLeaderRef.current !== null && previousLeaderRef.current !== leader.id && data.party.status === "live") {
+        showAlert({ kind: "leader", title: `👑 NEW LEADER: ${leader.name}`, detail: `${leader.score} points and climbing.` });
+      }
+      previousLeaderRef.current = leader?.id ?? "";
       const lastActivity = incomingActivity[incomingActivity.length - 1];
       if (lastActivity) soundActivityCursorRef.current = `${lastActivity.createdAt}|${lastActivity.id}`;
       setParty(data.party);
@@ -242,7 +322,7 @@ export default function HostRoom({ code }: { code: string }) {
       roomRefreshInFlightRef.current = false;
       if (announce) setRoomSyncing(false);
     }
-  }, [code, disableReactionAudio, hostKey, participantId, playReactionSound, releaseScreenWakeLock]);
+  }, [code, disableReactionAudio, hostKey, participantId, playEffect, playReactionSound, pullThePlug, releaseScreenWakeLock, showAlert, spawnBursts]);
 
   useEffect(() => {
     if (!participantId || !hostKey || partyStatus === "ended") return;
@@ -627,6 +707,52 @@ export default function HostRoom({ code }: { code: string }) {
     });
   }
 
+  function blowAirhorn() {
+    playEffect("airhorn");
+    spawnBursts("up", ["📯", "🎉", "🔥", "🎊", "📯", "✨", "🙌"]);
+    showAlert({ kind: "streak", title: "📯 AIRHORN", detail: "Host-approved hype." }, 1_600);
+  }
+
+  async function saveTheme(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (themeBusy) return;
+    setThemeBusy(true);
+    try {
+      const response = await fetch("/api/party", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "theme", code, participantId, pin: hostKey, theme: themeDraft }) });
+      const data = await response.json() as { error?: string; party?: HostParty };
+      if (!response.ok || !data.party) throw new Error(data.error ?? "The theme did not save.");
+      setParty(data.party);
+      setThemeDraft("");
+      setMessage(data.party.theme ? `🎯 Round theme set: ${data.party.theme}. Guests see it now.` : "🎯 Theme cleared. Anything goes.");
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "The theme did not save.");
+    } finally {
+      setThemeBusy(false);
+    }
+  }
+
+  async function shareRecap() {
+    if (!party || recapBusy) return;
+    setRecapBusy(true);
+    try {
+      const delivered = await shareRecapCard({
+        title: party.title,
+        code: party.code,
+        musicSource: party.musicSource,
+        people: [...party.people].sort((left, right) => right.score - left.score).map((person) => ({ name: person.name, avatar: person.initials, score: person.score })),
+        awards: party.awards ?? [],
+        songsPlayed: party.recap?.songsPlayed ?? party.songHistory.length,
+        songsBooedOff: party.recap?.songsBooedOff ?? party.songHistory.filter((track) => track.skipReason === "boos").length,
+        reactions: party.recap?.reactions ?? 0,
+      });
+      setMessage(delivered === "shared" ? "📸 Recap card shared." : "📸 Recap card saved to downloads.");
+    } catch (reason) {
+      if (!(reason instanceof DOMException && reason.name === "AbortError")) setMessage(reason instanceof Error ? reason.message : "The recap card could not be created.");
+    } finally {
+      setRecapBusy(false);
+    }
+  }
+
   function disableAudio() {
     disableReactionAudio();
     setMessage("🔇 Funny sounds are off. Spotify keeps playing normally.");
@@ -922,11 +1048,12 @@ export default function HostRoom({ code }: { code: string }) {
   };
   return <main className="host-shell">
     <header className="topbar"><a className="brand" href="/"><span className="brand-mark">HM</span><span>HackMusic Host</span></a><a className="participant-link" href={`/e/${code}`} target="_blank" rel="noreferrer">{party.status === "ended" ? "🏆 View final party page ↗" : "🎉 Open participant page safely ↗"}</a></header>
-    <div className="host-heading"><div><p className="eyebrow">🎛️ HOST CONTROL · ROOM {party.code}</p><h1>{party.title}</h1>{party.status !== "ended" && <button className="host-rename-trigger" type="button" onClick={openRename}>✏️ Rename event</button>}</div><div className="host-heading-actions"><span className={`host-status ${party.status}`}>{party.status === "ended" ? "🏁 PARTY ENDED" : party.status === "lobby" ? "🌙 LOBBY OPEN" : "⚡ LIVE"}</span>{party.status !== "ended" && <><button className="host-soft-refresh" type="button" onClick={() => void refreshParty(true)} disabled={roomSyncing}>{roomSyncing ? "↻ SYNCING…" : "↻ REFRESH ROOM DATA"}</button><small>Safe refresh · music keeps playing</small></>}</div></div>
+    <div className="host-heading"><div><p className="eyebrow">🎛️ HOST CONTROL · ROOM {party.code}</p><h1>{party.title}</h1>{party.theme && <span className="host-theme-pill" dir="auto">🎯 {party.theme}</span>}{party.status !== "ended" && <button className="host-rename-trigger" type="button" onClick={openRename}>✏️ Rename event</button>}</div><div className="host-heading-actions"><span className={`host-status ${party.status}`}>{party.status === "ended" ? "🏁 PARTY ENDED" : party.status === "lobby" ? "🌙 LOBBY OPEN" : "⚡ LIVE"}</span>{party.status !== "ended" && <><button className="host-soft-refresh" type="button" onClick={() => void refreshParty(true)} disabled={roomSyncing}>{roomSyncing ? "↻ SYNCING…" : "↻ REFRESH ROOM DATA"}</button><small>Safe refresh · music keeps playing</small></>}</div></div>
 
     {(syncProblem || error) && <section className={`host-sync-banner ${error ? "access" : "offline"}`} role="status"><div><strong>{error ? "🔐 Host access needs attention" : "📡 Room data is reconnecting"}</strong><span>{error || syncProblem}</span><small>{error ? "Spotify may continue, but host controls need the creator browser." : "Do not reload. Automatic retries are running and Spotify is untouched."}</small></div><button type="button" onClick={() => void refreshParty(true)} disabled={roomSyncing}>{roomSyncing ? "Trying…" : "Try now →"}</button></section>}
 
-    {party.status === "ended" ? <section className="host-ended-summary"><div><p className="eyebrow">🏁 THE AUX CABLE HAS BEEN RETIRED</p><h2>That&apos;s a wrap.</h2><p>Scores are frozen, voting is closed, and the speaker can finally process what happened.</p></div><div className="host-ended-summary-stats"><span><strong>{party.people.length}</strong> humans</span><span><strong>{party.queuedTracks.length}</strong> unplayed</span></div><div className="host-ended-summary-actions"><a href={`/e/${code}`}>🏆 View final party page →</a><a href="/">🎉 Create another room</a></div></section> : <section className="share-room-card"><div className="share-code"><span>📱 ROOM CODE</span><strong>{party.code}</strong>{joinPasscode ? <div className="share-passcode"><span>🔐 JOIN PASSCODE</span><strong>{joinPasscode}</strong><small>Not included in the URL or QR code. Copy/Share sends both.</small></div> : <div className="share-passcode-warning"><strong>{party.requiresPasscode ? "🔐 Passcode hidden on this browser" : "🚨 Legacy room: no passcode yet"}</strong><span>{party.requiresPasscode ? "Set a new one below if the original is lost." : "Lock it before sharing the room."}</span></div>}<details className="replace-passcode"><summary>{joinPasscode ? "Rotate room passcode" : "Set a room passcode"}</summary><form onSubmit={replaceJoinPasscode}><label htmlFor="replacement-passcode">NEW PASSCODE</label><input id="replacement-passcode" value={replacementPasscode} onChange={(event) => setReplacementPasscode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} minLength={4} maxLength={12} autoComplete="new-password" placeholder="e.g. VIBE42" required /><button type="submit" disabled={busy}>🔐 Save new passcode</button></form></details><p>{shareUrl}</p><div><button type="button" onClick={() => void copyInvite()}>📋 Copy invite</button><button type="button" onClick={() => void shareInvite()}>🚀 Share</button></div></div>{qrUrl && <Image unoptimized src={qrUrl} width={180} height={180} alt={`QR code to join room ${party.code}`} />}</section>}
+    {party.status === "ended" ? <section className="host-ended-summary"><div><p className="eyebrow">🏁 THE AUX CABLE HAS BEEN RETIRED</p><h2>That&apos;s a wrap.</h2><p>Scores are frozen, voting is closed, and the speaker can finally process what happened.</p></div><div className="host-ended-summary-stats"><span><strong>{party.people.length}</strong> humans</span><span><strong>{party.queuedTracks.length}</strong> unplayed</span></div><div className="host-ended-summary-actions"><button type="button" onClick={() => void shareRecap()} disabled={recapBusy}>{recapBusy ? "📸 Drawing…" : "📸 Share the recap card"}</button><a href={`/e/${code}`}>🏆 View final party page →</a><a href="/">🎉 Create another room</a></div></section> : <section className="share-room-card"><div className="share-code"><span>📱 ROOM CODE</span><strong>{party.code}</strong>{joinPasscode ? <div className="share-passcode"><span>🔐 JOIN PASSCODE</span><strong>{joinPasscode}</strong><small>Not included in the URL or QR code. Copy/Share sends both.</small></div> : <div className="share-passcode-warning"><strong>{party.requiresPasscode ? "🔐 Passcode hidden on this browser" : "🚨 Legacy room: no passcode yet"}</strong><span>{party.requiresPasscode ? "Set a new one below if the original is lost." : "Lock it before sharing the room."}</span></div>}<details className="replace-passcode"><summary>{joinPasscode ? "Rotate room passcode" : "Set a room passcode"}</summary><form onSubmit={replaceJoinPasscode}><label htmlFor="replacement-passcode">NEW PASSCODE</label><input id="replacement-passcode" value={replacementPasscode} onChange={(event) => setReplacementPasscode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} minLength={4} maxLength={12} autoComplete="new-password" placeholder="e.g. VIBE42" required /><button type="submit" disabled={busy}>🔐 Save new passcode</button></form></details><p>{shareUrl}</p><div><button type="button" onClick={() => void copyInvite()}>📋 Copy invite</button><button type="button" onClick={() => void shareInvite()}>🚀 Share</button></div></div>{qrUrl && <Image unoptimized src={qrUrl} width={180} height={180} alt={`QR code to join room ${party.code}`} />}</section>}
+        {party.status === "ended" && party.awards && party.awards.length > 0 && <section className="awards-card host-awards-card"><div className="card-title-row"><h2>🎖️ PARTY AWARDS</h2><span>{party.awards.length} {party.awards.length === 1 ? "TROPHY" : "TROPHIES"}</span></div><div className="awards-grid">{party.awards.map((entry) => <article className="award" key={entry.id}><span className="award-emoji" aria-hidden="true">{entry.emoji}</span><div><strong>{entry.title}</strong><p><span className={`avatar ${entry.winnerColor}`}>{entry.winnerAvatar}</span> <b>{entry.winnerName}</b></p><small>{entry.detail}</small></div></article>)}</div></section>}
 
     {party.status !== "ended" && (setupComplete && !setupExpanded
       ? <section className="host-setup-card complete"><div><p className="eyebrow">🧭 SETUP ORDER</p><strong>✅ Setup complete. Music is playing on this device.</strong><span>Keep this tab open. Reactions and the next songs are automatic.</span></div><button type="button" onClick={() => setSetupExpanded(true)}>Show steps</button></section>
@@ -956,12 +1083,13 @@ export default function HostRoom({ code }: { code: string }) {
     </section>}
 
     <div className="host-grid"><section className="host-now-card"><div className="section-kicker"><span>{party.status === "ended" ? "📼 LAST SONG" : party.status === "lobby" ? "🌙 SPEAKER SLEEPING" : "🔊 ON THE SPEAKER"}</span><span>{party.status === "ended" ? `📦 ${party.queueCount} UNPLAYED` : `🤫 ${party.queueCount} WAITING`}</span></div>{party.status !== "ended" && youtubeRoom && <div className={`youtube-stage ${currentYouTubeId && party.currentTrack ? "active" : "idle"}`} ref={attachYouTubeStage} aria-label="YouTube video player" />}{party.currentTrack ? <><div className="host-track"><div className={`host-art ${party.currentTrack.color}${currentYouTubeId ? " host-art-video" : ""}`}>{currentYouTubeId ? <Image unoptimized src={youtubeThumbnailUrl(currentYouTubeId)} width={120} height={120} alt="" /> : "🎵"}</div><div><h2>{party.currentTrack.title}</h2><p>{party.currentTrack.artist}{party.currentTrack.duration ? ` · ${party.currentTrack.duration}` : ""}</p></div></div>{party.status !== "ended" && (currentSource === "youtube" && currentYouTubeId ? <div className={`youtube-host-player youtube-${youtubeStatus}`}><div><strong>▶️ YOUTUBE VIDEO SPEAKER</strong><span>{youtubeStatus === "ready" ? "🎬 Plays right here · no account needed" : youtubeStatus === "error" ? "⚠️ YouTube player failed to load. Reload this page." : "⏳ Loading the YouTube player…"}</span></div><button type="button" disabled={speakerStarting || youtubeStatus !== "ready" || party.status !== "live"} onClick={() => void startHostSpeaker()}>{speakerStarting ? "🎬 Starting video…" : speakerArmed ? "🔁 Play this video again →" : "▶️ Start speaker →"}</button>{playbackProgressBar}{youtubeNeedsTap && <p className="youtube-tap-hint" role="status">👆 This {hostDeviceName} wants one tap on the video itself to start sound. After that, HackMusic starts every next song automatically.</p>}{youtubeMessage && <p className="youtube-message" role="status">{youtubeMessage}</p>}<small>👉 Starts the video only. Funny sounds stay off unless you enable them separately.</small></div> : currentSpotifyId ? <div className={`spotify-host-player spotify-${spotifyStatus}`}><div><strong>🟢 SPOTIFY PREMIUM SPEAKER</strong><span>{spotifyStatus === "ready" ? "🎶 Full song · no preview limit" : "👆 Connect Spotify above first"}</span></div><button type="button" disabled={speakerStarting || spotifyStatus !== "ready" || party.status !== "live"} onClick={() => void startHostSpeaker()}>{speakerStarting ? "🔊 Starting speaker…" : speakerArmed ? "🔁 Play this track again →" : "🔊 Start speaker →"}</button>{playbackProgressBar}<small>👉 Starts Spotify only. Funny sounds stay off unless you enable them separately.</small></div> : <div className="unplayable-track"><strong>⚠️ This queue item has no playable Spotify or YouTube ID.</strong><span>Skip this legacy item once. Every newly added song is now validated before it enters the queue.</span></div>)}<div className="host-reaction-counts"><div className="host-cheers"><strong>{cheers}</strong><span>🙌 CHEERS</span></div><div className="host-boos"><strong>{boos}</strong><span>👻 BOOS</span></div></div></> : <div className="host-empty"><strong>{party.status === "ended" ? "🏁 The speaker is off." : party.status === "lobby" ? "🌙 Playback is locked." : speakerArmed ? "🌙 Speaker armed. Enjoy the dramatic silence." : "🦗 No song yet."}</strong><p>{party.status === "ended" ? "The final scoreboard and any unplayed songs are saved below." : party.status === "lobby" ? `🤫 ${party.queueCount} secret ${party.queueCount === 1 ? "song is" : "songs are"} waiting for your launch.` : speakerArmed ? "🎵 Add another song whenever you like. It will wake the speaker and start automatically." : "🎵 Open the participant page and add the first one."}</p></div>}</section>
-      {party.status === "ended" ? <section className="host-controls-card host-controls-retired"><div className="card-title-row"><h2>🧊 CONTROLS FROZEN</h2><span>FINAL</span></div><div className="host-retired-mark">🏁</div><h3>The buttons have left the building.</h3><p>Playback, reactions, invitations, passcodes, queue rules, funny sounds, and screen wake lock are finished for this room.</p><a href="/">Start fresh with a new party →</a></section> : <section className="host-controls-card"><div className="card-title-row"><h2>🎛️ CONTROLS</h2><span>📱 HOST DEVICE</span></div><button className="host-readiness" type="button" onClick={startReadinessCheck} disabled={readinessRunning}>{readinessRunning ? "🧪 Checking this device…" : readinessResults ? "🧪 Run readiness check again" : `🧪 Run ${hostDeviceName} readiness check`}</button><button className={`host-audio ${audioEnabled ? "armed" : ""}`} type="button" aria-pressed={audioEnabled} onClick={audioEnabled ? disableAudio : enableAudio}>{audioEnabled ? "🔇 Disable funny sounds" : "🎉 Enable & test funny sounds"}</button><button className={`host-wake-lock ${wakeLockActive ? "armed" : ""}`} type="button" aria-pressed={wakeLockActive} disabled={wakeLockSupported === false} onClick={() => wakeLockActive ? void releaseScreenWakeLock() : void requestScreenWakeLock()}>{wakeLockActive ? "🔒 Screen staying awake · tap to release" : wakeLockSupported === false ? "⚠️ Screen wake lock unavailable" : "☀️ Keep this screen awake"}</button><button className="host-skip" type="button" disabled={busy || !party.currentTrack} onClick={() => void control("skip")}>⏭️ Skip to next song →</button><button className="host-end" type="button" disabled={busy} onClick={() => setEndConfirmOpen(true)}>🏁 End party & freeze scores</button><p className={`host-wake-status ${wakeLockActive ? "active" : ""}`}>{wakeLockStatus}</p><details className="host-wake-guide"><summary>🛟 Screen-awake help · detected {hostDeviceName}</summary><ul><li className={hostDevice === "ios" ? "current" : ""}><strong>🍎 iPhone / iPad</strong><span>Try the button first. If unavailable, use Settings → Display &amp; Brightness → Auto-Lock and choose Never or the longest available time.</span></li><li className={hostDevice === "android" ? "current" : ""}><strong>🤖 Android</strong><span>Try the button first. Otherwise increase Display → Screen timeout, or enable Developer options → Stay awake while charging.</span></li><li className={hostDevice === "computer" ? "current" : ""}><strong>💻 Computer</strong><span>Keep this tab visible. If needed, temporarily disable display sleep in the computer’s power or display settings.</span></li></ul></details><p className="host-hint">🔊 Reaction sounds play only from this host device. Keep this page open and its volume up.</p><details className="host-rare-tools"><summary>🧰 Rare host moves</summary><div><p>Need a new device or a less exhausted DJ? Initiate one highly regulated coup.</p><button type="button" onClick={() => { setHandoffInvite(null); setHandoffOpen(true); }}>🎚️ Pass the aux cable →</button><small>One-use link · chosen human only · 10 minutes</small></div></details></section>}
+      {party.status === "ended" ? <section className="host-controls-card host-controls-retired"><div className="card-title-row"><h2>🧊 CONTROLS FROZEN</h2><span>FINAL</span></div><div className="host-retired-mark">🏁</div><h3>The buttons have left the building.</h3><p>Playback, reactions, invitations, passcodes, queue rules, funny sounds, and screen wake lock are finished for this room.</p><a href="/">Start fresh with a new party →</a></section> : <section className="host-controls-card"><div className="card-title-row"><h2>🎛️ CONTROLS</h2><span>📱 HOST DEVICE</span></div><button className="host-readiness" type="button" onClick={startReadinessCheck} disabled={readinessRunning}>{readinessRunning ? "🧪 Checking this device…" : readinessResults ? "🧪 Run readiness check again" : `🧪 Run ${hostDeviceName} readiness check`}</button><button className={`host-audio ${audioEnabled ? "armed" : ""}`} type="button" aria-pressed={audioEnabled} onClick={audioEnabled ? disableAudio : enableAudio}>{audioEnabled ? "🔇 Disable funny sounds" : "🎉 Enable & test funny sounds"}</button><button className={`host-wake-lock ${wakeLockActive ? "armed" : ""}`} type="button" aria-pressed={wakeLockActive} disabled={wakeLockSupported === false} onClick={() => wakeLockActive ? void releaseScreenWakeLock() : void requestScreenWakeLock()}>{wakeLockActive ? "🔒 Screen staying awake · tap to release" : wakeLockSupported === false ? "⚠️ Screen wake lock unavailable" : "☀️ Keep this screen awake"}</button><button className="host-airhorn" type="button" disabled={!audioEnabled} onClick={blowAirhorn} title={audioEnabled ? "Blast the airhorn" : "Enable funny sounds first"}>📯 Airhorn</button><form className="host-theme-form" onSubmit={saveTheme}><label htmlFor="round-theme">🎯 ROUND THEME</label><div><input id="round-theme" value={themeDraft} onChange={(event) => setThemeDraft(event.target.value)} maxLength={MAX_THEME_LENGTH} placeholder={party.theme ? `Current: ${party.theme}` : "e.g. Guilty pleasures, Before 2000"} /><button type="submit" disabled={themeBusy}>{themeBusy ? "…" : themeDraft.trim() ? "Set" : party.theme ? "Clear" : "Set"}</button></div><small>Guests see it on their phone and in the add-song sheet.</small></form><button className="host-skip" type="button" disabled={busy || !party.currentTrack} onClick={() => void control("skip")}>⏭️ Skip to next song →</button><button className="host-end" type="button" disabled={busy} onClick={() => setEndConfirmOpen(true)}>🏁 End party & freeze scores</button><p className={`host-wake-status ${wakeLockActive ? "active" : ""}`}>{wakeLockStatus}</p><details className="host-wake-guide"><summary>🛟 Screen-awake help · detected {hostDeviceName}</summary><ul><li className={hostDevice === "ios" ? "current" : ""}><strong>🍎 iPhone / iPad</strong><span>Try the button first. If unavailable, use Settings → Display &amp; Brightness → Auto-Lock and choose Never or the longest available time.</span></li><li className={hostDevice === "android" ? "current" : ""}><strong>🤖 Android</strong><span>Try the button first. Otherwise increase Display → Screen timeout, or enable Developer options → Stay awake while charging.</span></li><li className={hostDevice === "computer" ? "current" : ""}><strong>💻 Computer</strong><span>Keep this tab visible. If needed, temporarily disable display sleep in the computer’s power or display settings.</span></li></ul></details><p className="host-hint">🔊 Reaction sounds play only from this host device. Keep this page open and its volume up.</p><details className="host-rare-tools"><summary>🧰 Rare host moves</summary><div><p>Need a new device or a less exhausted DJ? Initiate one highly regulated coup.</p><button type="button" onClick={() => { setHandoffInvite(null); setHandoffOpen(true); }}>🎚️ Pass the aux cable →</button><small>One-use link · chosen human only · 10 minutes</small></div></details></section>}
     </div>
     <section className="host-queue-card"><div className="card-title-row"><h2>{party.status === "ended" ? "📦 UNPLAYED AT CLOSING" : "🎶 WAITING IN THE QUEUE"}</h2><span>{party.status === "ended" ? "ARCHIVE" : "🤫"} {party.queuedTracks.length} {party.queuedTracks.length === 1 ? "SONG" : "SONGS"}</span></div>{party.status !== "ended" && <fieldset className="queue-mode-picker"><legend>HOW SHOULD THE NEXT SONG BE PICKED?</legend><div>{queueModes.map((mode) => <button className={party.queueMode === mode.id ? "active" : ""} type="button" aria-pressed={party.queueMode === mode.id} disabled={busy} onClick={() => void changeQueueMode(mode.id)} key={mode.id}><span className="queue-mode-icon">{mode.icon}</span><span className="queue-mode-copy"><strong>{mode.title}</strong><small>{mode.copy}</small></span><span className="queue-mode-state">{party.queueMode === mode.id ? "✓ ACTIVE" : "SELECT"}</span></button>)}</div></fieldset>}{party.queuedTracks.length ? <><p className="queue-order-note">{party.status === "ended" ? "📼 These songs were still waiting when the final bell rang." : party.queueMode === "ordered" ? "📍 The numbered list below is the exact play order." : party.queueMode === "random" ? "🎲 These songs are the chaos pool. The next one is chosen only when it’s time." : "⚖️ These songs are the fair-play pool. HackMusic balances people first, then rolls the dice."}</p><ol className="host-queue-list">{party.queuedTracks.map((track, index) => <li key={track.queueId}><span className="queue-position">{party.status === "ended" ? String(index + 1).padStart(2, "0") : party.queueMode === "ordered" ? String(index + 1).padStart(2, "0") : party.queueMode === "random" ? "🎲" : "⚖️"}</span><span className={`queue-art ${track.color}`}>{trackSource(track.id) === "youtube" ? "▶️" : "🎵"}</span><div className="queue-track-copy"><strong dir="auto">{track.title}</strong><span dir="auto">🎤 {track.artist}{track.duration ? ` · ${track.duration}` : ""} · {trackSource(track.id) === "youtube" ? "YouTube" : "Spotify"}</span></div><div className="queue-submitter"><span className={`avatar ${track.color}`}>{track.submitterInitials}</span><small>Added by</small><strong>{track.submittedBy}</strong></div></li>)}</ol></> : <div className="host-queue-empty"><span>{party.status === "ended" ? "✅" : "🪹"}</span><div><strong>{party.status === "ended" ? "Nothing was left behind." : "The queue is gloriously empty."}</strong><p>{party.status === "ended" ? "Every queued song got its moment, or met a strategically timed skip." : "Share the room code and let somebody make a questionable musical decision."}</p></div></div>}</section>
     <section className="host-history-card"><div className="card-title-row"><h2>📊 SONG OUTCOMES</h2><span>{party.songHistory.length} {party.songHistory.length === 1 ? "SONG" : "SONGS"}</span></div>{party.songHistory.length ? <ol>{party.songHistory.map((track) => { const outcome = hostSongOutcome(track); return <li key={track.queueId}><span className={`queue-art ${track.color}`}>{trackSource(track.id) === "youtube" ? "▶️" : "🎵"}</span><div className="history-track-copy"><strong dir="auto">{track.title}</strong><span dir="auto">🎤 {track.artist}{track.duration ? ` · ${track.duration}` : ""} · {trackSource(track.id) === "youtube" ? "YouTube" : "Spotify"}</span><small>Added by {track.submittedBy}</small></div><b className={`song-outcome ${outcome.tone}`}>{outcome.label}</b></li>; })}</ol> : <div className="host-history-empty"><span>🧪</span><div><strong>No outcomes yet.</strong><p>Completed songs and dramatic boo-skips will become permanent evidence here.</p></div></div>}</section>
     <section className="leaderboard-card"><div className="card-title-row"><h2>{party.status === "ended" ? "🏆 FINAL SCOREBOARD" : party.status === "lobby" ? "🌙 LOBBY ROSTER" : "⚡ LIVE SCOREBOARD"}</h2><span>🎉 {party.people.length} PLAYERS</span></div><ol>{[...party.people].sort((a, b) => b.score - a.score).map((person, index) => <li key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><b>{party.status === "lobby" ? index + 1 : index === 0 ? "👑" : index + 1}</b><strong>{person.name}</strong><span>{person.score} pts</span></li>)}</ol></section>
 
+    <HostEffects bursts={bursts} alert={hostAlert} shaking={shaking} blackout={blackout} />
     {message && <div className="toast host-toast" role="status">{message}</div>}
     {party.status !== "ended" && renameOpen && <div className="modal-backdrop host-rename-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && !renameBusy && setRenameOpen(false)}><section className="host-rename-card" role="dialog" aria-modal="true" aria-labelledby="host-rename-title" aria-describedby="host-rename-description"><div className="host-rename-handle" aria-hidden="true" /><div className="modal-topline"><div><p className="eyebrow">✏️ SAME PARTY, NEW LABEL</p><h2 id="host-rename-title">Rename the chaos.</h2></div><button className="close-button" type="button" onClick={() => setRenameOpen(false)} disabled={renameBusy} aria-label="Close event rename">×</button></div><p id="host-rename-description">Only the name changes. Room code, passcode, songs, scores, history, and questionable decisions remain exactly where you left them.</p><form className="host-rename-form" onSubmit={renameEvent}><label htmlFor="host-event-name">EVENT NAME</label><input ref={renameInputRef} id="host-event-name" value={renameTitle} onChange={(event) => setRenameTitle(event.target.value)} minLength={3} maxLength={60} required /><small>{renameTitle.trim().length}/60 characters · dramatic rebranding is optional</small><div><button className="host-rename-cancel" type="button" onClick={() => setRenameOpen(false)} disabled={renameBusy}>Never mind</button><button className="host-rename-save" type="submit" disabled={renameBusy || renameTitle.trim() === party.title}>{renameBusy ? "Renaming the paperwork…" : "✨ Save new name"}</button></div></form></section></div>}
     {readinessOpen && <div className="modal-backdrop host-readiness-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setReadinessOpen(false)}><section className="host-readiness-card" role="dialog" aria-modal="true" aria-labelledby="host-readiness-title"><div className="host-readiness-handle" aria-hidden="true" /><div className="modal-topline"><div><p className="eyebrow">🧪 PRE-FLIGHT · {hostDeviceName.toUpperCase()}</p><h2 id="host-readiness-title">{readinessRunning ? "Checking this device…" : readinessResults?.some((result) => result.status === "fail") ? "Fix these before guests arrive." : readinessResults?.some((result) => result.status === "warn") ? "Almost ready. Read the notes." : "This device is ready to host."}</h2></div><button ref={closeReadinessRef} className="close-button" type="button" onClick={() => setReadinessOpen(false)} aria-label="Close readiness check">×</button></div><p className="host-readiness-intro">One tap armed the sounds, requested the wake lock, and probed playback, the player, and the room connection. Results are for this browser only.</p><ol className="host-readiness-results" aria-live="polite">{(readinessResults ?? []).map((result) => <li className={`readiness-${result.status}`} key={result.id}><span aria-hidden="true">{result.status === "pass" ? "✅" : result.status === "warn" ? "⚠️" : result.status === "fail" ? "❌" : "ℹ️"}</span><div><strong>{result.label}</strong><p>{result.detail}</p></div></li>)}{readinessRunning && <li className="readiness-info"><span aria-hidden="true">⏳</span><div><strong>Running checks…</strong><p>Listening for the cheer and boo, then probing playback about two seconds later.</p></div></li>}</ol><div className="host-readiness-reminders"><strong>📋 Before the party, on this device</strong><ul><li>Auto-Lock → Never, Low Power Mode off, charger connected.</li><li>Volume up, mute switch off, Do Not Disturb on so notifications cannot interrupt audio.</li><li>Keep this tab in the foreground for the whole event. No Split View, no app switching.</li><li>{partyMusicSource === "youtube" ? "When the first video arrives, tap Start speaker, then tap the video once if it does not begin." : "Keep the Spotify connection on this device; it cannot move to another one."}</li></ul></div><div className="host-readiness-actions"><button type="button" onClick={startReadinessCheck} disabled={readinessRunning}>{readinessRunning ? "Checking…" : "🔁 Run again"}</button><button className="host-readiness-done" type="button" onClick={() => setReadinessOpen(false)}>Got it</button></div>{readinessCheckedAt && !readinessRunning && <small>Checked at {new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" }).format(new Date(readinessCheckedAt))}</small>}</section></div>}

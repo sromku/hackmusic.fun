@@ -165,6 +165,7 @@ test("formats song durations, Spotify links, and outcomes consistently", async (
   assert.equal(format.trackSourceLabel("spotify:track:5lf9LK4eETye6DsPUJpHDB"), "Spotify");
   assert.equal(format.mySongStatusLabel({ status: "skipped", skipReason: "boos", skipPercent: 42 }, false), "👻 Booed off at 42%");
   assert.deepEqual(format.hostSongOutcome({ status: "skipped", skipReason: "host", skipPercent: null }), { label: "⏭️ SKIPPED BY HOST", tone: "host" });
+  assert.deepEqual(format.hostSongOutcome({ status: "skipped", skipReason: "boos", skipPercent: 42 }), { label: "🪦 BOOED OFF AT 42%", tone: "boos" });
 });
 
 test("renders the create and join landing page", async () => {
@@ -304,6 +305,12 @@ test("renders a code-specific participant room", async () => {
   for (const copy of ["CHEER", "BOO", "Add a song", "YOUR FINAL SCORE", "🔊 ROOM NOISE", "FULL PARTY HISTORY", "🎧 My music", "Pick your party face", "Rename your human", "YOUR PARTY NAME", "YOUR NAME — SHOWN TO EVERYONE", "This is how other humans will see you. It is not the room code.", "ROOM PASSCODE — ASK THE HOST", "Paste a full track or short /s/ link…", "Paste a YouTube video link…", "YOUTUBE VIDEO LINK", "This room plays YouTube only", "Open on YouTube", "Show me how", "Borrow the link. Keep the chaos.", "Copy link", "I found the link"]) {
     assert.match(source, new RegExp(copy));
   }
+  for (const fun of ["Who picked this one?", "flair-bar", "Shield my song", "Arm my double cheer", "MYSTERY SOLVED", "PARTY AWARDS", "Share the recap card", "ROUND THEME", "flyaway-layer", "navigator.vibrate"]) {
+    assert.match(source, new RegExp(fun.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), fun);
+  }
+  assert.match(source, /action: "flair"/);
+  assert.match(source, /action: "shield"/);
+  assert.match(source, /action: "guess"/);
   assert.match(source, /spotifyHelpOpen/);
   assert.match(source, /aria-labelledby="spotify-help-title"/);
   assert.match(source, /event\.key === "Escape"/);
@@ -458,6 +465,18 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /state === "locked" \|\| step\.disabled/);
   assert.match(source, /Setup complete\. Music is playing on this device/);
   assert.match(source, /id="spotify-connect"/);
+  assert.match(source, /<HostEffects bursts=\{bursts\}/);
+  assert.match(source, /📯 Airhorn/);
+  assert.match(source, /action: "theme"/);
+  assert.match(source, /ONE MORE BOO/);
+  assert.match(source, /PLUG PULLED/);
+  assert.match(source, /THREE CHEERS IN A ROW/);
+  assert.match(source, /NEW LEADER/);
+  assert.match(source, /PARTY AWARDS/);
+  assert.match(source, /shareRecapCard/);
+  const effectsSource = await readFile(new URL("app/e/[code]/host/host-effects.tsx", projectRoot), "utf8");
+  assert.match(effectsSource, /host-blackout/);
+  assert.match(effectsSource, /burst-\$\{burst\.kind\}/);
   assert.match(source, /useReadinessCheck/);
   assert.match(source, /readiness check/);
   assert.match(source, /host-readiness-card/);
@@ -492,6 +511,9 @@ test("renders a code-specific host control surface", async () => {
   assert.match(reactionSoundSource, /decodeAudioData/);
   assert.match(reactionSoundSource, /player\.setVolume/);
   assert.match(reactionSoundSource, /ensureContextRunning/);
+  assert.match(reactionSoundSource, /"airhorn"/);
+  assert.match(reactionSoundSource, /playEffect/);
+  assert.match(reactionSoundSource, /playbackRate/);
   assert.match(reactionSoundSource, /audioSession/);
   assert.match(reactionSoundSource, /playThroughElement/);
   assert.doesNotMatch(reactionSoundSource, /context\.state === "suspended"/);

@@ -5,8 +5,14 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { AVATAR_EMOJIS } from "../../../lib/avatar-emojis";
 import { artworkVariant, durationSeconds, formatActivityTime, formatMusicDuration, formatPartyStart, mySongStatusLabel, trackSourceLabel, trackWebUrl } from "../../../lib/party-format";
 import { extractYouTubeVideoId, youtubeThumbnailUrl } from "../../../lib/youtube-track";
+import { FLAIR_EMOJIS, boosNeededToSkip } from "../../../lib/party-fun";
 import { MAX_PENDING_TRACKS_PER_PERSON } from "../../../lib/party-rules";
+import { shareRecapCard } from "../../../lib/recap-card";
 import type { MySong, ParticipantParty, PartyActivity, PartyColor, PartyTrack, RoomSummary } from "../../../lib/party-contract";
+
+function makeFlyaway(emoji: string, x?: number) {
+  return { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, emoji, x: x ?? 20 + Math.random() * 60 };
+}
 
 function Artwork({ tone, seed }: { tone: PartyColor; seed: string }) {
   const videoId = extractYouTubeVideoId(seed);
@@ -30,6 +36,10 @@ export default function PartyRoom({ code }: { code: string }) {
   const [nameOpen, setNameOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [spotifyHelpOpen, setSpotifyHelpOpen] = useState(false);
+  const [boostArmed, setBoostArmed] = useState(false);
+  const [guessBusy, setGuessBusy] = useState(false);
+  const [recapBusy, setRecapBusy] = useState(false);
+  const [flyaways, setFlyaways] = useState<Array<{ id: string; emoji: string; x: number }>>([]);
   const spotifyHelpCloseRef = useRef<HTMLButtonElement>(null);
 
   const myReaction = party?.reactions.find((reaction) => reaction.mine)?.tone;
@@ -37,6 +47,7 @@ export default function PartyRoom({ code }: { code: string }) {
   const ended = room?.status === "ended" || party?.status === "ended";
   const lobby = room?.status === "lobby" || party?.status === "lobby";
   const hasPlayedSong = (party?.activity ?? []).some((item) => item.tone === "song");
+  const boosToSkip = boosNeededToSkip(Boolean(party?.currentTrack?.shielded));
   const visiblePeople = party ? ended ? [...party.people].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)) : showEveryone ? party.people : party.people.slice(0, 4) : [];
 
   useEffect(() => {
@@ -109,7 +120,81 @@ export default function PartyRoom({ code }: { code: string }) {
     const response = await fetch("/api/party", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code, participantId, ...payload }) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error ?? "That did not work.");
-    return data as { party: ParticipantParty; skipped?: boolean; submittedTrack?: PartyTrack };
+    return data as { party: ParticipantParty; skipped?: boolean; shieldAbsorbed?: boolean; boosted?: boolean; submittedTrack?: PartyTrack };
+  }
+
+  function buzz(pattern: number | number[] = 30) {
+    try { navigator.vibrate?.(pattern); } catch { /* haptics are optional */ }
+  }
+
+  function flyAway(emoji: string, x?: number) {
+    const item = makeFlyaway(emoji, x);
+    setFlyaways((current) => [...current.slice(-14), item]);
+    window.setTimeout(() => setFlyaways((current) => current.filter((entry) => entry.id !== item.id)), 1_600);
+  }
+
+  async function sendFlair(emoji: string) {
+    flyAway(emoji);
+    buzz(15);
+    try {
+      const data = await postAction({ action: "flair", emoji });
+      setParty((current) => ({ ...data.party, activity: current?.activity ?? [] }));
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "That emoji got lost on the way to the host screen.");
+    }
+  }
+
+  async function shieldMySong() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const data = await postAction({ action: "shield" });
+      setParty((current) => ({ ...data.party, activity: current?.activity ?? [] }));
+      buzz([20, 40, 20]);
+      flyAway("🛡️", 50);
+      setNotice(`🛡️ Shield up! Your song now needs ${boosNeededToSkip(true)} boos, and the first boo costs nothing.`);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "The shield did not activate.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function guessPicker(publicId: string, name: string) {
+    if (guessBusy) return;
+    setGuessBusy(true);
+    try {
+      const data = await postAction({ action: "guess", guessParticipantId: publicId });
+      setParty((current) => ({ ...data.party, activity: current?.activity ?? [] }));
+      buzz(15);
+      setNotice(`🕵️ Guess locked on ${name}. +2 if you are right. You can change it until the song ends.`);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Your guess did not go through.");
+    } finally {
+      setGuessBusy(false);
+    }
+  }
+
+  async function shareRecap() {
+    if (!party || recapBusy) return;
+    setRecapBusy(true);
+    try {
+      const delivered = await shareRecapCard({
+        title: party.title,
+        code: party.code,
+        musicSource: party.musicSource,
+        people: [...party.people].sort((left, right) => (right.score ?? 0) - (left.score ?? 0)).map((person) => ({ name: person.name === "You" ? party.viewerDisplayName : person.name, avatar: person.initials, score: person.score ?? 0 })),
+        awards: party.awards ?? [],
+        songsPlayed: party.recap?.songsPlayed ?? 0,
+        songsBooedOff: party.recap?.songsBooedOff ?? 0,
+        reactions: party.recap?.reactions ?? 0,
+      });
+      setNotice(delivered === "shared" ? "📸 Recap card shared." : "📸 Recap card saved to your downloads.");
+    } catch (reason) {
+      if (!(reason instanceof DOMException && reason.name === "AbortError")) setNotice(reason instanceof Error ? reason.message : "The recap card could not be created.");
+    } finally {
+      setRecapBusy(false);
+    }
   }
 
   async function join(event: FormEvent<HTMLFormElement>) {
@@ -138,10 +223,20 @@ export default function PartyRoom({ code }: { code: string }) {
   async function react(kind: "up" | "down") {
     if (busy || myReaction || !party?.currentTrack) return;
     setBusy(true);
+    const boost = kind === "up" && boostArmed;
+    flyAway(kind === "up" ? (boost ? "⚡" : "🙌") : "👻", kind === "up" ? 28 : 72);
+    buzz(kind === "up" ? (boost ? [30, 40, 60] : 30) : [20, 30, 20]);
     try {
-      const data = await postAction({ action: "react", kind });
+      const data = await postAction({ action: "react", kind, boost });
       setParty((current) => ({ ...data.party, activity: current?.activity ?? [] }));
-      setNotice(data.skipped ? "⏭️ Three boos! Next song!" : kind === "up" ? "🙌 Cheer locked in! +3 to the picker." : "👻 Anonymous boo locked in.");
+      setBoostArmed(false);
+      setNotice(data.skipped
+        ? "⏭️ The crowd pulled the plug! Next song!"
+        : data.boosted
+          ? "⚡ DOUBLE CHEER! +6 to the picker. Your power-up is spent."
+          : data.shieldAbsorbed
+            ? "🛡️ That song is shielded. Your boo cost 0 points, and it takes 4 boos to skip."
+            : kind === "up" ? "🙌 Cheer locked in! +3 to the picker." : "👻 Anonymous boo locked in.");
     } catch (reason) { setNotice(reason instanceof Error ? reason.message : "Reaction failed."); }
     finally { setBusy(false); }
   }
@@ -256,18 +351,20 @@ export default function PartyRoom({ code }: { code: string }) {
         {!ended && party && <button className="add-song-button" type="button" onClick={() => setAddOpen(true)}><span aria-hidden="true">🎵</span> Add a song</button>}
       </section>
 
-      {party && ended && <section className="ended-banner"><strong>🏁 THAT’S A WRAP.</strong><span>🏆 No more votes. Bragging may continue indefinitely.</span></section>}
+      {party && !ended && party.theme && <section className="theme-banner" role="status"><span>🎯 ROUND THEME</span><strong dir="auto">{party.theme}</strong><small>Set by the host. Pick accordingly, or rebel loudly.</small></section>}
+      {party && ended && <section className="ended-banner"><strong>🏁 THAT’S A WRAP.</strong><span>🏆 No more votes. Bragging may continue indefinitely.</span><button type="button" className="recap-share" onClick={() => void shareRecap()} disabled={recapBusy}>{recapBusy ? "📸 Drawing…" : "📸 Share the recap card"}</button></section>}
+      {party && ended && party.awards && party.awards.length > 0 && <section className="awards-card" aria-labelledby="awards-title"><div className="card-title-row"><h2 id="awards-title">🎖️ PARTY AWARDS</h2><span>{party.awards.length} {party.awards.length === 1 ? "TROPHY" : "TROPHIES"}</span></div><div className="awards-grid">{party.awards.map((entry) => <article className={`award ${entry.winnerName === "You" ? "mine" : ""}`} key={entry.id}><span className="award-emoji" aria-hidden="true">{entry.emoji}</span><div><strong>{entry.title}</strong><p><span className={`avatar ${entry.winnerColor}`}>{entry.winnerAvatar}</span> <b>{entry.winnerName}</b></p><small>{entry.detail}</small></div></article>)}</div></section>}
       {party && lobby && <section className="lobby-banner"><div><p className="eyebrow">🌙 PRE-PARTY LOBBY</p><strong>Build the secret queue before the speakers wake up.</strong><span>Expected start: {formatPartyStart(party.scheduledFor)}. The host decides the exact moment.</span></div><div className="lobby-count"><strong>{party.queueCount}</strong><span>{party.queueCount === 1 ? "SECRET SONG" : "SECRET SONGS"}</span></div></section>}
 
       {party && <div className="party-grid">
         <section className={`now-playing ${!party.currentTrack ? "empty-player" : ""}`} aria-labelledby="playing-title">
           <div className="section-kicker"><span>{ended ? party.currentTrack ? "📼 FINAL SONG" : "🏁 SPEAKER RETIRED" : party.currentTrack ? "🎵 NOW PLAYING" : lobby ? "🌙 PLAYBACK STARTS LATER" : "🔇 THE SPEAKER IS WAITING"}</span><span>{ended ? `📦 ${party.queueCount} LEFT UNPLAYED` : `🤫 ${party.queueCount} SECRETLY QUEUED`}</span></div>
           {party.currentTrack ? <>
-            <div className="track-card"><Artwork tone={party.currentTrack.color} seed={party.currentTrack.id} /><div className="track-copy"><p className="track-label">{ended ? "🏁 FINAL CHAOS" : "⚡ CURRENT CHAOS"}</p><h2 id="playing-title">{party.currentTrack.title}</h2><div className="track-meta-row"><p className="artist">🎤 {party.currentTrack.artist}</p>{currentTrackUrl && <a className={`spotify-save-link ${currentTrackIsYouTube ? "youtube-open-link" : ""}`} href={currentTrackUrl} target="_blank" rel="noreferrer" aria-label={`Open ${party.currentTrack.title} by ${party.currentTrack.artist} on ${currentTrackIsYouTube ? "YouTube" : "Spotify"}`}>{currentTrackIsYouTube ? "▶ Open on YouTube ↗" : "＋ Add to my Spotify ↗"}</a>}</div><p className="submitted">🕵️ Submitted by a mystery human</p></div></div>
+            <div className="track-card"><Artwork tone={party.currentTrack.color} seed={party.currentTrack.id} /><div className="track-copy"><p className="track-label">{ended ? "🏁 FINAL CHAOS" : "⚡ CURRENT CHAOS"}{party.currentTrack.shielded && <b className="shield-badge">🛡️ SHIELDED · {boosToSkip} BOOS TO SKIP</b>}</p><h2 id="playing-title">{party.currentTrack.title}</h2><div className="track-meta-row"><p className="artist">🎤 {party.currentTrack.artist}</p>{currentTrackUrl && <a className={`spotify-save-link ${currentTrackIsYouTube ? "youtube-open-link" : ""}`} href={currentTrackUrl} target="_blank" rel="noreferrer" aria-label={`Open ${party.currentTrack.title} by ${party.currentTrack.artist} on ${currentTrackIsYouTube ? "YouTube" : "Spotify"}`}>{currentTrackIsYouTube ? "▶ Open on YouTube ↗" : "＋ Add to my Spotify ↗"}</a>}</div><p className="submitted">🕵️ Submitted by a mystery human</p>{!ended && party.powerUps.shieldUsableNow && <button className="shield-button" type="button" onClick={() => void shieldMySong()} disabled={busy}>🛡️ Shield my song · once per party</button>}</div></div>
             {!ended && <div className="reaction-panel"><div className="reaction-actions">
               <button className={`reaction-button cheer ${myReaction === "up" ? "selected" : ""}`} type="button" onClick={() => void react("up")} disabled={busy || Boolean(myReaction)} aria-pressed={myReaction === "up"}><span className="reaction-icon" aria-hidden="true">🙌</span><span><strong>CHEER</strong><small>{myReaction === "up" ? "locked in" : myReaction ? "vote already locked" : "make some noise"}</small></span>{myReaction === "up" && <b className="your-vote-badge">✓ YOUR VOTE</b>}</button>
               <button className={`reaction-button boo ${myReaction === "down" ? "selected" : ""}`} type="button" onClick={() => void react("down")} disabled={busy || Boolean(myReaction)} aria-pressed={myReaction === "down"}><span className="reaction-icon" aria-hidden="true">👻</span><span><strong>BOO</strong><small>{myReaction === "down" ? "locked anonymously" : myReaction ? "vote already locked" : "3 boos skip it"}</small></span>{myReaction === "down" && <b className="your-vote-badge">✓ YOUR VOTE</b>}</button>
-            </div>{myReaction && <div className="reaction-choice-note" role="status"><strong>{myReaction === "up" ? "🙌 You cheered" : "👻 You booed anonymously"}</strong><span>Vote locked for this song. No take-backs.</span></div>}<div className="boo-meter"><span className="boo-count">{boos}</span><div><strong>{boos === 0 ? "👻 NO BOOS YET" : boos === 1 ? "👻 ONE BOO IN" : "😬 ONE BOO TO GO"}</strong><small>{Math.max(0, 3 - boos)} more and it’s gone.</small></div><div className="meter-pips" aria-label={`${boos} of three boos`}>{[0, 1, 2].map((index) => <i className={index < boos ? "filled" : ""} key={index} />)}</div></div></div>}
+            </div>{!myReaction && party.powerUps.boostAvailable && <button className={`boost-toggle ${boostArmed ? "armed" : ""}`} type="button" aria-pressed={boostArmed} onClick={() => setBoostArmed((value) => !value)}>{boostArmed ? "⚡ Double cheer armed · your next cheer is worth +6" : "⚡ Arm my double cheer · +6, once per party"}</button>}{myReaction && <div className="reaction-choice-note" role="status"><strong>{myReaction === "up" ? "🙌 You cheered" : "👻 You booed anonymously"}</strong><span>Vote locked for this song. No take-backs.</span></div>}<div className="boo-meter"><span className="boo-count">{boos}</span><div><strong>{boos === 0 ? "👻 NO BOOS YET" : boos >= boosToSkip - 1 ? "😬 ONE BOO TO GO" : boos === 1 ? "👻 ONE BOO IN" : `👻 ${boos} BOOS IN`}</strong><small>{Math.max(0, boosToSkip - boos)} more and it’s gone.</small></div><div className="meter-pips" aria-label={`${boos} of ${boosToSkip} boos`}>{Array.from({ length: boosToSkip }, (_, index) => <i className={index < boos ? "filled" : ""} key={index} />)}</div></div><div className="flair-bar" role="group" aria-label="Quick emoji reactions for the host screen">{FLAIR_EMOJIS.map((emoji) => <button type="button" onClick={() => void sendFlair(emoji)} key={emoji} aria-label={`Send ${emoji} to the host screen`}>{emoji}</button>)}<small>Unscored. Lands on the host screen.</small></div>{party.guessOptions.length > 0 && <div className="guess-card"><div><strong>🕵️ Who picked this one?</strong><small>+2 points if you are right. Change your mind until the song ends.</small></div><div className="guess-chips">{party.guessOptions.map((person) => <button className={party.myGuess === person.id ? "selected" : ""} type="button" aria-pressed={party.myGuess === person.id} disabled={guessBusy} onClick={() => void guessPicker(person.id, person.name)} key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><span>{person.name}</span></button>)}</div></div>}</div>}
           </> : <div className="empty-player-copy"><span>{ended ? "🏁" : lobby ? "🤫" : hasPlayedSong ? "🎚️" : "🦗"}</span><h2 id="playing-title">{ended ? "The room has spoken." : lobby ? "The queue is undercover." : hasPlayedSong ? "The last song left the chat." : "Silence has entered the chat."}</h2><p>{ended ? "🏆 Final scores are frozen. The music stopped; the bragging did not." : lobby ? "🎵 Add secret songs now. Reactions unlock when the host starts the party." : hasPlayedSong ? "🎵 That song finished. Add another secret song and keep the speaker employed." : "🎵 Add the first song and the room starts immediately."}</p>{!ended && <button type="button" onClick={() => setAddOpen(true)}>{lobby ? "🤫 Add a secret song →" : hasPlayedSong ? "🎶 Add another song →" : "🎶 Add the first song →"}</button>}</div>}
         </section>
 
@@ -283,6 +380,7 @@ export default function PartyRoom({ code }: { code: string }) {
         </aside>
       </div>}
 
+      {party && !ended && party.lastSong && <section className="reveal-card" aria-labelledby="reveal-title"><div className="reveal-topline"><p className="eyebrow">📼 LAST SONG · MYSTERY SOLVED</p><b className={`song-outcome ${party.lastSong.status === "played" ? "played" : party.lastSong.skipReason === "boos" ? "boos" : "host"}`}>{party.lastSong.status === "played" ? "✅ PLAYED TO THE END" : party.lastSong.skipReason === "boos" ? `🪦 BOOED OFF${party.lastSong.skipPercent === null ? "" : ` AT ${party.lastSong.skipPercent}%`}` : "⏭️ SKIPPED BY HOST"}</b></div><h2 id="reveal-title" dir="auto">{party.lastSong.title}</h2><p className="reveal-artist" dir="auto">🎤 {party.lastSong.artist}</p><div className="reveal-picker"><span className={`avatar ${party.lastSong.submitterColor}`}>{party.lastSong.submitterAvatar}</span><div><small>PICKED BY</small><strong>{party.lastSong.submittedBy}</strong></div><div className="reveal-guesses"><small>DETECTIVES</small><strong>{party.lastSong.totalGuesses ? `${party.lastSong.correctGuesses} of ${party.lastSong.totalGuesses} guessed right` : "Nobody dared to guess"}</strong></div></div>{party.lastSong.myGuessCorrect !== null && <p className={`reveal-my-guess ${party.lastSong.myGuessCorrect ? "right" : "wrong"}`}>{party.lastSong.myGuessCorrect ? "🕵️ You guessed right. +2 points, detective." : "🙈 You guessed wrong. The mystery human wins this round."}</p>}{party.lastSong.mine && <p className="reveal-my-guess mine">🫵 That was your song. Everyone knows now.</p>}</section>}
       {party && <section className="activity-card"><div className="card-title-row"><h2>🔊 ROOM NOISE</h2><span>📜 FULL PARTY HISTORY</span></div><div className="activity-list" role="log" aria-live="polite" aria-label="Scrollable history of songs and reactions since the party began">{[...(party.activity ?? [])].reverse().map((item) => <div className={`activity-row ${item.tone}${item.tone === "song" ? " song-start" : ""}`} key={item.id}><span className="activity-avatar">{item.avatar}</span>{item.tone === "song" ? <p><strong>🎶 Now playing:</strong> <span dir="auto">{item.trackTitle}</span></p> : <p><span className="activity-emoji" aria-hidden="true">{item.tone === "up" ? "🎉" : "👻"}</span> <strong>{item.name}</strong> {item.message} <b dir="auto">“{item.trackTitle}”</b></p>}<span className="activity-icon" aria-hidden="true">{item.icon}</span><time dateTime={item.createdAt}>{formatActivityTime(item.createdAt)}</time></div>)}{!(party.activity ?? []).length && <p className="quiet-feed">{ended ? "📼 A remarkably peaceful party. No songs or reactions made the history book." : "🦗 It’s suspiciously quiet in here… The full story will appear here."}</p>}</div><p className="activity-scroll-hint">↕️ Scroll through the history. At either end, keep scrolling to continue through the page.</p></section>}
 
       {party && <section className="my-music-card" aria-labelledby="my-music-title">
@@ -321,7 +419,7 @@ export default function PartyRoom({ code }: { code: string }) {
       }}><section className="song-modal spotify-song-modal" role="dialog" aria-modal="true" aria-hidden={spotifyHelpOpen || undefined} aria-labelledby="add-song-title"><div className="modal-topline"><div><p className="eyebrow">🤫 SECRET WEAPON</p><h2 id="add-song-title">{roomIsYouTube ? "▶️ Add a YouTube video" : "🎵 Add a Spotify song"}</h2></div><button className="close-button" type="button" onClick={() => {
         setSpotifyHelpOpen(false);
         setAddOpen(false);
-      }} aria-label="Close">×</button></div><div className="spotify-add-guide"><div><strong>{roomIsYouTube ? "▶️ YouTube → Share → Copy link" : "🟢 Spotify → Share → Copy song link"}</strong><span>{roomIsYouTube ? "This room plays YouTube only. Paste the video link below; its title is checked before it joins the secret queue." : "This room plays Spotify only. Paste the track below; its title is checked before it joins the secret queue."}</span></div>{!roomIsYouTube && <button className="spotify-how-button" type="button" aria-haspopup="dialog" onClick={() => setSpotifyHelpOpen(true)}>🤔 Show me how</button>}</div><form className="link-form spotify-link-form" onSubmit={(event) => void submitLink(event)}><label htmlFor="song-link">{roomIsYouTube ? "YOUTUBE VIDEO LINK" : "SPOTIFY TRACK LINK"}</label><input id="song-link" name="song-link" type="url" inputMode="url" autoComplete="off" placeholder={roomIsYouTube ? "Paste a YouTube video link…" : "Paste a full track or short /s/ link…"} required /><button type="submit" disabled={busy || party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON}>{busy ? "🔎 Checking the link…" : party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON ? "🚧 Your waiting queue is full" : "🤫 Add to the secret queue →"}</button></form><p className="queue-note">🕵️ The queue stays secret. You have {Math.max(0, MAX_PENDING_TRACKS_PER_PERSON - party.pendingCount)} of {MAX_PENDING_TRACKS_PER_PERSON} waiting slots left. Played and skipped songs free their slots.</p></section></div>}
+      }} aria-label="Close">×</button></div>{party.theme && <p className="theme-hint">🎯 Round theme: <strong dir="auto">{party.theme}</strong></p>}<div className="spotify-add-guide"><div><strong>{roomIsYouTube ? "▶️ YouTube → Share → Copy link" : "🟢 Spotify → Share → Copy song link"}</strong><span>{roomIsYouTube ? "This room plays YouTube only. Paste the video link below; its title is checked before it joins the secret queue." : "This room plays Spotify only. Paste the track below; its title is checked before it joins the secret queue."}</span></div>{!roomIsYouTube && <button className="spotify-how-button" type="button" aria-haspopup="dialog" onClick={() => setSpotifyHelpOpen(true)}>🤔 Show me how</button>}</div><form className="link-form spotify-link-form" onSubmit={(event) => void submitLink(event)}><label htmlFor="song-link">{roomIsYouTube ? "YOUTUBE VIDEO LINK" : "SPOTIFY TRACK LINK"}</label><input id="song-link" name="song-link" type="url" inputMode="url" autoComplete="off" placeholder={roomIsYouTube ? "Paste a YouTube video link…" : "Paste a full track or short /s/ link…"} required /><button type="submit" disabled={busy || party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON}>{busy ? "🔎 Checking the link…" : party.pendingCount >= MAX_PENDING_TRACKS_PER_PERSON ? "🚧 Your waiting queue is full" : "🤫 Add to the secret queue →"}</button></form><p className="queue-note">🕵️ The queue stays secret. You have {Math.max(0, MAX_PENDING_TRACKS_PER_PERSON - party.pendingCount)} of {MAX_PENDING_TRACKS_PER_PERSON} waiting slots left. Played and skipped songs free their slots.</p></section></div>}
 
       {spotifyHelpOpen && <div className="modal-backdrop spotify-help-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && closeSpotifyHelp()}><section className="spotify-help-card" role="dialog" aria-modal="true" aria-labelledby="spotify-help-title"><div className="modal-topline"><div><p className="eyebrow">🟢 THREE TAPS · ZERO DJ DEGREE</p><h2 id="spotify-help-title">Borrow the link. Keep the chaos.</h2></div><button className="close-button" type="button" onClick={closeSpotifyHelp} aria-label="Close Spotify instructions" ref={spotifyHelpCloseRef}>×</button></div><p className="spotify-help-intro">Spotify buried the useful button under a tiny menu. Naturally. Here is the escape route.</p><div className="spotify-help-steps">
         <article className="spotify-help-step step-song"><div className="spotify-step-top"><span>01</span><strong>Find the actual song</strong></div><div className="spotify-mini-screen spotify-song-screen" aria-hidden="true"><div className="mini-spotify-bar"><b>●</b><span>SPOTIFY</span></div><div className="mini-song-row"><i>♪</i><span><strong>Your excellent song</strong><small>Mystery artist</small></span><b>•••</b></div><em>tap the dots ↗</em></div><p>Open the song itself, then tap the <strong>•••</strong> menu. A playlist link is not invited to this party.</p></article>
@@ -334,6 +432,7 @@ export default function PartyRoom({ code }: { code: string }) {
       {nameOpen && party && <div className="modal-backdrop name-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setNameOpen(false)}><form className="name-picker-card" role="dialog" aria-modal="true" aria-labelledby="name-picker-title" onSubmit={(event) => void changeName(event)}><div className="modal-topline"><div><p className="eyebrow">🎤 WITNESS PROTECTION, BUT FESTIVE</p><h2 id="name-picker-title">Rename your human</h2></div><button className="close-button" type="button" onClick={() => setNameOpen(false)} aria-label="Close name editor">×</button></div><p className="name-picker-intro">New nickname, same suspicious music taste. Everyone in this room will see the update.</p><label htmlFor="party-name-edit">YOUR NEW PARTY NAME</label><input id="party-name-edit" value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} minLength={2} maxLength={24} autoComplete="nickname" autoFocus required /><div className="name-picker-count"><span>Keep it recognizable-ish.</span><b>{nameDraft.length}/24</b></div><button className="name-save-button" type="submit" disabled={busy}>{busy ? "🎛️ Remixing identity…" : "✨ Save my new legend →"}</button><p className="avatar-privacy-note">👻 Your boos remain anonymous. Even from your new identity.</p></form></div>}
 
       {!participantId && !ended && <div className="modal-backdrop join-backdrop"><form className="join-card" onSubmit={join}><span className="join-mark">HM</span><p className="eyebrow">🎟️ ROOM {room.code}</p><h2>{lobby ? "The pre-party is open 🌙" : "Who just walked in? 👀"}</h2><p>You’re joining <strong>{room.title}</strong>. {lobby ? "Tell the room what to call you, then start hiding songs in the queue." : "Tell the room what to call you, then collect your 30 points ⭐"}</p><label htmlFor="join-name">YOUR NAME — SHOWN TO EVERYONE</label><input id="join-name" value={joinName} onChange={(event) => setJoinName(event.target.value)} maxLength={24} autoComplete="nickname" placeholder="Type your name or nickname (e.g. Maya)" required /><small className="join-name-hint">👋 This is how other humans will see you. It is not the room code.</small><small className="join-source-hint">{room.musicSource === "youtube" ? "▶️ This room plays YouTube videos. Have your video links ready." : "🟢 This room plays Spotify tracks. Have your song links ready."}</small>{room.requiresPasscode && <><label htmlFor="join-passcode">ROOM PASSCODE — ASK THE HOST</label><input id="join-passcode" value={joinPasscode} onChange={(event) => setJoinPasscode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} minLength={4} maxLength={12} autoComplete="one-time-code" placeholder="Enter the host’s passcode" required /></>}<button type="submit" disabled={busy}>{busy ? "🔐 Checking the guest list…" : lobby ? "🌙 Enter the lobby →" : "🥳 Enter the party →"}</button><small>🔐 Room code + passcode keeps random party crashers outside.</small></form></div>}
+      <div className="flyaway-layer" aria-hidden="true">{flyaways.map((item) => <span style={{ left: `${item.x}%` }} key={item.id}>{item.emoji}</span>)}</div>
       {notice && <div className="toast" role="status">{notice}</div>}
     </main>
   );

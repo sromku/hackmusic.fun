@@ -69,7 +69,7 @@ export function mySongStatusLabel(song: Pick<MySong, "status" | "skipReason" | "
 
 export function hostSongOutcome(track: HostSongHistory) {
   if (track.status === "played") return { label: "✅ PLAYED TO THE END", tone: "played" } as const;
-  if (track.skipReason === "boos") return { label: track.skipPercent === null ? "👻 BOOED OFF" : `👻 BOOED OFF AT ${track.skipPercent}%`, tone: "boos" } as const;
+  if (track.skipReason === "boos") return { label: track.skipPercent === null ? "🪦 BOOED OFF" : `🪦 BOOED OFF AT ${track.skipPercent}%`, tone: "boos" } as const;
   if (track.skipReason === "host") return { label: "⏭️ SKIPPED BY HOST", tone: "host" } as const;
   return { label: "⏭️ SKIPPED", tone: "unknown" } as const;
 }

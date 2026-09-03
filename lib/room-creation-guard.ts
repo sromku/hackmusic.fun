@@ -97,12 +97,22 @@ export async function protectPartyAction(request: Request, action: string, code:
     if (participantId) await consumeRequestLimit(request, { bucket: "react-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 12 });
     return;
   }
+  if (action === "flair") {
+    await consumeRequestLimit(request, { bucket: "flair-room", subject: normalizedCode, windowMs: 60_000, maximum: 600 });
+    if (participantId) await consumeRequestLimit(request, { bucket: "flair-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 20 });
+    return;
+  }
+  if (action === "guess" || action === "shield") {
+    await consumeRequestLimit(request, { bucket: `${action}-room`, subject: normalizedCode, windowMs: 60_000, maximum: 240 });
+    if (participantId) await consumeRequestLimit(request, { bucket: `${action}-person`, subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 12 });
+    return;
+  }
   if (action === "claimHost") {
     await consumeRequestLimit(request, { bucket: "claim-host-room", subject: normalizedCode, windowMs: 60_000, maximum: 30 });
     if (participantId) await consumeRequestLimit(request, { bucket: "claim-host-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 8 });
     return;
   }
-  if (["start", "skip", "advance", "end", "rename", "queueMode", "passcode", "prepareHostTransfer", "cancelHostTransfer", "skipProgress"].includes(action)) {
+  if (["start", "skip", "advance", "end", "rename", "queueMode", "passcode", "prepareHostTransfer", "cancelHostTransfer", "skipProgress", "theme"].includes(action)) {
     await consumeRequestLimit(request, { bucket: "host-control", subject: normalizedCode, windowMs: 60_000, maximum: 90 });
   }
 }

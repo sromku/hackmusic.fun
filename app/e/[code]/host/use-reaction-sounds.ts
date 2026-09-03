@@ -8,6 +8,7 @@ export type MusicVolumeControl = {
 };
 
 type ReactionKind = "up" | "down";
+export type SoundEffectKind = "sting" | "scratch" | "airhorn" | "slam";
 type AudioSessionNavigator = Navigator & { audioSession?: { type: string } };
 
 const REACTION_DUCK_VOLUME = 0.28;
@@ -162,6 +163,8 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
       if (!(await ensureContextRunning(context))) return false;
       source = context.createBufferSource();
       source.buffer = buffer;
+      // Slight random pitch so a crowd of identical reactions does not sound like a sample pad.
+      source.playbackRate.value = 0.93 + Math.random() * 0.14;
       source.connect(context.destination);
       source.onended = restoreMusic;
       activeSourcesRef.current.add(source);
@@ -177,6 +180,10 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
       try { element.currentTime = 0; } catch { /* not seekable yet */ }
       element.volume = 1;
       element.muted = false;
+      try {
+        (element as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = false;
+        element.playbackRate = 0.93 + Math.random() * 0.14;
+      } catch { /* pitch variation is optional */ }
       element.onended = restoreMusic;
       element.onerror = restoreMusic;
       activeElementsRef.current.add(element);
@@ -259,6 +266,101 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
     };
   }, [ensureElementPool]);
 
+  /** Synthesized one-shot effects for dramatic moments. Web Audio only; silently skipped when the mixer is not running. */
+  const playEffect = useCallback((kind: SoundEffectKind) => {
+    const context = audioContextRef.current;
+    if (!enabledRef.current || !context || (context.state as string) !== "running") return;
+    const now = context.currentTime;
+    const master = context.createGain();
+    master.connect(context.destination);
+    const envelope = (node: GainNode, peak: number, attack: number, hold: number, release: number) => {
+      node.gain.setValueAtTime(0.0001, now);
+      node.gain.exponentialRampToValueAtTime(peak, now + attack);
+      node.gain.setValueAtTime(peak, now + attack + hold);
+      node.gain.exponentialRampToValueAtTime(0.0001, now + attack + hold + release);
+    };
+    const noiseBuffer = (seconds: number) => {
+      const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * seconds), context.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let index = 0; index < data.length; index += 1) data[index] = Math.random() * 2 - 1;
+      return buffer;
+    };
+    let total = 1.5;
+    if (kind === "sting") {
+      const filter = context.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(320, now);
+      filter.frequency.linearRampToValueAtTime(900, now + 1.2);
+      filter.connect(master);
+      [55, 82.5, 110].forEach((frequency, index) => {
+        const oscillator = context.createOscillator();
+        oscillator.type = "sawtooth";
+        oscillator.frequency.value = frequency;
+        oscillator.detune.value = index * 7;
+        oscillator.connect(filter);
+        oscillator.start(now);
+        oscillator.stop(now + 1.6);
+      });
+      const tremolo = context.createOscillator();
+      const tremoloDepth = context.createGain();
+      tremolo.frequency.value = 6.5;
+      tremoloDepth.gain.value = 0.35;
+      tremolo.connect(tremoloDepth).connect(master.gain);
+      tremolo.start(now);
+      tremolo.stop(now + 1.6);
+      envelope(master, 0.55, 0.08, 1.0, 0.45);
+      total = 1.7;
+    } else if (kind === "scratch") {
+      const source = context.createBufferSource();
+      source.buffer = noiseBuffer(0.6);
+      const filter = context.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.Q.value = 6;
+      filter.frequency.setValueAtTime(2400, now);
+      filter.frequency.exponentialRampToValueAtTime(260, now + 0.5);
+      source.connect(filter).connect(master);
+      source.start(now);
+      source.stop(now + 0.6);
+      envelope(master, 0.7, 0.02, 0.3, 0.25);
+      total = 0.7;
+    } else if (kind === "airhorn") {
+      const filter = context.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = 2600;
+      filter.connect(master);
+      [0, -9, 12].forEach((cents) => {
+        const oscillator = context.createOscillator();
+        oscillator.type = "sawtooth";
+        oscillator.frequency.setValueAtTime(520, now);
+        oscillator.frequency.exponentialRampToValueAtTime(440, now + 0.18);
+        oscillator.detune.value = cents;
+        oscillator.connect(filter);
+        oscillator.start(now);
+        oscillator.stop(now + 1.5);
+      });
+      envelope(master, 0.5, 0.03, 1.05, 0.35);
+      total = 1.5;
+    } else {
+      const oscillator = context.createOscillator();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(110, now);
+      oscillator.frequency.exponentialRampToValueAtTime(28, now + 0.5);
+      oscillator.connect(master);
+      oscillator.start(now);
+      oscillator.stop(now + 0.9);
+      const thud = context.createBufferSource();
+      thud.buffer = noiseBuffer(0.2);
+      const thudGain = context.createGain();
+      thudGain.gain.setValueAtTime(0.4, now);
+      thudGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+      thud.connect(thudGain).connect(master);
+      thud.start(now);
+      envelope(master, 0.9, 0.01, 0.35, 0.5);
+      total = 0.95;
+    }
+    window.setTimeout(() => { try { master.disconnect(); } catch { /* already gone */ } }, total * 1_000 + 100);
+  }, []);
+
   const inspect = useCallback(() => ({
     contextState: (audioContextRef.current?.state as string | undefined) ?? null,
     buffersLoaded: Boolean(buffersRef.current),
@@ -266,5 +368,5 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
     poolSize: ELEMENT_POOL_SIZE * 2,
   }), []);
 
-  return { enabled, play, enableAndTest, disable, inspect };
+  return { enabled, play, playEffect, enableAndTest, disable, inspect };
 }

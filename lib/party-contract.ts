@@ -11,6 +11,7 @@ export type PartyTrack = {
   artist: string;
   duration: string;
   color: PartyColor;
+  shielded?: boolean;
 };
 
 export type PartyPerson = {
@@ -29,6 +30,7 @@ export type PartyReaction = {
   message: string;
   icon: "▲" | "▼";
   tone: ReactionTone;
+  boosted?: boolean;
   createdAt?: string;
 };
 
@@ -41,6 +43,52 @@ export type PartyActivity = {
   icon: string;
   tone: ReactionTone | "song";
   trackTitle: string;
+  createdAt: string;
+};
+
+export type PartyPowerUps = {
+  shieldAvailable: boolean;
+  shieldUsableNow: boolean;
+  boostAvailable: boolean;
+};
+
+export type LastSongReveal = {
+  queueId: string;
+  title: string;
+  artist: string;
+  submittedBy: string;
+  submitterAvatar: string;
+  submitterColor: PartyColor;
+  mine: boolean;
+  status: "played" | "skipped";
+  skipReason: "boos" | "host" | null;
+  skipPercent: number | null;
+  totalGuesses: number;
+  correctGuesses: number;
+  myGuessCorrect: boolean | null;
+};
+
+export type PartyAward = {
+  id: string;
+  emoji: string;
+  title: string;
+  winnerId: string;
+  winnerName: string;
+  winnerAvatar: string;
+  winnerColor: PartyColor;
+  detail: string;
+};
+
+export type PartyRecap = {
+  songsPlayed: number;
+  songsBooedOff: number;
+  reactions: number;
+};
+
+export type HostFlair = {
+  id: string;
+  emoji: string;
+  avatar: string;
   createdAt: string;
 };
 
@@ -70,6 +118,13 @@ export type ParticipantParty = {
   viewer: PartyPerson;
   viewerDisplayName: string;
   musicSource: MusicSource;
+  theme: string | null;
+  powerUps: PartyPowerUps;
+  guessOptions: PartyPerson[];
+  myGuess: string | null;
+  lastSong: LastSongReveal | null;
+  awards?: PartyAward[];
+  recap?: PartyRecap;
   people: PartyPerson[];
   currentTrack: PartyTrack | null;
   reactions: PartyReaction[];
@@ -112,14 +167,19 @@ export type HostParty = {
   scheduledFor: string | null;
   requiresPasscode: boolean;
   musicSource: MusicSource;
+  theme: string | null;
+  lastSong: LastSongReveal | null;
+  awards?: PartyAward[];
+  recap?: PartyRecap;
   currentTrack: PartyTrack | null;
   people: Array<Omit<PartyPerson, "score"> & { score: number }>;
-  reactions: Array<{ id: string; tone: ReactionTone }>;
+  reactions: Array<{ id: string; tone: ReactionTone; boosted?: boolean }>;
   queueCount: number;
   queueMode: QueueMode;
   queuedTracks: HostQueuedTrack[];
   songHistory: HostSongHistory[];
   activity?: Array<{ id: string; tone: ReactionTone | "song"; createdAt: string }>;
+  flair?: HostFlair[];
 };
 
 export type HostTransfer = {
@@ -146,7 +206,11 @@ export type PartyAction =
   | "prepareHostTransfer"
   | "cancelHostTransfer"
   | "claimHost"
-  | "skipProgress";
+  | "skipProgress"
+  | "flair"
+  | "shield"
+  | "guess"
+  | "theme";
 
 export type PartyRequest = {
   action?: PartyAction;
@@ -170,4 +234,8 @@ export type PartyRequest = {
   transferToken?: string;
   skipPercent?: number;
   track?: PartyTrack;
+  emoji?: string;
+  boost?: boolean;
+  guessParticipantId?: string;
+  theme?: string;
 };

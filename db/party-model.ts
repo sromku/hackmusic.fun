@@ -11,6 +11,7 @@ export type EventRow = {
   scheduled_for: string | null;
   queue_mode: QueueMode;
   music_source: MusicSource;
+  theme: string | null;
   current_submission_id: string | null;
   host_pin: string;
   join_passcode_hash: string | null;
@@ -25,6 +26,8 @@ export type ParticipantRow = {
   initials: string;
   color: string;
   score: number;
+  shield_used?: number;
+  boost_used?: number;
 };
 
 export type SubmissionRow = {
@@ -35,6 +38,8 @@ export type SubmissionRow = {
   artist: string;
   duration: string;
   color: string;
+  shielded?: number;
+  shield_absorbed?: number;
 };
 
 export type QueuedSubmissionRow = SubmissionRow & {
@@ -72,6 +77,7 @@ export type ReactionRow = {
   id: string;
   participant_id: string;
   kind: string;
+  weight?: number;
   created_at: string;
   display_name: string;
   initials: string;
@@ -123,7 +129,7 @@ export function collapseLegacyReactionActivity(rows: ActivityRow[]) {
 
 export async function loadEvent(code: string) {
   await ensurePartySchema();
-  return getD1().prepare(`SELECT id, code, title, status, scheduled_for, queue_mode, music_source,
+  return getD1().prepare(`SELECT id, code, title, status, scheduled_for, queue_mode, music_source, theme,
       current_submission_id, host_pin, join_passcode_hash, join_passcode_salt, created_at
     FROM events WHERE code = ?`)
     .bind(normalizeRoomCode(code)).first<EventRow>();

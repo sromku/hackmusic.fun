@@ -8,6 +8,7 @@ export const events = sqliteTable("events", {
   scheduledFor: text("scheduled_for"),
   queueMode: text("queue_mode").notNull().default("ordered"),
   musicSource: text("music_source").notNull().default("spotify"),
+  theme: text("theme"),
   currentSubmissionId: text("current_submission_id"),
   hostPin: text("host_pin").notNull(),
   joinPasscodeHash: text("join_passcode_hash"),
@@ -23,6 +24,8 @@ export const participants = sqliteTable("participants", {
   initials: text("initials").notNull(),
   color: text("color").notNull(),
   score: integer("score").notNull().default(30),
+  shieldUsed: integer("shield_used").notNull().default(0),
+  boostUsed: integer("boost_used").notNull().default(0),
   createdAt: text("created_at").notNull(),
 }, (table) => [
   index("participants_event_idx").on(table.eventId),
@@ -40,6 +43,8 @@ export const submissions = sqliteTable("submissions", {
   status: text("status").notNull().default("pending"),
   skipReason: text("skip_reason"),
   skipPercent: integer("skip_percent"),
+  shielded: integer("shielded").notNull().default(0),
+  shieldAbsorbed: integer("shield_absorbed").notNull().default(0),
   submittedAt: text("submitted_at").notNull(),
 }, (table) => [
   uniqueIndex("submissions_event_track_unique").on(table.eventId, table.providerTrackId),
@@ -52,6 +57,7 @@ export const reactions = sqliteTable("reactions", {
   submissionId: text("submission_id").notNull(),
   participantId: text("participant_id").notNull(),
   kind: text("kind").notNull(),
+  weight: integer("weight").notNull().default(1),
   createdAt: text("created_at").notNull(),
 }, (table) => [
   uniqueIndex("reactions_submission_participant_unique").on(table.submissionId, table.participantId),
@@ -66,6 +72,30 @@ export const activityEvents = sqliteTable("activity_events", {
   createdAt: text("created_at").notNull(),
 }, (table) => [
   index("activity_events_event_created_idx").on(table.eventId, table.createdAt, table.id),
+]);
+
+export const flairEvents = sqliteTable("flair_events", {
+  id: text("id").primaryKey(),
+  eventId: text("event_id").notNull(),
+  submissionId: text("submission_id"),
+  participantId: text("participant_id").notNull(),
+  emoji: text("emoji").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  index("flair_events_event_created_idx").on(table.eventId, table.createdAt, table.id),
+]);
+
+export const songGuesses = sqliteTable("song_guesses", {
+  id: text("id").primaryKey(),
+  eventId: text("event_id").notNull(),
+  submissionId: text("submission_id").notNull(),
+  participantId: text("participant_id").notNull(),
+  guessedParticipantId: text("guessed_participant_id").notNull(),
+  correct: integer("correct"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("song_guesses_submission_participant_unique").on(table.submissionId, table.participantId),
+  index("song_guesses_event_idx").on(table.eventId),
 ]);
 
 export const hostTransfers = sqliteTable("host_transfers", {

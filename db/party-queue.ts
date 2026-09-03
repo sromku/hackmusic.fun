@@ -1,6 +1,7 @@
 import { getD1 } from ".";
 import type { EventRow, SubmissionRow } from "./party-model";
 import { durationMilliseconds } from "../lib/party-format";
+import { GUESS_BONUS_POINTS } from "../lib/party-fun";
 
 export async function estimateSkipPercent(event: EventRow, current: SubmissionRow) {
   const duration = durationMilliseconds(current.duration);
@@ -51,6 +52,13 @@ export async function advanceCurrentTrack(
   if (event.current_submission_id) {
     statements.push(d1.prepare("UPDATE submissions SET status = ?, skip_reason = ?, skip_percent = ? WHERE id = ?")
       .bind(finishedStatus, finishedStatus === "skipped" ? skipReason : null, finishedStatus === "skipped" ? skipPercent : null, event.current_submission_id));
+    // Resolve "guess who picked it" votes for the finished song and pay the bonus once.
+    statements.push(d1.prepare(`UPDATE participants SET score = score + ? WHERE id IN (
+      SELECT participant_id FROM song_guesses
+      WHERE submission_id = ? AND correct IS NULL AND guessed_participant_id = (SELECT participant_id FROM submissions WHERE id = ?)
+    )`).bind(GUESS_BONUS_POINTS, event.current_submission_id, event.current_submission_id));
+    statements.push(d1.prepare(`UPDATE song_guesses SET correct = CASE WHEN guessed_participant_id = (SELECT participant_id FROM submissions WHERE id = ?) THEN 1 ELSE 0 END
+      WHERE submission_id = ? AND correct IS NULL`).bind(event.current_submission_id, event.current_submission_id));
   }
   if (next) {
     statements.push(d1.prepare("UPDATE submissions SET status = 'playing' WHERE id = ?").bind(next.id));
