@@ -7,6 +7,8 @@ import { artworkVariant, durationSeconds, formatActivityTime, formatMusicDuratio
 import { extractYouTubeVideoId, youtubeThumbnailUrl } from "../../../lib/youtube-track";
 import { FLAIR_EMOJIS, boosNeededToSkip } from "../../../lib/party-fun";
 import { MAX_PENDING_TRACKS_PER_PERSON } from "../../../lib/party-rules";
+import { isDevelopmentHost } from "../../../lib/dev-only";
+import { participantStorageKey, personaDisplayName, personaFromSearch } from "../../../lib/party-storage";
 import { shareRecapCard } from "../../../lib/recap-card";
 import type { MySong, ParticipantParty, PartyActivity, PartyColor, PartyTrack, RoomSummary } from "../../../lib/party-contract";
 
@@ -51,8 +53,17 @@ export default function PartyRoom({ code }: { code: string }) {
   const visiblePeople = party ? ended ? [...party.people].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)) : showEveryone ? party.people : party.people.slice(0, 4) : [];
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(`hackmusic:${code}:participant`) ?? "";
+    // Test personas exist only on development hosts; production ignores the parameter entirely.
+    const persona = isDevelopmentHost(window.location.hostname) ? personaFromSearch(window.location.search) : "";
+    const saved = window.localStorage.getItem(participantStorageKey(code, persona)) ?? "";
     const pendingHandoff = window.sessionStorage.getItem(`hackmusic:${code}:handoff`) ?? "";
+    if (persona && !saved) {
+      const presetPasscode = new URLSearchParams(window.location.search).get("passcode") ?? "";
+      queueMicrotask(() => {
+        setJoinName(personaDisplayName(persona));
+        if (presetPasscode) setJoinPasscode(presetPasscode.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12));
+      });
+    }
     if (saved && pendingHandoff) {
       window.sessionStorage.removeItem(`hackmusic:${code}:handoff`);
       window.location.replace(`/e/${code}/host#handoff=${encodeURIComponent(pendingHandoff)}`);
@@ -206,7 +217,7 @@ export default function PartyRoom({ code }: { code: string }) {
       const response = await fetch("/api/party", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "join", code, participantId: id, name: joinName, passcode: joinPasscode }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Could not join.");
-      window.localStorage.setItem(`hackmusic:${code}:participant`, id);
+      window.localStorage.setItem(participantStorageKey(code, isDevelopmentHost(window.location.hostname) ? personaFromSearch(window.location.search) : ""), id);
       const pendingHandoff = window.sessionStorage.getItem(`hackmusic:${code}:handoff`) ?? "";
       if (pendingHandoff) {
         window.sessionStorage.removeItem(`hackmusic:${code}:handoff`);

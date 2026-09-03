@@ -10,7 +10,7 @@ export async function requestWorker(pathname = "/", init = {}, bindings = {}) {
   if (init.method && init.method !== "GET" && !headers.has("origin")) headers.set("origin", "http://localhost");
 
   return worker.fetch(
-    new Request(`http://localhost${pathname}`, { ...init, headers }),
+    new Request(pathname.startsWith("http") ? pathname : `http://localhost${pathname}`, { ...init, headers }),
     { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) }, ...bindings },
     { waitUntil() {}, passThroughOnException() {} },
   );

@@ -351,6 +351,7 @@ test("publishes crawler, sitemap, and install metadata without exposing private 
   assert.match(robots, /Disallow: \/api\//);
   assert.match(robots, /Disallow: \/e\//);
   assert.match(robots, /Disallow: \/host/);
+  assert.match(robots, /Disallow: \/lab\//);
   assert.doesNotMatch(robots, /admin|backstage-hm/i);
   assert.match(robots, /Sitemap: https:\/\/hackmusic\.fun\/sitemap\.xml/);
 
@@ -586,10 +587,39 @@ test("starts Spotify PKCE without exposing a client secret", async () => {
 
 test("adds API and private-route security headers", async () => {
   const response = await render("/e/ABC123");
-  assert.equal(response.headers.get("x-frame-options"), "DENY");
+  assert.equal(response.headers.get("x-frame-options"), "SAMEORIGIN");
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
   assert.equal(response.headers.get("referrer-policy"), "no-referrer");
-  assert.match(response.headers.get("content-security-policy") ?? "", /frame-ancestors 'none'/);
+  assert.match(response.headers.get("content-security-policy") ?? "", /frame-ancestors 'self'/);
+  const labResponse = await render("/lab/ABC123");
+  assert.equal(labResponse.status, 200);
+  assert.match(labResponse.headers.get("x-robots-tag") ?? "", /noindex/);
+  const labHtml = await labResponse.text();
+  assert.match(labHtml, /HackMusic Test Lab/);
+  assert.match(labHtml, /Room <strong>ABC123<\/strong>/);
+  const labSource = await readFile(new URL("app/lab/[code]/lab-room.tsx", projectRoot), "utf8");
+  assert.match(labSource, /persona=guest-\$\{index\}/);
+  assert.match(labSource, /participantStorageKey/);
+  const storage = await loadTypeScriptModule("lib/party-storage.ts");
+  assert.equal(storage.participantStorageKey("ABC123"), "hackmusic:ABC123:participant");
+  assert.equal(storage.participantStorageKey("ABC123", "guest-2"), "hackmusic:ABC123:participant:guest-2");
+  assert.equal(storage.participantStorageKey("ABC123", "../evil key!"), "hackmusic:ABC123:participant:evilkey");
+  assert.equal(storage.personaFromSearch("?persona=guest-3&passcode=VIBE42"), "guest-3");
+  assert.equal(storage.personaDisplayName("guest-3"), "Guest 3");
+  const participantSource = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
+  assert.match(participantSource, /isDevelopmentHost\(window\.location\.hostname\) \? personaFromSearch\(window\.location\.search\) : ""/);
+  const devOnly = await loadTypeScriptModule("lib/dev-only.ts");
+  for (const host of ["localhost", "app.localhost", "127.0.0.1", "10.0.0.5", "192.168.1.20", "172.20.3.4", "169.254.1.1", "::1", "[::1]", "roman-macbook.local"]) assert.equal(devOnly.isDevelopmentHost(host), true, host);
+  for (const host of ["hackmusic.fun", "www.hackmusic.fun", "172.32.0.1", "11.0.0.1", "192.169.1.1", "localhost.evil.com", ""]) assert.equal(devOnly.isDevelopmentHost(host), false, host);
+  // Production hosts: no lab page, no framing.
+  const { requestWorker } = await import("./support/worker.mjs");
+  const productionLab = await requestWorker("https://hackmusic.fun/lab/ABC123");
+  assert.equal(productionLab.status, 404);
+  assert.equal(productionLab.headers.get("x-frame-options"), "DENY");
+  const productionRoom = await requestWorker("https://hackmusic.fun/e/ABC123");
+  assert.equal(productionRoom.status, 200);
+  assert.equal(productionRoom.headers.get("x-frame-options"), "DENY");
+  assert.match(productionRoom.headers.get("content-security-policy") ?? "", /frame-ancestors 'none'/);
   assert.match(response.headers.get("x-robots-tag") ?? "", /noindex/);
   const partyRoute = await readFile(new URL("app/api/party/route.ts", projectRoot), "utf8");
   assert.match(partyRoute, /readBoundedJson/);

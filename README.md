@@ -67,6 +67,10 @@ These rules are enforced on the server, not merely hidden in the UI:
 
 When adding a feature, prefer one meaningful flow or edge-case test over implementation-specific line matching.
 
+## Testing a party from one browser
+
+Every tab in one browser profile normally shares the same guest identity. For multi-guest testing without a pile of phones, open `/lab/CODE` (development hosts only: localhost, private LAN addresses, and `.local` names; production returns 404 and ignores personas) for a room you created in that browser. It shows the host page plus up to eight guest frames, each joined as its own persona (`/e/CODE?persona=guest-2`), with the passcode pre-filled. Personas only change where the browser stores each guest's id; the server applies the passcode, membership, and one-vote rules exactly as it does for real phones. Click inside the host frame once so the browser allows audio and video there.
+
 ## Data and secrets
 
 Cloudflare D1 is exposed to the worker as the `DB` binding declared in `.openai/hosting.json`. Spotify and admin secrets belong in hosted secrets or ignored local environment files. Never commit client secrets, session encryption keys, host keys, passcodes, production database exports, or `.env*` files other than `.env.example`.
