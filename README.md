@@ -1,6 +1,6 @@
 # HackMusic
 
-HackMusic turns one speaker and a room full of opinions into a private music party game. A host connects Spotify Premium, guests secretly queue tracks, and each person gets one cheer or anonymous boo per song. Three boos skip the track; scores are revealed when the party ends.
+HackMusic turns one speaker and a room full of opinions into a private music party game. Guests secretly queue Spotify tracks or YouTube videos, the host device plays them (YouTube needs no account; Spotify tracks need a connected Spotify Premium account), and each person gets one cheer or anonymous boo per song. Three boos skip the track; scores are revealed when the party ends.
 
 The production site is [hackmusic.fun](https://hackmusic.fun).
 
@@ -35,9 +35,11 @@ The code follows a thin-route, explicit-domain-boundary shape:
 - `db/party-queue.ts` owns ordered, random, and fair-ish queue selection.
 - `lib/party-contract.ts` is the shared API/UI contract source of truth.
 - `lib/party-format.ts` contains pure display and duration helpers.
-- `app/e/[code]/host/use-reaction-sounds.ts` owns reaction audio mixing and Spotify volume ducking.
+- `lib/track-link.ts` detects the music source of a pasted link and dispatches to `lib/spotify-track.ts` or `lib/youtube-track.ts`.
+- `app/e/[code]/host/use-reaction-sounds.ts` owns reaction audio mixing and music volume ducking for whichever player is active.
+- `app/e/[code]/host/use-youtube-player.ts` owns the YouTube IFrame player lifecycle on the host page.
 - `app/e/[code]/host/use-screen-wake-lock.ts` owns screen wake-lock lifecycle behavior.
-- `app/e/[code]/host/spotify-sdk.ts` isolates the third-party SDK surface.
+- `app/e/[code]/host/spotify-sdk.ts` and `app/e/[code]/host/youtube-sdk.ts` isolate the third-party SDK surfaces.
 
 Keep platform concerns at the edges. UI components should consume shared contracts rather than re-declaring response shapes, API routes should delegate domain work, and queue policy should not leak into rendering code.
 
@@ -49,6 +51,7 @@ These rules are enforced on the server, not merely hidden in the UI:
 - A room passcode is required to join.
 - A room accepts at most 100 participants.
 - A participant may keep at most 100 pending songs.
+- A room plays one music source, Spotify or YouTube, chosen at creation; links from the other service are rejected.
 - A track may appear only once in an event.
 - A participant gets one immutable reaction per played song.
 - A participant cannot react to their own song.

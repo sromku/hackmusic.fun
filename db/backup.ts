@@ -15,7 +15,7 @@ export async function readPortableBackup() {
   await ensurePartySchema();
 
   const [events, participants, submissions, reactions, activityEvents, analyticsPageviews] = await Promise.all([
-    allRows(`SELECT id, code, title, status, scheduled_for, queue_mode, current_submission_id,
+    allRows(`SELECT id, code, title, status, scheduled_for, queue_mode, music_source, current_submission_id,
       host_pin, join_passcode_hash, join_passcode_salt, created_at
       FROM events ORDER BY created_at ASC, id ASC`),
     allRows(`SELECT id, public_id, event_id, display_name, initials, color, score, created_at

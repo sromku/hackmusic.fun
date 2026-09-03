@@ -9,6 +9,21 @@ export function spotifyTrackWebUrl(value: string) {
   return trackId ? `https://open.spotify.com/track/${trackId}` : "";
 }
 
+export function youtubeVideoWebUrl(value: string) {
+  const videoId = value.match(/youtube:video:([A-Za-z0-9_-]{11})/)?.[1];
+  return videoId ? `https://www.youtube.com/watch?v=${videoId}` : "";
+}
+
+export function trackWebUrl(value: string) {
+  return spotifyTrackWebUrl(value) || youtubeVideoWebUrl(value);
+}
+
+export function trackSourceLabel(value: string) {
+  if (value.startsWith("youtube:")) return "YouTube";
+  if (value.startsWith("spotify:")) return "Spotify";
+  return "";
+}
+
 export function formatActivityTime(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);

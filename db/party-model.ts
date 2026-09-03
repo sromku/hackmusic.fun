@@ -1,5 +1,5 @@
 import { ensurePartySchema, getD1 } from ".";
-import type { QueueMode } from "../lib/party-contract";
+import type { MusicSource, QueueMode } from "../lib/party-contract";
 
 export type { QueueMode } from "../lib/party-contract";
 
@@ -10,6 +10,7 @@ export type EventRow = {
   status: string;
   scheduled_for: string | null;
   queue_mode: QueueMode;
+  music_source: MusicSource;
   current_submission_id: string | null;
   host_pin: string;
   join_passcode_hash: string | null;
@@ -122,7 +123,7 @@ export function collapseLegacyReactionActivity(rows: ActivityRow[]) {
 
 export async function loadEvent(code: string) {
   await ensurePartySchema();
-  return getD1().prepare(`SELECT id, code, title, status, scheduled_for, queue_mode,
+  return getD1().prepare(`SELECT id, code, title, status, scheduled_for, queue_mode, music_source,
       current_submission_id, host_pin, join_passcode_hash, join_passcode_salt, created_at
     FROM events WHERE code = ?`)
     .bind(normalizeRoomCode(code)).first<EventRow>();

@@ -18,7 +18,7 @@ const sections = [
     title: "Who we are & scope",
     content: <>
       <p>HackMusic is a small, experimental web service operated from New Jersey, United States. In this policy, “HackMusic,” “we,” “us,” and “our” refer to the operator of hackmusic.fun.</p>
-      <p>This policy applies to the HackMusic website, temporary event rooms, host controls, and related support communications. It does not replace the privacy policies of Spotify, OpenAI, or other services you choose to use with HackMusic.</p>
+      <p>This policy applies to the HackMusic website, temporary event rooms, host controls, and related support communications. It does not replace the privacy policies of Spotify, YouTube (Google), OpenAI, or other services you choose to use with HackMusic.</p>
     </>,
   },
   {
@@ -28,7 +28,7 @@ const sections = [
       <h3>Information you provide</h3>
       <ul>
         <li>Event names and participant display names.</li>
-        <li>Spotify track links and the resulting track title, artist, duration, and Spotify track identifier.</li>
+        <li>Spotify track links or YouTube video links and the resulting title, artist or channel name, duration, and Spotify track or YouTube video identifier.</li>
         <li>Cheers, boos, queue choices, scores, and other event actions.</li>
         <li>Your email address and message if you contact us directly.</li>
       </ul>
@@ -49,7 +49,7 @@ const sections = [
     id: "use",
     title: "How we use information",
     content: <>
-      <p>We use information only to provide, understand, and protect the service: create and operate rooms, remember participants and the host device, validate Spotify tracks, control authorized playback, calculate scores, display event history, measure aggregate website usage, authenticate the owner-only administration page, prevent abuse, diagnose failures, answer support requests, and comply with law.</p>
+      <p>We use information only to provide, understand, and protect the service: create and operate rooms, remember participants and the host device, validate Spotify tracks and YouTube videos, control authorized playback, calculate scores, display event history, measure aggregate website usage, authenticate the owner-only administration page, prevent abuse, diagnose failures, answer support requests, and comply with law.</p>
       <p>We do not sell personal data. We do not use event data for targeted advertising, cross-site behavioral profiling, credit decisions, employment decisions, or other legally significant automated decisions.</p>
     </>,
   },
@@ -88,6 +88,7 @@ const sections = [
       <ul>
         <li>OpenAI Sites and ChatGPT sign-in, plus infrastructure/service providers that host, authenticate, secure, route, store, and operate HackMusic.</li>
         <li>Spotify, when a track is validated or the host authorizes and controls playback.</li>
+        <li>YouTube (Google), when a video link is validated and when the host page embeds YouTube’s player to play a submitted video. Google’s own cookies and data practices apply inside that embedded player.</li>
         <li>Other people in the same event room. Display names, cheers, tracks, event history, and scores may be visible as described in the interface; boo identities are hidden from participant views.</li>
         <li>Professional advisers, authorities, or other parties when reasonably necessary to comply with law, protect rights and safety, investigate abuse, or handle a business transfer.</li>
       </ul>
@@ -122,7 +123,7 @@ const sections = [
     id: "third-parties",
     title: "Third-party services",
     content: <>
-      <p>Third-party services—including Spotify, OpenAI Sites, infrastructure providers, browsers, networks, and connected speakers—are governed by their own terms and privacy practices. We do not control their independent collection, availability, security, policy changes, outages, or acts and omissions.</p>
+      <p>Third-party services—including Spotify, YouTube (Google), OpenAI Sites, infrastructure providers, browsers, networks, and connected speakers—are governed by their own terms and privacy practices. We do not control their independent collection, availability, security, policy changes, outages, or acts and omissions.</p>
       <p>Links to third-party sites are provided for convenience and do not make HackMusic responsible for those sites. This policy covers only information controlled by HackMusic.</p>
     </>,
   },
@@ -137,5 +138,5 @@ const sections = [
 ];
 
 export default function PrivacyPage() {
-  return <LegalPage eyebrow="🔐 YOUR DATA, MINUS THE DRAMA" title="Privacy Policy" summary="The short version: we collect what the party needs, use limited cookie-free traffic counts, skip ad tracking, and keep private event routes away from search bots." accent="mint" sections={sections} lastUpdated="August 23, 2026" />;
+  return <LegalPage eyebrow="🔐 YOUR DATA, MINUS THE DRAMA" title="Privacy Policy" summary="The short version: we collect what the party needs, use limited cookie-free traffic counts, skip ad tracking, and keep private event routes away from search bots." accent="mint" sections={sections} lastUpdated="September 3, 2026" />;
 }

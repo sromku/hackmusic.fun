@@ -22,7 +22,7 @@ const partyLessons = [
     kicker: "THE SECRET DROP",
     title: "Feed the mystery.",
     shout: "ADD A SONG. TELL NOBODY.",
-    body: "Join the private party, pick a human name, and paste a Spotify track. It disappears into a hidden queue. No peeking. No lobbying the DJ. No twelve-person committee meeting about tempo.",
+    body: "Join the private party, pick a human name, and paste a Spotify or YouTube link. It disappears into a hidden queue. No peeking. No lobbying the DJ. No twelve-person committee meeting about tempo.",
     equation: ["YOU", "+", "SPOTIFY LINK", "→", "SECRET QUEUE"],
     footnote: "The host sees the queue. The humans see suspense.",
   },
@@ -90,6 +90,7 @@ export default function Home() {
   const [roomPasscode, setRoomPasscode] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [preParty, setPreParty] = useState(false);
+  const [musicSource, setMusicSource] = useState<"spotify" | "youtube">("spotify");
   const [scheduledFor, setScheduledFor] = useState("");
   const [hostedRooms, setHostedRooms] = useState<HostedRoom[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -198,7 +199,7 @@ export default function Home() {
       const response = await fetch("/api/party", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "create", title: eventName, name: hostName, passcode: roomPasscode, preParty, scheduledFor: scheduledDate?.toISOString(), website: String(form.get("website") ?? "") }),
+        body: JSON.stringify({ action: "create", title: eventName, name: hostName, passcode: roomPasscode, musicSource, preParty, scheduledFor: scheduledDate?.toISOString(), website: String(form.get("website") ?? "") }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Could not create the room.");
@@ -254,7 +255,7 @@ export default function Home() {
           <section className="landing-how" aria-labelledby="how-it-works-title">
             <div className="landing-how-heading"><strong id="how-it-works-title">THREE MOVES. MAXIMUM DRAMA.</strong><span>⚡ tap a rule · become dangerous</span></div>
             <div className="landing-rules">
-              <button type="button" className="landing-rule rule-song" aria-haspopup="dialog" onClick={(event) => openLesson(0, event.currentTarget)}><span className="rule-step">01</span><span className="rule-icon" aria-hidden="true">🎵</span><div><strong>Drop a secret song</strong><small>Paste a Spotify track. Nobody sees what’s next.</small></div><em>OPEN THE MANUAL ↗</em></button>
+              <button type="button" className="landing-rule rule-song" aria-haspopup="dialog" onClick={(event) => openLesson(0, event.currentTarget)}><span className="rule-step">01</span><span className="rule-icon" aria-hidden="true">🎵</span><div><strong>Drop a secret song</strong><small>Paste a Spotify or YouTube link. Nobody sees what’s next.</small></div><em>OPEN THE MANUAL ↗</em></button>
               <span className="rule-connector" aria-hidden="true">→</span>
               <button type="button" className="landing-rule rule-react" aria-haspopup="dialog" onClick={(event) => openLesson(1, event.currentTarget)}><span className="rule-step">02</span><span className="rule-icon" aria-hidden="true">🙌</span><div><strong>React out loud</strong><small>Cheers give +3. Boos stay completely anonymous.</small></div><em>OPEN THE MANUAL ↗</em></button>
               <span className="rule-connector" aria-hidden="true">→</span>
@@ -268,6 +269,10 @@ export default function Home() {
             <label htmlFor="event-name">EVENT NAME</label><input id="event-name" value={eventName} onChange={(event) => setEventName(event.target.value)} maxLength={60} placeholder="Friday night hackathon" required />
             <label htmlFor="host-name">YOUR NAME</label><input id="host-name" value={hostName} onChange={(event) => setHostName(event.target.value)} maxLength={24} placeholder="The brave host" required />
             <label htmlFor="room-passcode">ROOM PASSCODE</label><input id="room-passcode" value={roomPasscode} onChange={(event) => setRoomPasscode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} minLength={4} maxLength={12} autoComplete="new-password" placeholder="e.g. VIBE42" required /><small className="passcode-hint">🔐 Guests need the room code <em>and</em> this passcode. It never appears in the invite URL.</small>
+            <fieldset className="room-start-picker room-source-picker"><legend>WHERE DOES THE MUSIC COME FROM?</legend><div>
+              <button className={musicSource === "spotify" ? "active" : ""} type="button" aria-pressed={musicSource === "spotify"} onClick={() => setMusicSource("spotify")}><span>🟢</span><strong>Spotify</strong><small>Full tracks. Host needs Spotify Premium.</small></button>
+              <button className={musicSource === "youtube" ? "active" : ""} type="button" aria-pressed={musicSource === "youtube"} onClick={() => setMusicSource("youtube")}><span>▶️</span><strong>YouTube</strong><small>Videos play on the host screen. No account.</small></button>
+            </div><small className="source-hint">🔒 Locked for the whole event. Guests can only add {musicSource === "spotify" ? "Spotify tracks" : "YouTube videos"}.</small></fieldset>
             <fieldset className="room-start-picker"><legend>WHEN DOES THE MUSIC START?</legend><div>
               <button className={!preParty ? "active" : ""} type="button" aria-pressed={!preParty} onClick={() => setPreParty(false)}><span>⚡</span><strong>Start now</strong><small>First song plays immediately.</small></button>
               <button className={preParty ? "active" : ""} type="button" aria-pressed={preParty} onClick={() => setPreParty(true)}><span>🌙</span><strong>Pre-party lobby</strong><small>Collect songs before the event.</small></button>

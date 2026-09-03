@@ -33,15 +33,16 @@ const sections = [
     id: "service",
     title: "What HackMusic provides",
     content: <>
-      <p>HackMusic coordinates temporary private music rooms. Participants can submit Spotify track links, react to songs, affect scores, and—after enough boos—skip a track. The host controls the shared playback device and queue mode.</p>
+      <p>HackMusic coordinates temporary private music rooms. Participants can submit Spotify track links or YouTube video links, react to songs, affect scores, and—after enough boos—skip a track. The host controls the shared playback device and queue mode.</p>
       <p>HackMusic does not sell music, provide ownership rights in recordings, host uploaded audio, or grant a public-performance license. Points are fictional, have no monetary value, and cannot be redeemed or transferred.</p>
     </>,
   },
   {
     id: "music",
-    title: "Music, Spotify & licenses",
+    title: "Music, Spotify, YouTube & licenses",
     content: <>
       <p>Spotify is a separate service. A compatible Spotify Premium subscription, approved developer setup, supported device, and compliance with Spotify’s terms and policies may be required. You authorize Spotify directly; HackMusic is not affiliated with, endorsed by, or sponsored by Spotify.</p>
+      <p>YouTube is a separate service. Submitted videos play through YouTube’s embedded player on the host device and remain subject to the <a href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer">YouTube Terms of Service ↗</a>. HackMusic is not affiliated with, endorsed by, or sponsored by YouTube or Google.</p>
       <p>You and the event organizer are responsible for ensuring that playback is lawful and permitted for the event and location, including any copyright, venue, public-performance, subscription, or music-licensing requirements. Private-event positioning does not itself create a license or legal exemption.</p>
       <p>Review the <a href="https://www.spotify.com/legal/end-user-agreement/" target="_blank" rel="noreferrer">Spotify Terms ↗</a> and applicable <a href="https://developer.spotify.com/terms" target="_blank" rel="noreferrer">Spotify Developer Terms ↗</a>.</p>
     </>,
@@ -73,10 +74,10 @@ const sections = [
     id: "third-party",
     title: "Third-party infrastructure",
     content: <>
-      <p>HackMusic depends on third parties including Spotify, OpenAI Sites, ChatGPT sign-in for the owner-only admin page, infrastructure providers, domain and network providers, browsers, operating systems, and connected speakers. Their services, content, security, pricing, availability, advertisements, subscriptions, and policies are outside our control.</p>
+      <p>HackMusic depends on third parties including Spotify, YouTube (Google), OpenAI Sites, ChatGPT sign-in for the owner-only admin page, infrastructure providers, domain and network providers, browsers, operating systems, and connected speakers. Their services, content, security, pricing, availability, advertisements, subscriptions, and policies are outside our control.</p>
       <div className="legal-callout">
         <strong>🧩 Many moving pieces.</strong>
-        <span>If Spotify, OpenAI infrastructure, the internet, or your speaker takes a nap, HackMusic cannot promise to wake it.</span>
+        <span>If Spotify, YouTube, OpenAI infrastructure, the internet, or your speaker takes a nap, HackMusic cannot promise to wake it.</span>
       </div>
       <p>To the maximum extent permitted by law, HackMusic is not responsible for third-party acts, omissions, outages, content, data practices, account actions, service changes, or losses. Your dealings with third parties are between you and them. Nothing here limits rights or liabilities that cannot legally be waived.</p>
     </>,
@@ -85,7 +86,7 @@ const sections = [
     id: "availability",
     title: "Changes, availability & termination",
     content: <>
-      <p>HackMusic is experimental and may change, break, pause, lose features, impose limits, or stop operating at any time. We do not promise uninterrupted service, permanent storage, compatibility with every device, preservation of a room or score, or continued availability of any Spotify feature.</p>
+      <p>HackMusic is experimental and may change, break, pause, lose features, impose limits, or stop operating at any time. We do not promise uninterrupted service, permanent storage, compatibility with every device, preservation of a room or score, or continued availability of any Spotify or YouTube feature.</p>
       <p>You may stop using the service at any time. The host may end a room. We may suspend access or remove rooms when reasonably necessary for security, legal compliance, abuse prevention, or service operation.</p>
     </>,
   },
@@ -133,5 +134,5 @@ const sections = [
 ];
 
 export default function TermsPage() {
-  return <LegalPage eyebrow="📜 HOUSE RULES FOR THE HOUSE PARTY" title="Terms of Use" summary="A fair playlist still needs rules. These cover acceptable use, Spotify, third-party infrastructure, and who is responsible for the actual event." accent="blue" sections={sections} />;
+  return <LegalPage eyebrow="📜 HOUSE RULES FOR THE HOUSE PARTY" title="Terms of Use" summary="A fair playlist still needs rules. These cover acceptable use, Spotify, YouTube, third-party infrastructure, and who is responsible for the actual event." accent="blue" sections={sections} />;
 }

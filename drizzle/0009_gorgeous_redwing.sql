@@ -1,0 +1,1 @@
+ALTER TABLE `events` ADD `music_source` text DEFAULT 'spotify' NOT NULL;

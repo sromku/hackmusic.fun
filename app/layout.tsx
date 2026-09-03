@@ -39,6 +39,7 @@ export async function generateMetadata(): Promise<Metadata> {
       "party playlist game",
       "collaborative playlist",
       "Spotify party game",
+      "YouTube party game",
       "hackathon music",
       "house party game",
       "group song voting",

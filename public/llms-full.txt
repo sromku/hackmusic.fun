@@ -4,7 +4,7 @@ HackMusic turns a shared playlist into a lightweight social game for roughly 6â€
 
 ## Experience
 
-The host creates a room at https://hackmusic.fun and connects the host phone to the event speaker. A room can begin immediately or open first as a pre-party lobby. In lobby mode, guests can join early and submit secret Spotify tracks, but playback and reactions stay locked until the host explicitly starts the event. The displayed schedule is informational and never auto-starts music. Guests open the invite URL, register a display name, and submit Spotify track links without seeing the queue. Playback stays on the host device.
+The host creates a room at https://hackmusic.fun and connects the host phone to the event speaker. A room can begin immediately or open first as a pre-party lobby. In lobby mode, guests can join early and submit secret Spotify or YouTube tracks, but playback and reactions stay locked until the host explicitly starts the event. The displayed schedule is informational and never auto-starts music. Guests open the invite URL, register a display name, and submit Spotify track links or YouTube video links without seeing the queue. Playback stays on the host device.
 
 During each song, guests can do nothing, cheer, or boo. A cheer produces a short happy sound over playback and gives the submitter 3 points. A boo produces a funny sound, removes 3 points from the submitter, and stays anonymous in the participant interface. Three boos skip to the next song. The event feed keeps the full history of songs and reactions.
 

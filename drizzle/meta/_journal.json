@@ -64,6 +64,13 @@
       "when": 1787502995189,
       "tag": "0008_open_glorian",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788463814352,
+      "tag": "0009_gorgeous_redwing",
+      "breakpoints": true
     }
   ]
 }

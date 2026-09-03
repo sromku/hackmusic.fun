@@ -7,6 +7,7 @@ export const events = sqliteTable("events", {
   status: text("status").notNull().default("live"),
   scheduledFor: text("scheduled_for"),
   queueMode: text("queue_mode").notNull().default("ordered"),
+  musicSource: text("music_source").notNull().default("spotify"),
   currentSubmissionId: text("current_submission_id"),
   hostPin: text("host_pin").notNull(),
   joinPasscodeHash: text("join_passcode_hash"),

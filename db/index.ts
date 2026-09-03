@@ -31,6 +31,7 @@ async function initializePartySchema() {
       status TEXT NOT NULL DEFAULT 'live',
       scheduled_for TEXT,
       queue_mode TEXT NOT NULL DEFAULT 'ordered',
+      music_source TEXT NOT NULL DEFAULT 'spotify',
       current_submission_id TEXT,
       host_pin TEXT NOT NULL,
       join_passcode_hash TEXT,
@@ -117,6 +118,7 @@ async function initializePartySchema() {
   const existingEventColumns = new Set(eventColumns.results.map((column) => column.name));
   const missingEventColumns = [
     ["queue_mode", "ALTER TABLE events ADD COLUMN queue_mode TEXT NOT NULL DEFAULT 'ordered'"],
+    ["music_source", "ALTER TABLE events ADD COLUMN music_source TEXT NOT NULL DEFAULT 'spotify'"],
     ["scheduled_for", "ALTER TABLE events ADD COLUMN scheduled_for TEXT"],
     ["join_passcode_hash", "ALTER TABLE events ADD COLUMN join_passcode_hash TEXT"],
     ["join_passcode_salt", "ALTER TABLE events ADD COLUMN join_passcode_salt TEXT"],

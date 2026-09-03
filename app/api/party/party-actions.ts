@@ -1,4 +1,5 @@
 import {
+  assertMusicSource,
   assertPartyParticipant,
   cancelHostTransfer,
   claimHostTransfer,
@@ -7,6 +8,7 @@ import {
   joinParty,
   reactToCurrent,
   readParty,
+  readRoomSummary,
   prepareHostTransfer,
   renameParty,
   recordBooSkipProgress,
@@ -20,12 +22,12 @@ import {
 import type { PartyAction, PartyRequest } from "../../../lib/party-contract";
 import { PublicError } from "../../../lib/public-error";
 import { protectPartyAction, protectRoomCreation } from "../../../lib/room-creation-guard";
-import { resolveSpotifyTrack, type ResolvedSpotifyTrack } from "../../../lib/spotify-track";
+import { resolveTrack, trackSource, type ResolvedTrack } from "../../../lib/track-link";
 
 export function partyActionFallback(action?: PartyAction) {
   if (action === "create") return "We could not create the room right now. Wait a moment and try again.";
   if (action === "join") return "We could not join the room. Check the room code and passcode, then try again.";
-  if (action === "submit") return "We could not check that Spotify song right now. Check the link and try again in a moment.";
+  if (action === "submit") return "We could not check that song right now. Check the Spotify or YouTube link and try again in a moment.";
   if (action === "react") return "Your reaction did not go through. Check your connection and try again.";
   if (action === "remove") return "We could not remove that song. Refresh your list and try again.";
   if (action === "avatar") return "Your party face did not change. Try another emoji.";
@@ -52,7 +54,7 @@ export async function executePartyAction(request: Request, input: PartyRequest):
   const code = input.code ?? "";
   const participantId = input.participantId ?? "";
   let skipped = false;
-  let submittedTrack: ResolvedSpotifyTrack | undefined;
+  let submittedTrack: ResolvedTrack | undefined;
 
   switch (input.action) {
     case "create": {
@@ -60,6 +62,7 @@ export async function executePartyAction(request: Request, input: PartyRequest):
       await protectRoomCreation(request, input.website);
       const room = await createRoom(input.title, input.name, {
         passcode: input.passcode,
+        musicSource: input.musicSource,
         preParty: input.preParty,
         scheduledFor: input.scheduledFor,
       });
@@ -80,8 +83,10 @@ export async function executePartyAction(request: Request, input: PartyRequest):
       if (!trackReference) invalidAction();
       await protectPartyAction(request, input.action, code, participantId);
       await assertPartyParticipant(code, participantId);
-      if (trackReference.length > 512) throw new PublicError("That Spotify link is too long. Copy the track link directly from Spotify and try again.");
-      submittedTrack = await resolveSpotifyTrack(trackReference);
+      if (trackReference.length > 512) throw new PublicError("That link is too long. Copy the song link directly from Spotify or YouTube and try again.");
+      const roomSummary = await readRoomSummary(code);
+      assertMusicSource(roomSummary.musicSource, trackSource(trackReference) ?? roomSummary.musicSource);
+      submittedTrack = await resolveTrack(trackReference);
       await submitTrack(code, participantId, submittedTrack);
       break;
     }

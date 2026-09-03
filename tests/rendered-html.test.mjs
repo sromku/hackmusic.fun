@@ -6,16 +6,24 @@ import { renderPage as render } from "./support/worker.mjs";
 
 const projectRoot = new URL("../", import.meta.url);
 
-async function loadTypeScriptModule(pathname) {
+const transpiledModuleUrls = new Map();
+
+async function transpileTypeScriptModule(pathname) {
+  if (transpiledModuleUrls.has(pathname)) return transpiledModuleUrls.get(pathname);
   const source = await readFile(new URL(pathname, projectRoot), "utf8");
   let output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-  if (output.includes('"./public-error"')) {
-    const dependencySource = await readFile(new URL("lib/public-error.ts", projectRoot), "utf8");
-    const dependencyOutput = ts.transpileModule(dependencySource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-    const dependencyUrl = `data:text/javascript;base64,${Buffer.from(dependencyOutput).toString("base64")}`;
-    output = output.replace('"./public-error"', JSON.stringify(dependencyUrl));
+  const directory = pathname.slice(0, pathname.lastIndexOf("/") + 1);
+  for (const match of [...output.matchAll(/from\s+"(\.{1,2}\/[^"]+)"/g)]) {
+    const dependencyPath = new URL(`${match[1]}.ts`, `file:///${directory}`).pathname.slice(1);
+    output = output.replace(`"${match[1]}"`, JSON.stringify(await transpileTypeScriptModule(dependencyPath)));
   }
-  return import(`data:text/javascript;base64,${Buffer.from(output).toString("base64")}`);
+  const moduleUrl = `data:text/javascript;base64,${Buffer.from(output).toString("base64")}`;
+  transpiledModuleUrls.set(pathname, moduleUrl);
+  return moduleUrl;
+}
+
+async function loadTypeScriptModule(pathname) {
+  return import(await transpileTypeScriptModule(pathname));
 }
 
 test("normalizes Spotify share links and short links to their actual track token", async () => {
@@ -56,6 +64,66 @@ test("normalizes Spotify share links and short links to their actual track token
   });
 });
 
+test("normalizes YouTube share links and resolves video metadata without a Google API key", async () => {
+  const youtube = await loadTypeScriptModule("lib/youtube-track.ts");
+  for (const link of [
+    "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL123&index=2&t=43s",
+    "https://youtu.be/dQw4w9WgXcQ?si=abc123",
+    "https://m.youtube.com/watch?v=dQw4w9WgXcQ",
+    "https://music.youtube.com/watch?v=dQw4w9WgXcQ&feature=share",
+    "https://www.youtube.com/shorts/dQw4w9WgXcQ",
+    "https://www.youtube.com/embed/dQw4w9WgXcQ",
+    "youtube:video:dQw4w9WgXcQ",
+  ]) {
+    assert.deepEqual(youtube.parseYouTubeVideoReference(link), {
+      videoId: "dQw4w9WgXcQ",
+      uri: "youtube:video:dQw4w9WgXcQ",
+      canonicalUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    }, link);
+  }
+  assert.throws(() => youtube.parseYouTubeVideoReference("https://www.youtube.com/playlist?list=PL123"), /valid YouTube video ID/);
+  assert.throws(() => youtube.parseYouTubeVideoReference("https://vimeo.com/12345"), /youtube\.com or youtu\.be/);
+  assert.equal(youtube.extractYouTubeVideoId("prefix youtube:video:dQw4w9WgXcQ"), "dQw4w9WgXcQ");
+  assert.equal(youtube.extractYouTubeVideoId("spotify:track:5lf9LK4eETye6DsPUJpHDB"), "");
+  assert.equal(youtube.cleanYouTubeTitle("Rick Astley - Never Gonna Give You Up (Official Music Video) [HD]"), "Rick Astley - Never Gonna Give You Up");
+  assert.equal(youtube.cleanYouTubeChannel("RickAstleyVEVO"), "RickAstley");
+  assert.equal(youtube.cleanYouTubeChannel("Rick Astley - Topic"), "Rick Astley");
+  assert.deepEqual(youtube.parseYouTubeWatchMetadata('<html>{"videoDetails":{"lengthSeconds":"213","isLiveContent":false}}</html>'), { durationSeconds: 213, isLive: false });
+  assert.deepEqual(youtube.parseYouTubeWatchMetadata('<meta itemprop="duration" content="PT3M33S">'), { durationSeconds: 213, isLive: false });
+
+  const requests = [];
+  const resolved = await youtube.resolveYouTubeTrack("https://youtu.be/dQw4w9WgXcQ", async (requestUrl) => {
+    requests.push(String(requestUrl));
+    if (String(requestUrl).includes("/oembed")) {
+      return new Response(JSON.stringify({ title: "Rick Astley - Never Gonna Give You Up (Official Video)", author_name: "RickAstleyVEVO" }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    return new Response('<html>"lengthSeconds":"213"</html>', { status: 200 });
+  });
+  assert.deepEqual(resolved, {
+    id: "youtube:video:dQw4w9WgXcQ",
+    videoId: "dQw4w9WgXcQ",
+    canonicalUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    title: "Rick Astley - Never Gonna Give You Up",
+    artist: "RickAstley",
+    duration: "3:33",
+    color: "coral",
+  });
+  assert.ok(requests.some((url) => url.startsWith("https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ")));
+  await assert.rejects(() => youtube.resolveYouTubeTrack("https://youtu.be/dQw4w9WgXcQ", async (requestUrl) => new Response(String(requestUrl).includes("/oembed") ? "Unauthorized" : "", { status: 401 })), /private or cannot be embedded/);
+  await assert.rejects(() => youtube.resolveYouTubeTrack("https://youtu.be/dQw4w9WgXcQ", async (requestUrl) => new Response(String(requestUrl).includes("/oembed") ? "Not Found" : "", { status: 404 })), /could not find that video/);
+
+  const links = await loadTypeScriptModule("lib/track-link.ts");
+  assert.equal(links.trackSource("https://open.spotify.com/track/5lf9LK4eETye6DsPUJpHDB?si=x"), "spotify");
+  assert.equal(links.trackSource("https://youtu.be/dQw4w9WgXcQ"), "youtube");
+  assert.equal(links.trackSource("youtube:video:dQw4w9WgXcQ"), "youtube");
+  assert.equal(links.trackSource("https://soundcloud.com/some/track"), null);
+  assert.deepEqual(links.parseTrackReference("https://www.youtube.com/watch?v=dQw4w9WgXcQ"), { source: "youtube", uri: "youtube:video:dQw4w9WgXcQ", canonicalUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" });
+  assert.deepEqual(links.parseTrackReference("spotify:track:5lf9LK4eETye6DsPUJpHDB"), { source: "spotify", uri: "spotify:track:5lf9LK4eETye6DsPUJpHDB", canonicalUrl: "https://open.spotify.com/track/5lf9LK4eETye6DsPUJpHDB" });
+  assert.throws(() => links.parseTrackReference("https://soundcloud.com/some/track"), /Spotify track link or a YouTube video link/);
+  assert.equal(links.trackWebUrl("youtube:video:dQw4w9WgXcQ"), "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+  assert.equal(links.trackWebUrl("spotify:track:5lf9LK4eETye6DsPUJpHDB"), "https://open.spotify.com/track/5lf9LK4eETye6DsPUJpHDB");
+});
+
 test("hashes room passcodes and compares them without storing plaintext", async () => {
   const passcodes = await loadTypeScriptModule("lib/room-passcode.ts");
   const passcodeSource = await readFile(new URL("lib/room-passcode.ts", projectRoot), "utf8");
@@ -91,6 +159,10 @@ test("formats song durations, Spotify links, and outcomes consistently", async (
   assert.equal(format.formatPlaybackTime(125_999), "2:05");
   assert.equal(format.spotifyTrackWebUrl("spotify:track:5lf9LK4eETye6DsPUJpHDB"), "https://open.spotify.com/track/5lf9LK4eETye6DsPUJpHDB");
   assert.equal(format.spotifyTrackWebUrl("youtube:video:abc"), "");
+  assert.equal(format.trackWebUrl("youtube:video:dQw4w9WgXcQ"), "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+  assert.equal(format.trackWebUrl("spotify:track:5lf9LK4eETye6DsPUJpHDB"), "https://open.spotify.com/track/5lf9LK4eETye6DsPUJpHDB");
+  assert.equal(format.trackSourceLabel("youtube:video:dQw4w9WgXcQ"), "YouTube");
+  assert.equal(format.trackSourceLabel("spotify:track:5lf9LK4eETye6DsPUJpHDB"), "Spotify");
   assert.equal(format.mySongStatusLabel({ status: "skipped", skipReason: "boos", skipPercent: 42 }, false), "👻 Booed off at 42%");
   assert.deepEqual(format.hostSongOutcome({ status: "skipped", skipReason: "host", skipPercent: null }), { label: "⏭️ SKIPPED BY HOST", tone: "host" });
 });
@@ -125,6 +197,8 @@ test("renders the create and join landing page", async () => {
   assert.match(landingSource, /type="datetime-local"/);
   assert.match(landingSource, /preParty, scheduledFor/);
   assert.match(landingSource, /ROOM PASSCODE/);
+  assert.match(landingSource, /WHERE DOES THE MUSIC COME FROM\?/);
+  assert.match(landingSource, /passcode: roomPasscode, musicSource, preParty/);
   assert.match(landingSource, /joinPasscode/);
   assert.match(landingSource, /hackmusic:hostedRooms/);
   assert.match(landingSource, /Your hosted rooms/);
@@ -201,7 +275,8 @@ test("renders tailored privacy and terms pages", async () => {
   assert.match(privacy, /raw IP addresses/);
   assert.match(privacy, /older than 90 days/);
   assert.match(privacy, /Global Privacy Control/);
-  assert.match(privacy, /Last updated August 23, 2026/);
+  assert.match(privacy, /YouTube \(Google\)/);
+  assert.match(privacy, /Last updated September 3, 2026/);
 
   const termsResponse = await render("/terms");
   assert.equal(termsResponse.status, 200);
@@ -209,6 +284,7 @@ test("renders tailored privacy and terms pages", async () => {
   assert.match(terms, /Terms of Use/);
   assert.match(terms, /New Jersey law/);
   assert.match(terms, /public-performance license/);
+  assert.match(terms, /YouTube Terms of Service/);
   assert.match(terms, /OpenAI Sites/);
   assert.match(terms, /hackmusic\.fun@gmail\.com/);
   const legalSource = await readFile(new URL("app/legal-page.tsx", projectRoot), "utf8");
@@ -225,7 +301,7 @@ test("renders a code-specific participant room", async () => {
   assert.match(html, /noindex/);
   assert.doesNotMatch(html, /og(?:-v2)?\.png/);
   const source = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
-  for (const copy of ["CHEER", "BOO", "Add a song", "YOUR FINAL SCORE", "🔊 ROOM NOISE", "FULL PARTY HISTORY", "🎧 My music", "Pick your party face", "Rename your human", "YOUR PARTY NAME", "YOUR NAME — SHOWN TO EVERYONE", "This is how other humans will see you. It is not the room code.", "ROOM PASSCODE — ASK THE HOST", "Paste a full track or short /s/ link…", "Show me how", "Borrow the link. Keep the chaos.", "Copy link", "I found the link"]) {
+  for (const copy of ["CHEER", "BOO", "Add a song", "YOUR FINAL SCORE", "🔊 ROOM NOISE", "FULL PARTY HISTORY", "🎧 My music", "Pick your party face", "Rename your human", "YOUR PARTY NAME", "YOUR NAME — SHOWN TO EVERYONE", "This is how other humans will see you. It is not the room code.", "ROOM PASSCODE — ASK THE HOST", "Paste a full track or short /s/ link…", "Paste a YouTube video link…", "YOUTUBE VIDEO LINK", "This room plays YouTube only", "Open on YouTube", "Show me how", "Borrow the link. Keep the chaos.", "Copy link", "I found the link"]) {
     assert.match(source, new RegExp(copy));
   }
   assert.match(source, /spotifyHelpOpen/);
@@ -300,6 +376,10 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /ROOM CODE/);
   assert.match(source, /QRCode/);
   assert.match(source, /SPOTIFY PREMIUM SPEAKER/);
+  assert.match(source, /YOUTUBE VIDEO SPEAKER/);
+  assert.match(source, /useYouTubePlayer/);
+  assert.match(source, /className=\{`youtube-stage/);
+  assert.match(source, /trackSource\(track\.id\) === "youtube"/);
   assert.match(source, /https:\/\/sdk\.scdn\.co\/spotify-player\.js/);
   assert.match(source, /Connect Spotify Premium/);
   assert.match(source, /\/api\/spotify\/callback/);
@@ -333,9 +413,11 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /CONTROLS FROZEN/);
   assert.match(source, /UNPLAYED AT CLOSING/);
   assert.match(source, /const partyEnded = partyStatus === "ended"/);
-  assert.match(source, /if \(!participantId \|\| !hostKey \|\| partyEnded\) return/);
-  assert.match(source, /\[code, getSpotifyToken, hostKey, participantId, partyEnded\]/);
-  assert.match(source, /party\.status !== "ended" && <section className=\{`spotify-connect-card/);
+  assert.match(source, /if \(!participantId \|\| !hostKey \|\| partyEnded \|\| !spotifyRoom\) return/);
+  assert.match(source, /\[code, getSpotifyToken, hostKey, participantId, partyEnded, spotifyRoom\]/);
+  assert.match(source, /party\.status !== "ended" && spotifyRoom && <section id="spotify-connect" className=\{`spotify-connect-card/);
+  assert.match(source, /party\.status !== "ended" && youtubeRoom && <section className="spotify-connect-card youtube-room-card"/);
+  assert.match(source, /enabled: hostReady && youtubeRoom/);
   assert.match(source, /party\.status !== "ended" && endConfirmOpen/);
   assert.match(source, /🙌 CHEERS/);
   assert.match(source, /👻 BOOS/);
@@ -371,6 +453,21 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /Computer/);
   assert.doesNotMatch(source, /Android auto-lock is blocked|stop Android from auto-locking/);
   assert.match(source, /Rare host moves/);
+  assert.match(source, /SETUP ORDER · TOP TO BOTTOM/);
+  assert.match(source, /const currentStepIndex = setupSteps\.findIndex\(\(step\) => !step\.done\)/);
+  assert.match(source, /state === "locked" \|\| step\.disabled/);
+  assert.match(source, /Setup complete\. Music is playing on this device/);
+  assert.match(source, /id="spotify-connect"/);
+  assert.match(source, /useReadinessCheck/);
+  assert.match(source, /readiness check/);
+  assert.match(source, /host-readiness-card/);
+  assert.match(source, /aria-labelledby="host-readiness-title"/);
+  const readinessSource = await readFile(new URL("app/e/[code]/host/use-readiness-check.ts", projectRoot), "utf8");
+  assert.match(readinessSource, /detectHostBrowser/);
+  assert.match(readinessSource, /LATER_PLAYBACK_DELAY_MS/);
+  assert.match(readinessSource, /wakeLock|requestScreenWakeLock/);
+  assert.match(readinessSource, /probeRoomData/);
+  assert.match(readinessSource, /visibilityState/);
   assert.match(source, /Rename event/);
   assert.match(source, /action: "rename"/);
   assert.match(source, /Rename the chaos/);
@@ -394,6 +491,16 @@ test("renders a code-specific host control surface", async () => {
   assert.match(reactionSoundSource, /REACTION_DUCK_VOLUME = 0\.28/);
   assert.match(reactionSoundSource, /decodeAudioData/);
   assert.match(reactionSoundSource, /player\.setVolume/);
+  assert.match(reactionSoundSource, /ensureContextRunning/);
+  assert.match(reactionSoundSource, /audioSession/);
+  assert.match(reactionSoundSource, /playThroughElement/);
+  assert.doesNotMatch(reactionSoundSource, /context\.state === "suspended"/);
+  const youtubeSdkSource = await readFile(new URL("app/e/[code]/host/youtube-sdk.ts", projectRoot), "utf8");
+  assert.match(youtubeSdkSource, /https:\/\/www\.youtube\.com\/iframe_api/);
+  const youtubePlayerSource = await readFile(new URL("app/e/[code]/host/use-youtube-player.ts", projectRoot), "utf8");
+  assert.match(youtubePlayerSource, /loadVideoById/);
+  assert.match(youtubePlayerSource, /playsinline: 1/);
+  assert.match(youtubePlayerSource, /YouTubePlayerState\.ended/);
   const wakeLockSource = await readFile(new URL("app/e/[code]/host/use-screen-wake-lock.ts", projectRoot), "utf8");
   assert.match(wakeLockSource, /wakeLock\.request\("screen"\)/);
   assert.match(wakeLockSource, /visibilitychange/);
@@ -416,8 +523,10 @@ test("renders a code-specific host control surface", async () => {
   assert.match(spotifyAuthSource, /AES-GCM/);
   assert.match(spotifyAuthSource, /SPOTIFY_COOKIE_SECRET/);
   const participantSource = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
-  assert.match(participantSource, /Checking Spotify/);
+  assert.match(participantSource, /Checking the link/);
   assert.match(participantSource, /Add to the secret queue/);
+  assert.match(participantSource, /trackWebUrl/);
+  assert.doesNotMatch(participantSource, /spotifyTrackWebUrl/);
 });
 
 test("detects the host device used for wake-lock guidance", async () => {
@@ -426,6 +535,11 @@ test("detects the host device used for wake-lock guidance", async () => {
   assert.equal(devices.detectHostDevice("Mozilla/5.0 (Linux; Android 15; Pixel 9)"), "android");
   assert.equal(devices.detectHostDevice("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"), "computer");
   assert.equal(devices.detectHostDevice("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", "MacIntel", 5), "ios");
+  assert.equal(devices.detectHostBrowser("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/128.0 Mobile/15E148 Safari/604.1", "MacIntel", 5), "ipad-chrome");
+  assert.equal(devices.detectHostBrowser("Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1"), "ios-safari");
+  assert.equal(devices.detectHostBrowser("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 CriOS/128.0 Mobile/15E148 Safari/604.1"), "ios-other");
+  assert.equal(devices.detectHostBrowser("Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 Chrome/128.0 Mobile Safari/537.36"), "android-chrome");
+  assert.equal(devices.detectHostBrowser("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/128.0 Safari/537.36"), "desktop");
 });
 
 test("starts Spotify PKCE without exposing a client secret", async () => {

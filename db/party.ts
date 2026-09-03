@@ -1,9 +1,11 @@
 import { ensurePartySchema, getD1 } from ".";
 import { isAvatarEmoji } from "../lib/avatar-emojis";
+import { MUSIC_SOURCES, type MusicSource } from "../lib/party-contract";
 import { MAX_PARTICIPANTS_PER_ROOM, MAX_PENDING_TRACKS_PER_PERSON } from "../lib/party-rules";
 import { PublicError } from "../lib/public-error";
 import { hashRoomPasscode, verifyRoomPasscode } from "../lib/room-passcode";
-import { parseSpotifyTrackReference, resolveSpotifyTrack } from "../lib/spotify-track";
+import { resolveSpotifyTrack } from "../lib/spotify-track";
+import { parseTrackReference, trackSource } from "../lib/track-link";
 import { advanceCurrentTrack, estimateSkipPercent } from "./party-queue";
 import {
   collapseLegacyReactionActivity,
@@ -34,6 +36,7 @@ export type { QueueMode } from "./party-model";
 
 type CreateRoomOptions = {
   passcode?: string;
+  musicSource?: string;
   preParty?: boolean;
   scheduledFor?: string;
 };
@@ -64,6 +67,8 @@ export async function createRoom(
   const hostName = normalizeDisplayName(hostNameInput);
   if (title.length < 3 || title.length > 60) throw new PublicError("Use an event name between 3 and 60 characters.");
   if (hostName.length < 2 || hostName.length > 24) throw new PublicError("Use a host name between 2 and 24 characters.");
+  const musicSource = (options.musicSource ?? "spotify") as MusicSource;
+  if (!MUSIC_SOURCES.includes(musicSource)) throw new PublicError("Choose Spotify or YouTube as the music source for this room.");
   let scheduledFor: string | null = null;
   if (options.preParty) {
     const scheduledDate = new Date(options.scheduledFor ?? "");
@@ -93,18 +98,18 @@ export async function createRoom(
   const now = new Date().toISOString();
   const status = options.preParty ? "lobby" : "live";
   await d1.batch([
-    d1.prepare("INSERT INTO events (id, code, title, status, scheduled_for, current_submission_id, host_pin, join_passcode_hash, join_passcode_salt, created_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)")
-      .bind(eventId, code, title, status, scheduledFor, hostKey, passcode.hash, passcode.salt, now),
+    d1.prepare("INSERT INTO events (id, code, title, status, scheduled_for, music_source, current_submission_id, host_pin, join_passcode_hash, join_passcode_salt, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)")
+      .bind(eventId, code, title, status, scheduledFor, musicSource, hostKey, passcode.hash, passcode.salt, now),
     d1.prepare("INSERT INTO participants (id, public_id, event_id, display_name, initials, color, score, created_at) VALUES (?, ?, ?, ?, ?, ?, 30, ?)")
       .bind(participantId, hostPublicId, eventId, hostName, profile.initials, profile.color, now),
   ]);
-  return { code, title, status, scheduledFor, createdAt: now, participantId, hostKey };
+  return { code, title, status, scheduledFor, musicSource, createdAt: now, participantId, hostKey };
 }
 
 export async function readRoomSummary(codeInput: string) {
   const event = await loadEvent(codeInput);
   if (!event) throw new PublicError("Room not found. Check the six-character code and try again.", 404);
-  return { code: event.code, title: event.title, status: event.status, scheduledFor: event.scheduled_for, createdAt: event.created_at, requiresPasscode: Boolean(event.join_passcode_hash) };
+  return { code: event.code, title: event.title, status: event.status, scheduledFor: event.scheduled_for, createdAt: event.created_at, requiresPasscode: Boolean(event.join_passcode_hash), musicSource: event.music_source ?? "spotify" };
 }
 
 export async function readParty(codeInput: string, viewerId: string, hostKey = "", activityAfter?: string) {
@@ -119,7 +124,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
       .bind(event.current_submission_id).first<SubmissionRow>()
     : null;
 
-  if (current && (current.artist === "Spotify" || current.artist === "Artist unavailable")) {
+  if (current && trackSource(current.provider_track_id) === "spotify" && (current.artist === "Spotify" || current.artist === "Artist unavailable")) {
     try {
       const enriched = await resolveSpotifyTrack(current.provider_track_id);
       current.title = enriched.title;
@@ -219,6 +224,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
     status: event.status,
     scheduledFor: event.scheduled_for,
     requiresPasscode: Boolean(event.join_passcode_hash),
+    musicSource: event.music_source ?? "spotify",
     viewer,
     viewerDisplayName,
     people,
@@ -455,18 +461,26 @@ export async function reactToCurrent(code: string, participantId: string, kind: 
   return { skipped };
 }
 
+export function assertMusicSource(roomSource: MusicSource, linkSource: MusicSource) {
+  if (roomSource === linkSource) return;
+  throw new PublicError(roomSource === "youtube"
+    ? "This room plays YouTube only. Paste a YouTube video link instead."
+    : "This room plays Spotify only. Paste a Spotify track link instead.");
+}
+
 export async function submitTrack(code: string, participantId: string, track: TrackInput) {
-  const normalizedTrack = parseSpotifyTrackReference(track.id);
+  const normalizedTrack = parseTrackReference(track.id);
   const event = await loadEvent(code);
   if (!event) throw new PublicError("Room not found. Check the six-character code and try again.", 404);
   if (event.status === "ended") throw new PublicError("This party has ended, so no more songs can be added.");
+  assertMusicSource(event.music_source ?? "spotify", normalizedTrack.source);
   const d1 = getD1();
   const member = await d1.prepare("SELECT id FROM participants WHERE id = ? AND event_id = ?").bind(participantId, event.id).first<{ id: string }>();
   if (!member) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);
   const pending = await d1.prepare("SELECT COUNT(*) AS count FROM submissions WHERE event_id = ? AND participant_id = ? AND status = 'pending'")
     .bind(event.id, participantId).first<{ count: number }>();
   if ((pending?.count ?? 0) >= MAX_PENDING_TRACKS_PER_PERSON) throw new PublicError(`You already have ${MAX_PENDING_TRACKS_PER_PERSON} secret picks waiting. Wait for one to play before adding another.`);
-  if (!track.title || !track.artist) throw new PublicError("Spotify did not return enough song information. Copy the track link again.");
+  if (!track.title || !track.artist) throw new PublicError("The music service did not return enough song information. Copy the link again.");
   const duplicate = await d1.prepare("SELECT id FROM submissions WHERE event_id = ? AND provider_track_id = ? LIMIT 1")
     .bind(event.id, normalizedTrack.uri).first<{ id: string }>();
   if (duplicate) throw new PublicError("That song is already part of this party. Pick another track and keep the queue mysterious.", 409);
@@ -574,7 +588,7 @@ export async function hostControl(code: string, hostKey: string, action: "start"
 export async function recordBooSkipProgress(code: string, hostKey: string, providerTrackId: string, percentInput: number) {
   const event = await loadEvent(code);
   if (!event || event.host_pin !== hostKey) throw new PublicError("Host controls belong to the browser that created this room.", 403);
-  const trackId = parseSpotifyTrackReference(providerTrackId).uri;
+  const trackId = parseTrackReference(providerTrackId).uri;
   if (!Number.isFinite(percentInput)) throw new PublicError("That playback position was invalid. Refresh the host page and try again.");
   const percent = Math.max(0, Math.min(100, Math.round(percentInput)));
   await getD1().prepare(`UPDATE submissions SET skip_percent = ?

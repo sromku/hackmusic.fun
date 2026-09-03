@@ -1,6 +1,8 @@
 export type PartyColor = "coral" | "sun" | "blue" | "mint";
 export type PartyStatus = "lobby" | "live" | "ended";
 export type QueueMode = "ordered" | "random" | "fair";
+export type MusicSource = "spotify" | "youtube";
+export const MUSIC_SOURCES: readonly MusicSource[] = ["spotify", "youtube"];
 export type ReactionTone = "up" | "down";
 
 export type PartyTrack = {
@@ -67,6 +69,7 @@ export type ParticipantParty = {
   title: string;
   viewer: PartyPerson;
   viewerDisplayName: string;
+  musicSource: MusicSource;
   people: PartyPerson[];
   currentTrack: PartyTrack | null;
   reactions: PartyReaction[];
@@ -86,6 +89,7 @@ export type RoomSummary = {
   scheduledFor: string | null;
   createdAt?: string;
   requiresPasscode: boolean;
+  musicSource: MusicSource;
 };
 
 export type HostQueuedTrack = PartyTrack & {
@@ -107,6 +111,7 @@ export type HostParty = {
   status: PartyStatus;
   scheduledFor: string | null;
   requiresPasscode: boolean;
+  musicSource: MusicSource;
   currentTrack: PartyTrack | null;
   people: Array<Omit<PartyPerson, "score"> & { score: number }>;
   reactions: Array<{ id: string; tone: ReactionTone }>;
@@ -150,6 +155,7 @@ export type PartyRequest = {
   kind?: ReactionTone;
   pin?: string;
   queueMode?: QueueMode;
+  musicSource?: MusicSource;
   name?: string;
   title?: string;
   passcode?: string;

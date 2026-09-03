@@ -1,6 +1,6 @@
 # HackMusic
 
-> HackMusic is a browser-based multiplayer music party game for private, in-person events. One host phone controls a shared speaker while guests submit secret Spotify tracks and react together.
+> HackMusic is a browser-based multiplayer music party game for private, in-person events. One host phone controls a shared speaker while guests submit secret Spotify or YouTube tracks and react together.
 
 Canonical site: https://hackmusic.fun
 

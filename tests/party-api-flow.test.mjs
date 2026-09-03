@@ -131,6 +131,71 @@ test("three distinct boos skip a song, preserve anonymity, and ending freezes th
   assert.match(lateJoin.data.error, /already ended/i);
 });
 
+test("YouTube videos share the queue with Spotify tracks and record boo-skip progress", async () => {
+  const created = await action(db, { action: "create", title: "YouTube Room Party", name: "Host Human", passcode: "VIBE42", musicSource: "youtube" }, { "cf-connecting-ip": "203.0.113.90" });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  const room = created.data.room;
+  const guests = [];
+  for (const name of ["Video One", "Video Two", "Video Three"]) {
+    const joined = await joinRoom(db, room, name);
+    assert.equal(joined.response.status, 200, JSON.stringify(joined.data));
+    guests.push(joined.participantId);
+  }
+  const videoId = seedTrack(db, room, room.participantId, { uri: "youtube:video:dQw4w9WgXcQ", title: "Never Gonna Give You Up", artist: "Rick Astley", duration: "3:33" });
+  const nextSpotifyId = seedTrack(db, room, guests[0], { status: "pending", uri: `spotify:track:${"C".repeat(22)}`, title: "Spotify Follow-up" });
+
+  const hostViewResponse = await requestWorker(`/api/party?code=${room.code}`, { headers: { "x-hackmusic-participant": room.participantId, "x-hackmusic-host-key": room.hostKey, "cf-connecting-ip": "203.0.113.30" } }, { DB: db });
+  const hostView = await hostViewResponse.json();
+  assert.equal(hostViewResponse.status, 200, JSON.stringify(hostView));
+  assert.equal(hostView.party.currentTrack.id, "youtube:video:dQw4w9WgXcQ");
+  assert.equal(hostView.party.currentTrack.artist, "Rick Astley");
+  assert.equal(hostView.party.queuedTracks[0].id, `spotify:track:${"C".repeat(22)}`);
+
+  const badLink = await action(db, { action: "submit", code: room.code, participantId: guests[1], trackUrl: "https://soundcloud.com/someone/some-song" });
+  assert.equal(badLink.response.status, 400);
+  assert.match(badLink.data.error, /Spotify track link or a YouTube video link/);
+  const badVideo = await action(db, { action: "submit", code: room.code, participantId: guests[1], trackUrl: "https://www.youtube.com/playlist?list=PL123" });
+  assert.equal(badVideo.response.status, 400);
+  assert.match(badVideo.data.error, /valid YouTube video ID/);
+  const wrongService = await action(db, { action: "submit", code: room.code, participantId: guests[1], trackUrl: "https://open.spotify.com/track/5lf9LK4eETye6DsPUJpHDB" });
+  assert.equal(wrongService.response.status, 400);
+  assert.match(wrongService.data.error, /YouTube only/);
+  assert.equal(created.data.room.musicSource, "youtube");
+  assert.equal(hostView.party.musicSource, "youtube");
+
+  for (const [index, participantId] of guests.entries()) {
+    const boo = await action(db, { action: "react", code: room.code, participantId, kind: "down" }, { "cf-connecting-ip": `203.0.113.${40 + index}` });
+    assert.equal(boo.response.status, 200, JSON.stringify(boo.data));
+  }
+  assert.equal(db.first("SELECT status, skip_reason FROM submissions WHERE id = ?", videoId).skip_reason, "boos");
+  assert.equal(db.first("SELECT current_submission_id FROM events WHERE code = ?", room.code).current_submission_id, nextSpotifyId);
+
+  const progress = await action(db, { action: "skipProgress", code: room.code, participantId: room.participantId, pin: room.hostKey, trackId: "youtube:video:dQw4w9WgXcQ", skipPercent: 61.4 });
+  assert.equal(progress.response.status, 200, JSON.stringify(progress.data));
+  assert.equal(db.first("SELECT skip_percent FROM submissions WHERE id = ?", videoId).skip_percent, 61);
+  assert.equal(progress.data.party.songHistory[0].skipPercent, 61);
+});
+
+test("a room is locked to one music source chosen at creation", async () => {
+  const invalid = await action(db, { action: "create", title: "Nowhere Party", name: "Host Human", passcode: "VIBE42", musicSource: "soundcloud" }, { "cf-connecting-ip": "203.0.113.91" });
+  assert.equal(invalid.response.status, 400);
+  assert.match(invalid.data.error, /Spotify or YouTube/);
+
+  const created = await action(db, { action: "create", title: "Spotify Room Party", name: "Host Human", passcode: "VIBE42" }, { "cf-connecting-ip": "203.0.113.92" });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  assert.equal(created.data.room.musicSource, "spotify");
+  const summaryResponse = await requestWorker(`/api/party?code=${created.data.room.code}`, { headers: { "cf-connecting-ip": "203.0.113.93" } }, { DB: db });
+  assert.equal((await summaryResponse.json()).room.musicSource, "spotify");
+
+  const guest = await joinRoom(db, created.data.room, "Video Fan");
+  assert.equal(guest.response.status, 200, JSON.stringify(guest.data));
+  assert.equal(guest.data.party.musicSource, "spotify");
+  const rejected = await action(db, { action: "submit", code: created.data.room.code, participantId: guest.participantId, trackUrl: "https://youtu.be/dQw4w9WgXcQ" });
+  assert.equal(rejected.response.status, 400);
+  assert.match(rejected.data.error, /Spotify only/);
+  assert.equal(db.first("SELECT COUNT(*) AS count FROM submissions WHERE event_id = (SELECT id FROM events WHERE code = ?)", created.data.room.code).count, 0);
+});
+
 test("party API rejects cross-origin writes and malformed request bodies", async () => {
   const crossOrigin = await requestWorker("/api/party", {
     method: "POST",
