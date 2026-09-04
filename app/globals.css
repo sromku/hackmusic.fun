@@ -586,6 +586,9 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 .activity-row:first-child.song-start { animation: noise-pop .52s cubic-bezier(.2, .8, .25, 1.25) both; }
 .activity-row.song-start .activity-avatar { border-radius: 0; background: var(--blue); font-size: 15px; }
 .activity-row.song-start .activity-icon { background: var(--sun); }
+.activity-row.song-past { margin: 8px 0; border: 2px dashed var(--ink); background: var(--paper); padding: 8px 10px; opacity: .78; }
+.activity-row.song-past .activity-avatar { border-radius: 0; background: var(--white); font-size: 15px; }
+.activity-row.song-past .activity-icon { background: var(--white); }
 .quiet-feed { margin: 14px 0 4px; color: #6d675e; font-size: 12px; font-weight: 700; }
 .activity-scroll-hint { margin: 12px 0 0; color: #676158; font-size: 10px; font-weight: 800; }
 .empty-player-copy { display: grid; min-height: 410px; place-items: center; align-content: center; padding: 36px; text-align: center; }
