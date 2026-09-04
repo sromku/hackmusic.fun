@@ -2044,3 +2044,30 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
   .hall-playlist li { grid-template-columns: 30px 1fr; }
   .hall-playlist li .song-outcome, .hall-playlist li > a { grid-column: 2; justify-self: start; }
 }
+
+.hall-personality { margin: 12px 0 0; border: 2px solid var(--ink); background: var(--sun); box-shadow: 4px 4px 0 var(--ink); padding: 8px 12px; font-size: 13px; font-weight: 750; max-width: 640px; }
+.arc-chart { display: flex; gap: 6px; align-items: stretch; margin-top: 14px; overflow-x: auto; border: 2px solid var(--ink); background: var(--paper); padding: 12px 10px 6px; }
+.arc-column { display: grid; grid-template-rows: 70px 70px auto; flex: 1 0 28px; min-width: 22px; max-width: 48px; }
+.arc-up, .arc-down { position: relative; }
+.arc-up { border-bottom: 2px solid var(--ink); }
+.arc-up span { position: absolute; left: 3px; right: 3px; bottom: 0; border: 2px solid var(--ink); border-bottom: 0; background: var(--mint); }
+.arc-down span { position: absolute; left: 3px; right: 3px; top: 0; border: 2px solid var(--ink); border-top: 0; background: var(--coral); }
+.arc-column.boos .arc-down span { background: #ff5b51; }
+.arc-column small { margin-top: 4px; text-align: center; font-size: 9px; font-weight: 900; color: #5f5a52; }
+.hall-insight-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 16px; }
+.insight { display: grid; gap: 6px; align-content: start; border: 2px solid var(--ink); background: var(--white); box-shadow: 4px 4px 0 var(--ink); padding: 12px 14px; }
+.insight.mint { background: var(--mint); } .insight.coral { background: var(--coral); } .insight.sun { background: var(--sun); }
+.insight small { font-size: 9px; font-weight: 950; letter-spacing: .1em; }
+.insight strong { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 18px; letter-spacing: -.02em; line-height: 1.2; }
+.insight strong .avatar, .insight p .avatar, .song-tag .avatar { width: 24px; height: 24px; font-size: 11px; }
+.insight p { margin: 0; font-size: 11px; font-weight: 750; line-height: 1.4; }
+.song-tag { display: inline-flex; flex-wrap: wrap; gap: 5px; align-items: center; font-size: 12px; font-weight: 800; }
+.song-tag b { font-weight: 950; }
+.receipt-mini { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.receipt-mini span { border: 2px solid var(--ink); background: var(--white); padding: 2px 6px; font-size: 9px; font-weight: 900; }
+.hall-history { width: 100%; margin-top: 14px; border-collapse: collapse; font-size: 12px; }
+.hall-history th { text-align: left; border-bottom: 2px solid var(--ink); padding: 6px 8px; font-size: 9px; letter-spacing: .1em; }
+.hall-history td { border-bottom: 1px solid #d9d3c6; padding: 8px; font-weight: 750; }
+.hall-history tr.current td { background: var(--sun); }
+.hall-history td small { font-weight: 700; color: #5f5a52; }
+.hall-history a { color: var(--ink); }

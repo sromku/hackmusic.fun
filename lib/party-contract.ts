@@ -206,6 +206,12 @@ export type RecapPlayer = {
   harshestCritic: RecapRelation | null;
   favoriteTarget: RecapRelation | null;
   nemesis: RecapRelation | null;
+  /** Picks that earned more cheers than boos, out of picks that reached the speaker. */
+  consistency: { wins: number; picks: number };
+  guessesMade: number;
+  guessesCorrect: number;
+  /** Net points this player handed to others: +3 per cheer (+6 boosted), −3 per boo. */
+  pointsGiven: number;
 };
 
 export type RecapSong = {
@@ -231,6 +237,34 @@ export type RecapSong = {
 
 export type RecapPair = { left: RecapRelation; right: RecapRelation; count: number };
 
+export type RecapSongMention = { queueId: string; title: string; pickerName: string; pickerAvatar: string; pickerColor: PartyColor };
+
+export type RecapInsights = {
+  startedAt: string | null;
+  endedAt: string | null;
+  minutes: number | null;
+  reactionPaceSeconds: number | null;
+  peakWindow: { start: string; end: string; reactions: number } | null;
+  fastestBoo: { song: RecapSongMention; by: RecapRelation; seconds: number } | null;
+  survivor: { song: RecapSongMention; boos: number } | null;
+  longestLife: { song: RecapSongMention; seconds: number } | null;
+  shortestLife: { song: RecapSongMention; seconds: number; percent: number } | null;
+  topArtist: { artist: string; songs: number; booedOff: number } | null;
+  silentSongs: number;
+  unanimousSongs: number;
+  soulmates: RecapPair | null;
+  contrarian: RecapRelation | null;
+  ghosts: RecapRelation[];
+  villain: RecapRelation | null;
+  saint: RecapRelation | null;
+  hardestToGuess: { player: RecapRelation; guesses: number; correct: number } | null;
+  bestDetective: RecapRelation | null;
+  shields: Array<{ song: RecapSongMention; boos: number; outcome: "saved" | "held" | "wasted" }>;
+  boosts: Array<{ song: RecapSongMention; by: RecapRelation; survived: boolean }>;
+  clutch: RecapSongMention[];
+  cheerShare: number | null;
+};
+
 export type PartyRecapPage = {
   code: string;
   title: string;
@@ -243,6 +277,7 @@ export type PartyRecapPage = {
   awards: PartyAward[];
   rivalry: RecapPair | null;
   bromance: RecapPair | null;
+  insights: RecapInsights;
 };
 
 export type DeviceMove = {

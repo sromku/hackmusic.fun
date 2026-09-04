@@ -139,6 +139,7 @@ export function drawHallOfFame(canvas: HTMLCanvasElement, recap: PartyRecapPage)
   canvas.height = HALL_HEIGHT;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("This browser cannot draw the Hall of Fame.");
+  const insights = recap.insights;
   context.fillStyle = PAPER;
   context.fillRect(0, 0, HALL_WIDTH, HALL_HEIGHT);
   context.fillStyle = COLORS[1];
@@ -152,69 +153,110 @@ export function drawHallOfFame(canvas: HTMLCanvasElement, recap: PartyRecapPage)
   text(context, "HM", 76, 148, 60, 950, PAPER);
   text(context, "HALL OF FAME", 210, 108, 26, 950);
   text(context, `ROOM ${recap.code} · ${recap.musicSource === "youtube" ? "YOUTUBE ROOM" : "SPOTIFY ROOM"}${recap.theme ? ` · 🎯 ${recap.theme.toUpperCase()}` : ""}`, 210, 150, 20, 800, "#5f5a52", 780);
-  context.font = "950 64px ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", sans-serif";
-  text(context, ellipsize(context, recap.title, 960), 60, 270, 64, 950);
+  context.font = "950 60px ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", sans-serif";
+  text(context, ellipsize(context, recap.title, 960), 60, 262, 60, 950);
+  const cheerShare = insights.cheerShare;
+  const personality = cheerShare === null ? "🧠 Silent room. Nobody reacted to anything." : cheerShare >= 80 ? `🧠 Cheer-heavy room · ${cheerShare}% cheers. Suspiciously supportive.` : cheerShare >= 60 ? `🧠 Generous room · ${cheerShare}% cheers, just enough boos to keep the DJ honest.` : cheerShare >= 40 ? `🧠 Balanced room · ${recap.stats.cheers} cheers, ${recap.stats.boos} boos. Exhausting democracy.` : cheerShare >= 20 ? `🧠 Boo-heavy room · ${100 - cheerShare}% boos. Everyone came to fight.` : `🧠 Hostile environment · ${100 - cheerShare}% boos. The playlist filed a complaint.`;
+  context.font = "850 22px ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", sans-serif";
+  text(context, ellipsize(context, personality, 960), 60, 300, 22, 850, "#3b3733");
 
   const stats = [[`${recap.stats.players}`, "HUMANS"], [`${recap.stats.songsPlayed}`, "SONGS"], [`${recap.stats.cheers}`, "CHEERS"], [`${recap.stats.boos}`, "BOOS"]];
   stats.forEach(([value, label], index) => {
     const x = 60 + index * 245;
-    box(context, x, 310, 225, 120, COLORS[index % COLORS.length], 8);
-    text(context, value, x + 20, 382, 50, 950);
-    text(context, label, x + 20, 412, 16, 900, "#3b3733");
+    box(context, x, 330, 225, 104, COLORS[index % COLORS.length], 8);
+    text(context, value, x + 20, 394, 44, 950);
+    text(context, label, x + 20, 420, 15, 900, "#3b3733");
   });
 
   // Podium
-  box(context, 60, 480, 960, 300, PAPER, 10);
-  text(context, "🏆 PODIUM", 90, 530, 28, 950);
+  box(context, 60, 480, 960, 250, PAPER, 10);
+  text(context, "🏆 PODIUM", 90, 526, 26, 950);
   const podium = recap.players.slice(0, 3);
-  const slots = [{ x: 400, h: 150, label: "1", fill: COLORS[0] }, { x: 130, h: 110, label: "2", fill: COLORS[2] }, { x: 670, h: 90, label: "3", fill: COLORS[3] }];
+  const slots = [{ x: 400, h: 130, label: "1", fill: COLORS[0] }, { x: 130, h: 100, label: "2", fill: COLORS[2] }, { x: 670, h: 80, label: "3", fill: COLORS[3] }];
   podium.forEach((player, index) => {
     const slot = slots[index];
-    const top = 760 - slot.h;
+    const top = 706 - slot.h;
     box(context, slot.x, top, 280, slot.h, slot.fill, 6);
-    text(context, slot.label, slot.x + 16, top + 44, 34, 950);
-    context.font = "900 26px ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", sans-serif";
-    text(context, `${player.avatar} ${ellipsize(context, player.displayName, 200)}`, slot.x + 60, top + 44, 26, 900);
-    text(context, `${player.score} pts`, slot.x + 60, top + 76, 22, 950, "#3b3733");
+    text(context, slot.label, slot.x + 16, top + 42, 32, 950);
+    context.font = "900 24px ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", sans-serif";
+    text(context, `${player.avatar} ${ellipsize(context, player.displayName, 200)}`, slot.x + 58, top + 42, 24, 900);
+    text(context, `${player.score} pts`, slot.x + 58, top + 70, 20, 950, "#3b3733");
   });
-  if (!podium.length) text(context, "Nobody scored. A remarkably peaceful party.", 90, 640, 24, 800, "#5f5a52");
+  if (!podium.length) text(context, "Nobody scored. A remarkably peaceful party.", 90, 620, 24, 800, "#5f5a52");
+
+  // Party arc
+  box(context, 60, 780, 960, 210, PAPER, 10);
+  text(context, "📈 THE PARTY ARC", 90, 824, 26, 950);
+  text(context, "cheers up · boos down · in play order", 360, 824, 16, 800, "#5f5a52");
+  const arcSongs = recap.songs.slice(0, 24);
+  const arcMax = Math.max(1, ...arcSongs.map((song) => Math.max(song.cheers, song.boos)));
+  const arcLeft = 90; const arcWidth = 900; const midY = 908; const arcHalf = 60;
+  context.fillStyle = INK; context.fillRect(arcLeft, midY - 1, arcWidth, 2);
+  const columnWidth = arcSongs.length ? Math.min(60, arcWidth / arcSongs.length) : 0;
+  arcSongs.forEach((song, index) => {
+    const x = arcLeft + index * columnWidth + 4;
+    const width = Math.max(6, columnWidth - 8);
+    const up = Math.round((song.cheers / arcMax) * arcHalf);
+    const down = Math.round((song.boos / arcMax) * arcHalf);
+    if (up) { context.fillStyle = "#b5ead7"; context.fillRect(x, midY - up, width, up); context.strokeStyle = INK; context.lineWidth = 2; context.strokeRect(x, midY - up, width, up); }
+    if (down) { context.fillStyle = song.skipReason === "boos" ? "#ff5b51" : "#ff8fa3"; context.fillRect(x, midY, width, down); context.strokeStyle = INK; context.lineWidth = 2; context.strokeRect(x, midY, width, down); }
+  });
+  if (!arcSongs.length) text(context, "No songs. A flat line.", 90, 900, 22, 800, "#5f5a52");
 
   // Awards
-  box(context, 60, 830, 960, 360, PAPER, 10);
-  text(context, "🎖️ AWARDS", 90, 880, 28, 950);
+  box(context, 60, 1040, 460, 300, PAPER, 10);
+  text(context, "🎖️ AWARDS", 90, 1084, 24, 950);
   recap.awards.slice(0, 5).forEach((entry, index) => {
-    const y = 934 + index * 52;
-    context.font = "950 24px ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", sans-serif";
-    text(context, `${entry.emoji} ${entry.title}`, 90, y, 24, 950);
-    context.font = "850 24px ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", sans-serif";
-    text(context, ellipsize(context, `${entry.winnerAvatar} ${entry.winnerName === "You" ? "" : entry.winnerName}`.trim() || entry.winnerName, 430), 560, y, 24, 850);
+    const y = 1128 + index * 44;
+    context.font = "900 19px ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", sans-serif";
+    text(context, ellipsize(context, `${entry.emoji} ${entry.title} · ${entry.winnerAvatar} ${entry.winnerName}`, 400), 90, y, 19, 900);
   });
-  if (!recap.awards.length) text(context, "No awards. Try booing harder next time.", 90, 950, 22, 800, "#5f5a52");
+  if (!recap.awards.length) text(context, "No awards. Try booing harder.", 90, 1140, 20, 800, "#5f5a52");
+
+  // Insights
+  box(context, 560, 1040, 460, 300, COLORS[0], 10);
+  text(context, "💡 INSIGHTS", 590, 1084, 24, 950);
+  const lines = [
+    insights.peakWindow ? `🔥 Peak ${new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(insights.peakWindow.start))}: ${insights.peakWindow.reactions} reactions in 30 min` : "🔥 The room never peaked",
+    insights.fastestBoo ? `🚨 Fastest boo: ${insights.fastestBoo.seconds}s into ${insights.fastestBoo.song.title} (${insights.fastestBoo.by.name})` : "🚨 No pre-judged songs",
+    insights.survivor ? `🛡️ Survivor: ${insights.survivor.song.title} took ${insights.survivor.boos} boos, finished` : "🛡️ No survivors of note",
+    insights.villain ? `💸 Boo economy: ${insights.villain.name} gave ${insights.villain.count} pts` : "💸 Nobody ran a deficit",
+    insights.minutes ? `⏱️ ${insights.minutes} min · a reaction every ${insights.reactionPaceSeconds ?? "—"}s` : "⏱️ No clock, no songs",
+  ];
+  lines.forEach((line, index) => {
+    context.font = "850 18px ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", sans-serif";
+    text(context, ellipsize(context, line, 400), 590, 1128 + index * 44, 18, 850);
+  });
 
   // Receipts
-  box(context, 60, 1240, 960, 260, COLORS[1], 10);
-  text(context, "🧾 THE RECEIPTS", 90, 1290, 28, 950);
+  box(context, 60, 1390, 960, 200, COLORS[1], 10);
+  text(context, "🧾 THE RECEIPTS", 90, 1434, 26, 950);
   const rivalry = recap.rivalry;
   const bromance = recap.bromance;
-  context.font = "850 24px ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", sans-serif";
-  text(context, rivalry ? ellipsize(context, `👻 Rivalry of the night: ${rivalry.left.avatar} ${rivalry.left.name} ⚔️ ${rivalry.right.avatar} ${rivalry.right.name} · ${rivalry.count} boo${rivalry.count === 1 ? "" : "s"} between them`, 900) : "👻 No rivalries. Suspiciously polite.", 90, 1345, 24, 850);
-  text(context, bromance ? ellipsize(context, `🙌 Mutual admiration: ${bromance.left.avatar} ${bromance.left.name} 🤝 ${bromance.right.avatar} ${bromance.right.name} · ${bromance.count} cheer${bromance.count === 1 ? "" : "s"}`, 900) : "🙌 No fan clubs formed.", 90, 1395, 24, 850);
   const mostBooed = [...recap.players].sort((left, right) => right.boosReceived - left.boosReceived)[0];
-  text(context, mostBooed && mostBooed.boosReceived ? ellipsize(context, `🪦 Most booed human: ${mostBooed.avatar} ${mostBooed.displayName} (${mostBooed.boosReceived}) · harshest critic ${mostBooed.harshestCritic?.avatar ?? ""} ${mostBooed.harshestCritic?.name ?? "nobody"}`, 900) : "🪦 Nobody was booed. Are you sure this was a party?", 90, 1445, 24, 850);
+  const receipts = [
+    rivalry ? `👻 Rivalry: ${rivalry.left.avatar} ${rivalry.left.name} ⚔️ ${rivalry.right.avatar} ${rivalry.right.name} · ${rivalry.count} boo${rivalry.count === 1 ? "" : "s"}` : "👻 No rivalries. Suspiciously polite.",
+    bromance ? `🙌 Admiration: ${bromance.left.avatar} ${bromance.left.name} 🤝 ${bromance.right.avatar} ${bromance.right.name} · ${bromance.count} cheer${bromance.count === 1 ? "" : "s"}` : "🙌 No fan clubs formed.",
+    mostBooed && mostBooed.boosReceived ? `🪦 Most booed: ${mostBooed.avatar} ${mostBooed.displayName} (${mostBooed.boosReceived}) · critic ${mostBooed.harshestCritic?.avatar ?? ""} ${mostBooed.harshestCritic?.name ?? "nobody"}` : "🪦 Nobody was booed. Was this a party?",
+  ];
+  receipts.forEach((line, index) => {
+    context.font = "850 22px ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", sans-serif";
+    text(context, ellipsize(context, line, 900), 90, 1482 + index * 42, 22, 850);
+  });
 
   // Playlist
-  box(context, 60, 1550, 960, 300, PAPER, 10);
-  text(context, "📼 THE PLAYLIST", 90, 1600, 28, 950);
-  const shown = recap.songs.slice(0, 5);
+  box(context, 60, 1640, 960, 210, PAPER, 10);
+  text(context, "📼 THE PLAYLIST", 90, 1684, 26, 950);
+  const shown = recap.songs.slice(0, 4);
   shown.forEach((song, index) => {
-    const y = 1646 + index * 40;
+    const y = 1724 + index * 34;
     const outcome = song.status === "played" ? "✅" : song.skipReason === "boos" ? "🪦" : "⏭️";
-    context.font = "850 20px ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", sans-serif";
-    text(context, ellipsize(context, `${outcome} ${song.title} · ${song.pickerAvatar} ${song.pickerName === "You" ? song.pickerName : song.pickerName}`, 880), 90, y, 20, 850);
+    context.font = "850 19px ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", sans-serif";
+    text(context, ellipsize(context, `${outcome} ${song.title} · ${song.pickerAvatar} ${song.pickerName} · 🙌 ${song.cheers} 👻 ${song.boos}`, 880), 90, y, 19, 850);
   });
-  if (recap.songs.length > shown.length) text(context, `…and ${recap.songs.length - shown.length} more on the Hall of Fame page`, 90, 1646 + shown.length * 40, 18, 800, "#5f5a52");
-  if (!recap.songs.length) text(context, "No songs made it to the speaker.", 90, 1650, 22, 800, "#5f5a52");
-  text(context, "hackmusic.fun", 60, 1890, 22, 900, "#5f5a52");
+  if (recap.songs.length > shown.length) text(context, `…and ${recap.songs.length - shown.length} more on the Hall of Fame page`, 90, 1724 + shown.length * 34, 16, 800, "#5f5a52");
+  if (!recap.songs.length) text(context, "No songs reached the speaker.", 90, 1730, 20, 800, "#5f5a52");
+  text(context, "hackmusic.fun", 60, 1895, 22, 900, "#5f5a52");
 }
 
 export async function shareHallOfFame(recap: PartyRecapPage): Promise<"shared" | "downloaded"> {

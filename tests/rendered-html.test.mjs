@@ -382,12 +382,14 @@ test("renders the Hall of Fame shell for an ended room", async () => {
   assert.match(html, /Hall of Fame · HackMusic room ABC123/);
   assert.match(html, /noindex/);
   const source = await readFile(new URL("app/e/[code]/recap/recap-page.tsx", projectRoot), "utf8");
-  for (const copy of ["THE PODIUM", "THE RECEIPTS", "RIVALRY OF THE NIGHT", "MUTUAL ADMIRATION SOCIETY", "BIGGEST FAN", "HARSHEST CRITIC", "CHEERED MOST", "BOOED MOST", "THE PLAYLIST", "Save as image", "recap=1"]) {
+  for (const copy of ["THE PODIUM", "THE RECEIPTS", "RIVALRY OF THE NIGHT", "MUTUAL ADMIRATION SOCIETY", "BIGGEST FAN", "HARSHEST CRITIC", "CHEERED MOST", "BOOED MOST", "THE PLAYLIST", "Save as image", "recap=1", "THE PARTY ARC", "FASTEST BOO", "SURVIVOR OF THE NIGHT", "VIBE SOULMATES", "CONTRARIAN", "GHOSTS", "BOO ECONOMY", "DRAMA REPORT", "YOUR PREVIOUS PARTIES", "roomPersonality"]) {
     assert.match(source, new RegExp(copy.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), copy);
   }
   const cardSource = await readFile(new URL("lib/recap-card.ts", projectRoot), "utf8");
   assert.match(cardSource, /export function drawHallOfFame/);
   assert.match(cardSource, /HALL_HEIGHT = 1920/);
+  assert.match(cardSource, /THE PARTY ARC/);
+  assert.match(cardSource, /💡 INSIGHTS/);
   const participantSource = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
   assert.match(participantSource, /Open the Hall of Fame/);
   const hostSource = await readFile(new URL("app/e/[code]/host/host-room.tsx", projectRoot), "utf8");

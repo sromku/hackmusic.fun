@@ -666,6 +666,24 @@ test("the Hall of Fame recap exposes scores, receipts, rivalries, and the playli
   assert.equal(recap.songs[1].pickerName, "Bob");
   assert.match(recap.songs[1].webUrl, /open\.spotify\.com/);
   assert.ok(recap.awards.some((entry) => entry.id === "most-booed"));
+  const insights = recap.insights;
+  assert.equal(insights.cheerShare, 40);
+  assert.equal(insights.survivor.song.title, "Bob Banger", "the closing song took a boo and finished");
+  assert.equal(insights.survivor.boos, 1);
+  assert.ok(insights.fastestBoo && insights.fastestBoo.seconds >= 0 && ["Bob", "Cara"].includes(insights.fastestBoo.by.name));
+  assert.equal(insights.villain.name, "Cara");
+  assert.equal(insights.villain.count, -6);
+  assert.equal(insights.saint.count, 3);
+  assert.equal(insights.peakWindow.reactions, 5);
+  assert.ok(insights.minutes >= 1);
+  assert.equal(insights.topArtist.artist, "Test Artist");
+  assert.equal(insights.silentSongs, 0);
+  assert.deepEqual(insights.ghosts, []);
+  assert.deepEqual(insights.shields, []);
+  assert.deepEqual(insights.boosts, []);
+  assert.equal(insights.longestLife.song.title, "Bob Banger", "host-skipped songs have no measured life; the played closer does");
+  assert.equal(me.pointsGiven, 3);
+  assert.deepEqual(cara2.consistency, { wins: 0, picks: 0 });
 
   const hostRecap = await (await requestWorker(`/api/party?code=${room.code}&recap=1`, { headers: { "x-hackmusic-participant": room.participantId, "x-hackmusic-host-key": room.hostKey, "cf-connecting-ip": "203.0.113.179" } }, { DB: db })).json();
   assert.equal(hostRecap.recap.players.find((player) => player.name === "You").displayName, "Host Human");
