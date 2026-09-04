@@ -29,6 +29,8 @@ const sections = [
       <ul>
         <li>Event names and participant display names.</li>
         <li>Spotify track links or YouTube video links and the resulting title, artist or channel name, duration, and Spotify track or YouTube video identifier.</li>
+        <li>Party play data: cheers, boos, quick emoji reactions sent to the host screen, guesses about who picked a song, one-time power-up use (song shield, double cheer), and the resulting scores.</li>
+        <li>Optional host settings such as a round theme and whether song pickers are revealed after each song.</li>
         <li>Cheers, boos, queue choices, scores, and other event actions.</li>
         <li>Your email address and message if you contact us directly.</li>
       </ul>
@@ -65,6 +67,7 @@ const sections = [
       <ul>
         <li><strong>Spotify OAuth cookie:</strong> a short-lived, HTTP-only cookie keeps the Spotify sign-in request secure for about 10 minutes.</li>
         <li><strong>Spotify session cookie:</strong> an encrypted, HTTP-only, secure cookie keeps the host’s authorized Spotify connection available for up to 30 days, or until the host disconnects it. It contains Spotify access credentials and required connection details and is not available to page scripts.</li>
+        <li><strong>YouTube embedded player:</strong> in YouTube rooms the host page embeds YouTube’s player, which may set Google’s own cookies and storage on the host device under Google’s policies. Guest phones never load the player.</li>
         <li><strong>Local browser storage:</strong> participant IDs, host keys, the host’s readable room passcode, hosted-room shortcuts, room names and statuses, recent access times, and the host’s public Spotify Client ID are stored on that device so the browser can recognize its room role, share invitations, and help the host reopen recent events. This hosted-room history stays in that browser and is not a separate server-side profile. Clearing site data removes it and may lock that browser out of host controls.</li>
         <li><strong>Analytics session storage:</strong> a random visit identifier is stored only for the life of the current browser tab session. It is not a cookie, is not shared across sites, and is not used to recognize you over time. Analytics collection is skipped when the browser sends an enabled Do Not Track or Global Privacy Control signal.</li>
         <li><strong>Infrastructure storage:</strong> OpenAI Sites and its infrastructure providers may use strictly necessary security, routing, authentication, load-balancing, or fraud-prevention technologies.</li>
@@ -74,10 +77,11 @@ const sections = [
   },
   {
     id: "spotify",
-    title: "Spotify connection",
+    title: "Spotify connection & YouTube playback",
     content: <>
       <p>A host may voluntarily connect a Spotify Premium account using Spotify’s authorization screen. HackMusic requests the permissions needed for streaming, account eligibility, playback state, and playback control. We use the resulting authorization to run the shared speaker and do not intentionally display or store the host’s Spotify email or private profile information in the HackMusic event database.</p>
       <p>Spotify controls its own service and data practices. Review the <a href="https://www.spotify.com/legal/privacy-policy/" target="_blank" rel="noreferrer">Spotify Privacy Policy ↗</a>. Disconnecting Spotify from the host page removes HackMusic’s Spotify cookies on that device; you can also revoke access from your Spotify account settings.</p>
+      <p>In YouTube rooms no account or sign-in is involved. When a guest submits a video link, our server asks YouTube’s public metadata endpoints for the title, channel, and duration. Playback happens inside YouTube’s embedded player on the host device only, where Google may collect viewing and device data under the <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google Privacy Policy ↗</a>. We do not receive YouTube account information.</p>
     </>,
   },
   {
@@ -99,7 +103,7 @@ const sections = [
     id: "retention",
     title: "Retention & security",
     content: <>
-      <p>Website analytics records older than 90 days are automatically deleted when analytics collection or owner reporting runs. The browser-tab analytics identifier ends with the tab session, and its server-side one-way form changes daily. Event records currently may remain in our hosted database until they are manually deleted, deleted during operational cleanup, or removed after a valid request. We do not promise a fixed automatic deletion date for event records. Spotify cookies expire as described above or can be removed by disconnecting or clearing site data.</p>
+      <p>Website analytics records older than 90 days are automatically deleted when analytics collection or owner reporting runs. The browser-tab analytics identifier ends with the tab session, and its server-side one-way form changes daily. Event records currently may remain in our hosted database until they are manually deleted, deleted during operational cleanup, or removed after a valid request. We do not promise a fixed automatic deletion date for event records. Spotify cookies expire as described above or can be removed by disconnecting or clearing site data. Host-handoff and move-to-another-device links are stored only as one-way hashes, work once, and expire after ten minutes.</p>
       <p>We use reasonable measures such as HTTPS, randomized room and participant identifiers, salted passcode hashes, one-way hashes for short-lived host-handoff links, request throttling based on one-way network-derived keys, device-held host keys, encrypted HTTP-only Spotify cookies, limited data collection, and restricted host controls. No online service is perfectly secure. Keep room links, passcodes, and host-handoff links private, do not reuse sensitive information as a display name, and protect the host device.</p>
     </>,
   },
@@ -138,5 +142,5 @@ const sections = [
 ];
 
 export default function PrivacyPage() {
-  return <LegalPage eyebrow="🔐 YOUR DATA, MINUS THE DRAMA" title="Privacy Policy" summary="The short version: we collect what the party needs, use limited cookie-free traffic counts, skip ad tracking, and keep private event routes away from search bots." accent="mint" sections={sections} lastUpdated="September 3, 2026" />;
+  return <LegalPage eyebrow="🔐 YOUR DATA, MINUS THE DRAMA" title="Privacy Policy" summary="The short version: we collect what the party needs, use limited cookie-free traffic counts, skip ad tracking, and keep private event routes away from search bots." accent="mint" sections={sections} lastUpdated="September 4, 2026" />;
 }

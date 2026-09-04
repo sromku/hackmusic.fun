@@ -282,7 +282,10 @@ test("renders tailored privacy and terms pages", async () => {
   assert.match(privacy, /older than 90 days/);
   assert.match(privacy, /Global Privacy Control/);
   assert.match(privacy, /YouTube \(Google\)/);
-  assert.match(privacy, /Last updated September 3, 2026/);
+  assert.match(privacy, /Last updated September 4, 2026/);
+  assert.match(privacy, /YouTube embedded player/);
+  assert.match(privacy, /Google Privacy Policy/);
+  assert.match(privacy, /one-way hashes, work once/);
 
   const termsResponse = await render("/terms");
   assert.equal(termsResponse.status, 200);
@@ -291,6 +294,7 @@ test("renders tailored privacy and terms pages", async () => {
   assert.match(terms, /New Jersey law/);
   assert.match(terms, /public-performance license/);
   assert.match(terms, /YouTube Terms of Service/);
+  assert.match(terms, /move their own seat to another device/);
   assert.match(terms, /OpenAI Sites/);
   assert.match(terms, /hackmusic\.fun@gmail\.com/);
   const legalSource = await readFile(new URL("app/legal-page.tsx", projectRoot), "utf8");

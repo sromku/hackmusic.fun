@@ -194,7 +194,8 @@ export async function executePartyAction(request: Request, input: PartyRequest):
       if (!input.transferToken) invalidAction();
       await protectPartyAction(request, input.action, code);
       const moved = await claimDeviceMove(code, input.transferToken);
-      return { body: { participantId: moved.participantId, ...(moved.hostKey ? { hostKey: moved.hostKey } : {}), party: await readParty(code, moved.participantId, moved.hostKey ?? "") } };
+      // Always the participant view: the phone lands on the guest page, and the host page loads its own view with the key.
+      return { body: { participantId: moved.participantId, ...(moved.hostKey ? { hostKey: moved.hostKey } : {}), party: await readParty(code, moved.participantId) } };
     }
     case "skipProgress":
       if (!input.trackId || typeof input.skipPercent !== "number" || !input.pin) invalidAction();

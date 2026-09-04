@@ -576,7 +576,8 @@ test("a guest can move their seat to another device with everything intact, and 
   const hostClaimed = await action(db, { action: "claimDeviceMove", code: room.code, transferToken: hostPrepared.data.move.token }, { "cf-connecting-ip": "203.0.113.155" });
   assert.equal(hostClaimed.response.status, 200, JSON.stringify(hostClaimed.data));
   assert.ok(hostClaimed.data.hostKey && hostClaimed.data.hostKey !== room.hostKey, "host key rotates with the move");
-  assert.ok(Array.isArray(hostClaimed.data.party.queuedTracks), "the phone gets the host view");
+  assert.ok(Array.isArray(hostClaimed.data.party.mySongs), "the phone lands on the guest view even for a host");
+  assert.equal(hostClaimed.data.party.queuedTracks, undefined);
   const oldHost = await action(db, { action: "queueMode", code: room.code, participantId: room.participantId, pin: room.hostKey, queueMode: "random" });
   assert.equal(oldHost.response.status, 403, "the old browser lost host control");
   const newHost = await action(db, { action: "queueMode", code: room.code, participantId: hostClaimed.data.participantId, pin: hostClaimed.data.hostKey, queueMode: "random" });

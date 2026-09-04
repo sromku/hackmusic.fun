@@ -566,11 +566,13 @@ export async function claimDeviceMove(code: string, transferToken: string) {
     d1.prepare("UPDATE host_transfers SET target_participant_id = ? WHERE target_participant_id = ? AND event_id = ?").bind(newId, oldId, event.id),
     d1.prepare("DELETE FROM device_moves WHERE participant_id = ?").bind(oldId),
   ];
-  if (nextHostKey) statements.push(d1.prepare("UPDATE events SET host_pin = ? WHERE id = ?").bind(nextHostKey, event.id));
+  // Only rotate the key if this batch actually moved the seat (a racing duplicate claim moves zero rows) and the key is unchanged.
+  if (nextHostKey) statements.push(d1.prepare("UPDATE events SET host_pin = ? WHERE id = ? AND host_pin = ? AND EXISTS (SELECT 1 FROM participants WHERE id = ? AND event_id = ?)").bind(nextHostKey, event.id, event.host_pin, newId, event.id));
   await d1.batch(statements);
   const moved = await d1.prepare("SELECT id FROM participants WHERE id = ? AND event_id = ?").bind(newId, event.id).first<{ id: string }>();
   if (!moved) throw new PublicError("The seat could not be moved. Open the QR code again on your other device.", 409);
-  return { participantId: newId, hostKey: nextHostKey };
+  const hostKeyApplied = nextHostKey ? (await d1.prepare("SELECT host_pin FROM events WHERE id = ?").bind(event.id).first<{ host_pin: string }>())?.host_pin === nextHostKey : false;
+  return { participantId: newId, hostKey: hostKeyApplied ? nextHostKey : null };
 }
 
 export async function reactToCurrent(code: string, participantId: string, kind: "up" | "down", boost = false, intendedTrackId = "") {
