@@ -1,4 +1,5 @@
 import { readParty, readRoomSummary } from "../../../db/party";
+import { readPartyRecap } from "../../../db/party-recap";
 import type { PartyAction, PartyRequest } from "../../../lib/party-contract";
 import { protectRoomLookup, RoomCreationGuardError } from "../../../lib/room-creation-guard";
 import { readBoundedJson, RequestSecurityError } from "../../../lib/request-security";
@@ -21,6 +22,7 @@ export async function GET(request: Request) {
       await protectRoomLookup(request);
       return json({ room: await readRoomSummary(code) });
     }
+    if (url.searchParams.has("recap")) return json({ recap: await readPartyRecap(code, participantId, hostKey) });
     return json({ party: await readParty(code, participantId, hostKey, activityAfter) });
   } catch (error) {
     if (error instanceof RequestSecurityError) return json({ error: error.message }, error.status, error.retryAfter ? { "retry-after": String(error.retryAfter) } : undefined);

@@ -187,6 +187,64 @@ export type HostParty = {
   flair?: HostFlair[];
 };
 
+export type RecapRelation = { id: string; name: string; avatar: string; color: PartyColor; count: number };
+
+export type RecapPlayer = {
+  id: string;
+  name: string;
+  displayName: string;
+  avatar: string;
+  color: PartyColor;
+  score: number;
+  rank: number;
+  songsPicked: number;
+  cheersReceived: number;
+  boosReceived: number;
+  cheersGiven: number;
+  boosGiven: number;
+  biggestFan: RecapRelation | null;
+  harshestCritic: RecapRelation | null;
+  favoriteTarget: RecapRelation | null;
+  nemesis: RecapRelation | null;
+};
+
+export type RecapSong = {
+  order: number;
+  queueId: string;
+  id: string;
+  title: string;
+  artist: string;
+  duration: string;
+  color: PartyColor;
+  status: "played" | "skipped";
+  skipReason: "boos" | "host" | null;
+  skipPercent: number | null;
+  cheers: number;
+  boos: number;
+  pickerId: string;
+  pickerName: string;
+  pickerAvatar: string;
+  pickerColor: PartyColor;
+  webUrl: string;
+  startedAt: string | null;
+};
+
+export type RecapPair = { left: RecapRelation; right: RecapRelation; count: number };
+
+export type PartyRecapPage = {
+  code: string;
+  title: string;
+  musicSource: MusicSource;
+  theme: string | null;
+  viewerId: string | null;
+  stats: { players: number; songsPlayed: number; songsBooedOff: number; cheers: number; boos: number; guesses: number; correctGuesses: number };
+  players: RecapPlayer[];
+  songs: RecapSong[];
+  awards: PartyAward[];
+  rivalry: RecapPair | null;
+  bromance: RecapPair | null;
+};
+
 export type DeviceMove = {
   token: string;
   expiresAt: string;

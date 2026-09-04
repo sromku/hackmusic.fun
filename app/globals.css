@@ -1963,3 +1963,84 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .moved-host-banner a { min-height: 40px; display: inline-flex; align-items: center; border: 2px solid var(--ink); background: var(--ink); box-shadow: 3px 3px 0 var(--coral); padding: 0 14px; color: var(--white); font-size: 11px; font-weight: 950; text-decoration: none; }
 .join-moved-note { margin: 0 0 12px; border: 2px solid var(--ink); background: var(--blue); padding: 8px 10px; font-size: 11px; font-weight: 800; line-height: 1.4; }
 @media (max-width: 560px) { .move-card { padding: 16px; } .move-qr { grid-template-columns: 1fr; justify-items: center; } .move-qr > div { width: 100%; } }
+
+
+/* ---------- Hall of Fame ---------- */
+.hall-shell { position: relative; min-height: 100dvh; overflow: hidden; padding: 18px 20px 60px; }
+.hall-hero { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: end; margin-top: 26px; }
+.hall-hero h1 { margin: 6px 0 0; font-size: clamp(44px, 8vw, 96px); letter-spacing: -.05em; line-height: .92; }
+.hall-lede { max-width: 640px; margin: 12px 0 0; font-size: 15px; font-weight: 800; line-height: 1.4; }
+.hall-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.hall-actions button, .hall-actions a { min-height: 46px; display: inline-flex; align-items: center; border: 2px solid var(--ink); background: var(--white); box-shadow: 4px 4px 0 var(--ink); padding: 0 14px; color: var(--ink); font-size: 12px; font-weight: 950; text-decoration: none; cursor: pointer; transition: transform .2s cubic-bezier(.2, .8, .25, 1.15), box-shadow .2s ease; }
+.hall-actions button:first-child { background: var(--sun); }
+.hall-actions button:not(:disabled):hover, .hall-actions a:hover { box-shadow: 6px 6px 0 var(--ink); transform: translate(-2px, -2px); }
+.hall-actions button:disabled { opacity: .6; cursor: wait; }
+.hall-stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
+.hall-stat { display: grid; gap: 4px; border: 2px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); padding: 14px; }
+.hall-stat strong { font-size: clamp(28px, 4vw, 44px); letter-spacing: -.05em; line-height: 1; }
+.hall-stat span { font-size: 9px; font-weight: 950; letter-spacing: .1em; }
+.hall-stat.sun { background: var(--sun); } .hall-stat.blue { background: var(--blue); } .hall-stat.mint { background: var(--mint); } .hall-stat.coral { background: var(--coral); } .hall-stat.paper { background: var(--white); }
+.hall-card { margin-top: 24px; border: 2px solid var(--ink); background: var(--white); box-shadow: 7px 7px 0 var(--ink); padding: 22px; animation: card-arrive .5s ease both; }
+.podium { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: end; margin-top: 16px; min-height: 200px; }
+.podium-slot { display: grid; justify-items: center; gap: 6px; border: 2px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); padding: 16px 10px; text-align: center; }
+.podium-slot .avatar { width: 56px; height: 56px; font-size: 26px; }
+.podium-slot strong { font-size: 16px; letter-spacing: -.02em; }
+.podium-slot b { font-size: 20px; letter-spacing: -.04em; }
+.podium-slot small { font-size: 10px; font-weight: 800; }
+.podium-slot.rank-1 { min-height: 200px; background: var(--sun); transform: rotate(-.6deg); }
+.podium-slot.rank-2 { min-height: 160px; background: var(--blue); }
+.podium-slot.rank-3 { min-height: 140px; background: var(--mint); transform: rotate(.6deg); }
+.podium-slot.empty { border: 2px dashed #c9c3b6; box-shadow: none; min-height: 120px; }
+.hall-scoreboard { display: grid; gap: 8px; margin: 18px 0 0; padding: 0; list-style: none; }
+.hall-scoreboard li { display: grid; grid-template-columns: 34px 36px 1fr auto; gap: 10px; align-items: center; border: 2px solid var(--ink); padding: 8px 10px; }
+.hall-scoreboard li.me { background: var(--sun); }
+.hall-scoreboard li > b { font-size: 16px; text-align: center; }
+.hall-scoreboard li strong { display: block; font-size: 14px; }
+.hall-scoreboard li small { display: block; font-size: 10px; font-weight: 750; color: #5f5a52; }
+.hall-points { font-size: 15px; font-weight: 950; }
+.hall-headlines { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 16px; }
+.headline { display: grid; gap: 6px; border: 2px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); padding: 12px 14px; }
+.headline small { font-size: 9px; font-weight: 950; letter-spacing: .1em; }
+.headline strong { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 15px; line-height: 1.3; }
+.headline strong .avatar { width: 26px; height: 26px; font-size: 12px; }
+.headline p { margin: 0; font-size: 11px; font-weight: 750; }
+.headline.coral { background: var(--coral); } .headline.mint { background: var(--mint); } .headline.sun { background: var(--sun); } .headline.paper { background: var(--paper); }
+.receipt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin-top: 18px; }
+.receipt { border: 2px solid var(--ink); background: var(--paper); box-shadow: 5px 5px 0 var(--ink); padding: 14px; }
+.receipt.me { background: var(--sun); }
+.receipt header { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: center; }
+.receipt header .avatar { width: 44px; height: 44px; font-size: 20px; }
+.receipt header strong { display: block; font-size: 15px; }
+.receipt header small { display: block; font-size: 10px; font-weight: 750; color: #5f5a52; }
+.receipt-verdict { margin: 10px 0 12px; border-left: 4px solid var(--ink); padding-left: 10px; font-size: 12px; font-weight: 800; font-style: italic; }
+.receipt-line { display: grid; grid-template-columns: 28px 1fr; gap: 8px; align-items: center; border-top: 1px solid #d9d3c6; padding: 8px 0; }
+.receipt-line.quiet { opacity: .7; }
+.receipt-emoji { font-size: 18px; }
+.receipt-line small { display: block; font-size: 8px; font-weight: 950; letter-spacing: .1em; }
+.receipt-line strong { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+.receipt-line strong .avatar { width: 22px; height: 22px; font-size: 11px; }
+.receipt-line strong b { border: 2px solid var(--ink); background: var(--white); padding: 0 5px; font-size: 10px; }
+.hall-playlist { display: grid; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
+.hall-playlist li { display: grid; grid-template-columns: 36px 1fr auto auto; gap: 12px; align-items: center; border: 2px solid var(--ink); padding: 10px 12px; }
+.hall-playlist li.boos { background: #ffe6e2; } .hall-playlist li.played { background: var(--white); } .hall-playlist li.host { background: var(--paper); }
+.playlist-order { font: 950 14px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.playlist-copy strong { display: block; font-size: 14px; }
+.playlist-copy span { display: block; font-size: 11px; font-weight: 750; color: #3b3733; }
+.playlist-copy small { display: flex; gap: 6px; align-items: center; margin-top: 4px; font-size: 10px; font-weight: 800; }
+.playlist-copy small .avatar { width: 20px; height: 20px; font-size: 10px; }
+.hall-playlist li > a { display: grid; width: 34px; height: 34px; place-items: center; border: 2px solid var(--ink); background: var(--white); color: var(--ink); font-weight: 950; text-decoration: none; }
+.hall-empty { margin: 14px 0 0; font-size: 13px; font-weight: 800; }
+.hall-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 28px; font-size: 12px; font-weight: 800; }
+.hall-footer a { color: var(--ink); }
+.hall-footer button { min-height: 44px; border: 2px solid var(--ink); background: var(--sun); box-shadow: 4px 4px 0 var(--ink); padding: 0 14px; cursor: pointer; font-size: 12px; font-weight: 950; }
+.hall-link { text-decoration: none; display: inline-flex; align-items: center; background: var(--mint) !important; }
+@media (max-width: 820px) {
+  .hall-shell { padding: 12px 12px 48px; }
+  .hall-hero { grid-template-columns: 1fr; }
+  .hall-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .podium { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .podium-slot .avatar { width: 40px; height: 40px; font-size: 18px; }
+  .podium-slot strong { font-size: 12px; }
+  .hall-playlist li { grid-template-columns: 30px 1fr; }
+  .hall-playlist li .song-outcome, .hall-playlist li > a { grid-column: 2; justify-self: start; }
+}

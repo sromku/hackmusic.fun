@@ -605,3 +605,68 @@ test("a host move prepared before a handoff cannot steal the room from the new h
   const stillHost = await action(db, { action: "queueMode", code: room.code, participantId: chosen.participantId, pin: claimedHost.data.hostKey, queueMode: "fair" });
   assert.equal(stillHost.response.status, 200, JSON.stringify(stillHost.data));
 });
+
+
+test("the Hall of Fame recap exposes scores, receipts, rivalries, and the playlist to members of an ended party", async () => {
+  const created = await action(db, { action: "create", title: "Hall of Fame Party", name: "Host Human", passcode: "VIBE42" }, { "cf-connecting-ip": "203.0.113.170" });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  const room = created.data.room;
+  const alice = await joinRoom(db, room, "Alice");
+  const bob = await joinRoom(db, room, "Bob");
+  const cara = await joinRoom(db, room, "Cara");
+  for (const joined of [alice, bob, cara]) assert.equal(joined.response.status, 200, JSON.stringify(joined.data));
+
+  const tooEarly = await requestWorker(`/api/party?code=${room.code}&recap=1`, { headers: { "x-hackmusic-participant": alice.participantId, "cf-connecting-ip": "203.0.113.171" } }, { DB: db });
+  assert.equal(tooEarly.status, 400, "recap is locked until the party ends");
+
+  // Song 1 by Alice: Bob and Cara boo it, host cheers it. Song 2 by Bob: Alice cheers, Cara boos.
+  seedTrack(db, room, alice.participantId, { title: "Alice Anthem", duration: "3:00" });
+  const song2 = seedTrack(db, room, bob.participantId, { status: "pending", uri: `spotify:track:${"I".repeat(22)}`, title: "Bob Banger", duration: "2:30" });
+  for (const [participantId, kind, ip] of [[bob.participantId, "down", 172], [cara.participantId, "down", 173], [room.participantId, "up", 174]]) {
+    const result = await action(db, { action: "react", code: room.code, participantId, kind }, { "cf-connecting-ip": `203.0.113.${ip}` });
+    assert.equal(result.response.status, 200, JSON.stringify(result.data));
+  }
+  const skipped = await action(db, { action: "skip", code: room.code, participantId: room.participantId, pin: room.hostKey });
+  assert.equal(skipped.response.status, 200, JSON.stringify(skipped.data));
+  db.prepare("UPDATE activity_events SET created_at = ? WHERE submission_id = ? AND kind = 'song_start'").bind(new Date(Date.now() - 20_000).toISOString(), song2).run();
+  for (const [participantId, kind, ip] of [[alice.participantId, "up", 175], [cara.participantId, "down", 176]]) {
+    const result = await action(db, { action: "react", code: room.code, participantId, kind }, { "cf-connecting-ip": `203.0.113.${ip}` });
+    assert.equal(result.response.status, 200, JSON.stringify(result.data));
+  }
+  const ended = await action(db, { action: "end", code: room.code, participantId: room.participantId, pin: room.hostKey });
+  assert.equal(ended.response.status, 200, JSON.stringify(ended.data));
+
+  const stranger = await requestWorker(`/api/party?code=${room.code}&recap=1`, { headers: { "x-hackmusic-participant": `p-${crypto.randomUUID()}`, "cf-connecting-ip": "203.0.113.177" } }, { DB: db });
+  assert.equal(stranger.status, 401, "only people who were in the room see the Hall of Fame");
+
+  const response = await requestWorker(`/api/party?code=${room.code}&recap=1`, { headers: { "x-hackmusic-participant": alice.participantId, "cf-connecting-ip": "203.0.113.178" } }, { DB: db });
+  assert.equal(response.status, 200);
+  const { recap } = await response.json();
+  assert.equal(recap.title, "Hall of Fame Party");
+  assert.equal(recap.stats.players, 4);
+  assert.equal(recap.stats.songsPlayed, 2);
+  assert.deepEqual([recap.stats.cheers, recap.stats.boos], [2, 3]);
+  const me = recap.players.find((player) => player.name === "You");
+  assert.equal(me.displayName, "Alice");
+  assert.equal(me.boosReceived, 2);
+  assert.equal(me.cheersReceived, 1);
+  assert.equal(me.nemesis, null, "Alice booed nobody");
+  assert.equal(me.favoriteTarget.name, "Bob");
+  assert.ok(["Bob", "Cara"].includes(me.harshestCritic.name));
+  assert.equal(me.biggestFan.name, "Host Human");
+  const cara2 = recap.players.find((player) => player.displayName === "Cara");
+  assert.equal(cara2.boosGiven, 2);
+  assert.ok(["You", "Bob"].includes(cara2.nemesis.name));
+  assert.ok(recap.rivalry && recap.rivalry.count === 1);
+  assert.equal(recap.bromance.count, 1);
+  assert.equal(recap.songs.length, 2);
+  assert.equal(recap.songs[0].title, "Alice Anthem");
+  assert.equal(recap.songs[0].pickerName, "You");
+  assert.deepEqual([recap.songs[0].cheers, recap.songs[0].boos, recap.songs[0].skipReason], [1, 2, "host"]);
+  assert.equal(recap.songs[1].pickerName, "Bob");
+  assert.match(recap.songs[1].webUrl, /open\.spotify\.com/);
+  assert.ok(recap.awards.some((entry) => entry.id === "most-booed"));
+
+  const hostRecap = await (await requestWorker(`/api/party?code=${room.code}&recap=1`, { headers: { "x-hackmusic-participant": room.participantId, "x-hackmusic-host-key": room.hostKey, "cf-connecting-ip": "203.0.113.179" } }, { DB: db })).json();
+  assert.equal(hostRecap.recap.players.find((player) => player.name === "You").displayName, "Host Human");
+});
