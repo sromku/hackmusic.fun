@@ -453,3 +453,27 @@ test("simultaneous cheers and boos from many guests are all recorded and never s
   assert.equal(hostView.party.currentTrack.title, "Burst Song");
   assert.deepEqual(hostView.party.activity.map((item) => item.tone).sort(), ["down", "down", "song", "up", "up", "up"]);
 });
+
+
+test("development hosts get 25x rate-limit headroom so a shared-IP test lab never trips 429s, production does not", async () => {
+  const created = await action(db, { action: "create", title: "Limit Lab", name: "Host Human", passcode: "VIBE42" }, { "cf-connecting-ip": "203.0.113.130" });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  const guest = await joinRoom(db, created.data.room, "Paste Machine");
+  assert.equal(guest.response.status, 200, JSON.stringify(guest.data));
+  // Ten rapid submissions from one guest on localhost: the production cap is six per minute.
+  for (let index = 0; index < 10; index += 1) {
+    const result = await action(db, { action: "submit", code: created.data.room.code, participantId: guest.participantId, trackUrl: "https://soundcloud.com/x/y" }, { "cf-connecting-ip": "203.0.113.131" });
+    assert.equal(result.response.status, 400, `submission ${index + 1}: ${JSON.stringify(result.data)}`);
+  }
+  // Production host: the sixth room creation from one network within the window is refused.
+  const statuses = [];
+  for (let index = 0; index < 6; index += 1) {
+    const response = await requestWorker("https://hackmusic.fun/api/party", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://hackmusic.fun", "cf-connecting-ip": "198.51.100.77" },
+      body: JSON.stringify({ action: "create", title: `Prod Room ${index}`, name: "Host Human", passcode: "VIBE42" }),
+    }, { DB: db });
+    statuses.push(response.status);
+  }
+  assert.deepEqual(statuses, [201, 201, 201, 201, 201, 429]);
+});

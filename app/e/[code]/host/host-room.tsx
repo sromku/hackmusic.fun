@@ -104,8 +104,9 @@ export default function HostRoom({ code }: { code: string }) {
   const partyMusicSource = party?.musicSource ?? "spotify";
   const hostDeviceName = hostDevice === "ios" ? "iPhone / iPad" : hostDevice === "android" ? "Android device" : hostDevice === "computer" ? "computer" : "device";
   const hostReady = Boolean(participantId && hostKey && !partyEnded);
-  const spotifyRoom = partyMusicSource === "spotify";
-  const youtubeRoom = partyMusicSource === "youtube";
+  // Neither connector starts until the room has loaded and declared its source.
+  const spotifyRoom = party?.musicSource === "spotify";
+  const youtubeRoom = party?.musicSource === "youtube";
 
   const advanceTrack = useCallback(async (outcome: "advance" | "skip") => {
     if (advancingTrackRef.current) return;

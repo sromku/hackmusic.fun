@@ -436,6 +436,7 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /party\.status !== "ended" && spotifyRoom && <section id="spotify-connect" className=\{`spotify-connect-card/);
   assert.match(source, /party\.status !== "ended" && youtubeRoom && <section className="spotify-connect-card youtube-room-card"/);
   assert.match(source, /enabled: hostReady && youtubeRoom/);
+  assert.match(source, /const spotifyRoom = party\?\.musicSource === "spotify"/);
   assert.match(source, /youtube-setup-grid/);
   assert.match(source, /No account\. No developer dashboard\. No client ID\./);
   assert.match(source, /party\.status !== "ended" && endConfirmOpen/);

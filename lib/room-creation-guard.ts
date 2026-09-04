@@ -1,4 +1,5 @@
 import { ensurePartySchema, getD1 } from "../db";
+import { isDevelopmentHost } from "./dev-only";
 import { assertSameOriginMutation, consumeRequestLimit, RequestSecurityError } from "./request-security";
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
@@ -60,8 +61,18 @@ export async function protectRoomCreation(request: Request, website = "") {
   const d1 = getD1();
   await d1.prepare("DELETE FROM room_creation_limits WHERE expires_at < ?").bind(now).run();
   const clientKey = await anonymousClientKey(request);
+  const scale = requestLimitScale(request);
   for (const limit of limits) {
-    await consumeLimit(clientKey, limit.kind, limit.windowMs, limit.maximum, now);
+    await consumeLimit(clientKey, limit.kind, limit.windowMs, limit.maximum * scale, now);
+  }
+}
+
+/** Development hosts (localhost, private LAN) run the same limiter with 25× headroom: the test lab puts every guest behind one IP. */
+export function requestLimitScale(request: Request) {
+  try {
+    return isDevelopmentHost(new URL(request.url).hostname) ? 25 : 1;
+  } catch {
+    return 1;
   }
 }
 
@@ -69,54 +80,54 @@ export async function protectPartyAction(request: Request, action: string, code:
   assertSameOriginMutation(request);
   const normalizedCode = code.trim().toUpperCase();
   if (action === "join") {
-    await consumeRequestLimit(request, { bucket: "join-room", subject: normalizedCode, windowMs: FIFTEEN_MINUTES, maximum: 60 });
+    await consumeRequestLimit(request, { bucket: "join-room", subject: normalizedCode, windowMs: FIFTEEN_MINUTES, maximum: 60 * requestLimitScale(request) });
     return;
   }
   if (action === "submit") {
-    await consumeRequestLimit(request, { bucket: "submit-track-room", subject: normalizedCode, windowMs: 60_000, maximum: 30 });
-    if (participantId) await consumeRequestLimit(request, { bucket: "submit-track-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 6 });
+    await consumeRequestLimit(request, { bucket: "submit-track-room", subject: normalizedCode, windowMs: 60_000, maximum: 30 * requestLimitScale(request) });
+    if (participantId) await consumeRequestLimit(request, { bucket: "submit-track-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 6 * requestLimitScale(request) });
     return;
   }
   if (action === "remove") {
-    await consumeRequestLimit(request, { bucket: "remove-track-room", subject: normalizedCode, windowMs: 60_000, maximum: 60 });
-    if (participantId) await consumeRequestLimit(request, { bucket: "remove-track-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 12 });
+    await consumeRequestLimit(request, { bucket: "remove-track-room", subject: normalizedCode, windowMs: 60_000, maximum: 60 * requestLimitScale(request) });
+    if (participantId) await consumeRequestLimit(request, { bucket: "remove-track-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 12 * requestLimitScale(request) });
     return;
   }
   if (action === "avatar") {
-    await consumeRequestLimit(request, { bucket: "avatar-room", subject: normalizedCode, windowMs: 60_000, maximum: 120 });
-    if (participantId) await consumeRequestLimit(request, { bucket: "avatar-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 20 });
+    await consumeRequestLimit(request, { bucket: "avatar-room", subject: normalizedCode, windowMs: 60_000, maximum: 120 * requestLimitScale(request) });
+    if (participantId) await consumeRequestLimit(request, { bucket: "avatar-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 20 * requestLimitScale(request) });
     return;
   }
   if (action === "profileName") {
-    await consumeRequestLimit(request, { bucket: "profile-name-room", subject: normalizedCode, windowMs: 60_000, maximum: 120 });
-    if (participantId) await consumeRequestLimit(request, { bucket: "profile-name-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 10 });
+    await consumeRequestLimit(request, { bucket: "profile-name-room", subject: normalizedCode, windowMs: 60_000, maximum: 120 * requestLimitScale(request) });
+    if (participantId) await consumeRequestLimit(request, { bucket: "profile-name-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 10 * requestLimitScale(request) });
     return;
   }
   if (action === "react") {
-    await consumeRequestLimit(request, { bucket: "react-room", subject: normalizedCode, windowMs: 60_000, maximum: 120 });
-    if (participantId) await consumeRequestLimit(request, { bucket: "react-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 12 });
+    await consumeRequestLimit(request, { bucket: "react-room", subject: normalizedCode, windowMs: 60_000, maximum: 120 * requestLimitScale(request) });
+    if (participantId) await consumeRequestLimit(request, { bucket: "react-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 12 * requestLimitScale(request) });
     return;
   }
   if (action === "flair") {
-    await consumeRequestLimit(request, { bucket: "flair-room", subject: normalizedCode, windowMs: 60_000, maximum: 600 });
-    if (participantId) await consumeRequestLimit(request, { bucket: "flair-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 20 });
+    await consumeRequestLimit(request, { bucket: "flair-room", subject: normalizedCode, windowMs: 60_000, maximum: 600 * requestLimitScale(request) });
+    if (participantId) await consumeRequestLimit(request, { bucket: "flair-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 20 * requestLimitScale(request) });
     return;
   }
   if (action === "guess" || action === "shield") {
-    await consumeRequestLimit(request, { bucket: `${action}-room`, subject: normalizedCode, windowMs: 60_000, maximum: 240 });
-    if (participantId) await consumeRequestLimit(request, { bucket: `${action}-person`, subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 12 });
+    await consumeRequestLimit(request, { bucket: `${action}-room`, subject: normalizedCode, windowMs: 60_000, maximum: 240 * requestLimitScale(request) });
+    if (participantId) await consumeRequestLimit(request, { bucket: `${action}-person`, subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 12 * requestLimitScale(request) });
     return;
   }
   if (action === "claimHost") {
-    await consumeRequestLimit(request, { bucket: "claim-host-room", subject: normalizedCode, windowMs: 60_000, maximum: 30 });
-    if (participantId) await consumeRequestLimit(request, { bucket: "claim-host-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 8 });
+    await consumeRequestLimit(request, { bucket: "claim-host-room", subject: normalizedCode, windowMs: 60_000, maximum: 30 * requestLimitScale(request) });
+    if (participantId) await consumeRequestLimit(request, { bucket: "claim-host-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 8 * requestLimitScale(request) });
     return;
   }
   if (["start", "skip", "advance", "end", "rename", "queueMode", "passcode", "prepareHostTransfer", "cancelHostTransfer", "skipProgress", "theme"].includes(action)) {
-    await consumeRequestLimit(request, { bucket: "host-control", subject: normalizedCode, windowMs: 60_000, maximum: 90 });
+    await consumeRequestLimit(request, { bucket: "host-control", subject: normalizedCode, windowMs: 60_000, maximum: 90 * requestLimitScale(request) });
   }
 }
 
 export async function protectRoomLookup(request: Request) {
-  await consumeRequestLimit(request, { bucket: "room-lookup", windowMs: FIFTEEN_MINUTES, maximum: 180 });
+  await consumeRequestLimit(request, { bucket: "room-lookup", windowMs: FIFTEEN_MINUTES, maximum: 180 * requestLimitScale(request) });
 }
