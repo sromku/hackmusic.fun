@@ -18,6 +18,7 @@ import {
   setParticipantAvatar,
   setParticipantName,
   setQueueMode,
+  setRevealPickers,
   setRoomPasscode,
   setRoundTheme,
   shieldCurrentSong,
@@ -46,6 +47,7 @@ export function partyActionFallback(action?: PartyAction) {
   if (action === "shield") return "The shield did not activate. Try again while your song is still playing.";
   if (action === "guess") return "Your guess did not go through. Try again.";
   if (action === "theme") return "The theme did not save. Try again.";
+  if (action === "revealPickers") return "The reveal setting did not save. Try again.";
   return "That host action did not finish. Refresh the host page and try again.";
 }
 
@@ -101,6 +103,11 @@ export async function executePartyAction(request: Request, input: PartyRequest):
       if (!input.guessParticipantId) invalidAction();
       await protectPartyAction(request, input.action, code, participantId);
       await guessSubmitter(code, participantId, input.guessParticipantId);
+      break;
+    case "revealPickers":
+      if (typeof input.revealPickers !== "boolean" || !input.pin) invalidAction();
+      await protectPartyAction(request, input.action, code);
+      await setRevealPickers(code, input.pin, input.revealPickers);
       break;
     case "theme":
       if (typeof input.theme !== "string" || !input.pin) invalidAction();

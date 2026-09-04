@@ -56,9 +56,10 @@ export type LastSongReveal = {
   queueId: string;
   title: string;
   artist: string;
-  submittedBy: string;
-  submitterAvatar: string;
-  submitterColor: PartyColor;
+  /** Null until the host enables per-song reveals or the party ends. */
+  submittedBy: string | null;
+  submitterAvatar: string | null;
+  submitterColor: PartyColor | null;
   mine: boolean;
   status: "played" | "skipped";
   skipReason: "boos" | "host" | null;
@@ -119,6 +120,7 @@ export type ParticipantParty = {
   viewerDisplayName: string;
   musicSource: MusicSource;
   theme: string | null;
+  revealPickers: boolean;
   powerUps: PartyPowerUps;
   guessOptions: PartyPerson[];
   myGuess: string | null;
@@ -168,6 +170,7 @@ export type HostParty = {
   requiresPasscode: boolean;
   musicSource: MusicSource;
   theme: string | null;
+  revealPickers: boolean;
   lastSong: LastSongReveal | null;
   awards?: PartyAward[];
   recap?: PartyRecap;
@@ -210,7 +213,8 @@ export type PartyAction =
   | "flair"
   | "shield"
   | "guess"
-  | "theme";
+  | "theme"
+  | "revealPickers";
 
 export type PartyRequest = {
   action?: PartyAction;
@@ -238,4 +242,5 @@ export type PartyRequest = {
   boost?: boolean;
   guessParticipantId?: string;
   theme?: string;
+  revealPickers?: boolean;
 };

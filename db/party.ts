@@ -203,13 +203,16 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
         id: string; title: string; artist: string; status: "played" | "skipped"; skip_reason: "boos" | "host" | null; skip_percent: number | null;
         submitter_id: string; display_name: string; initials: string; color: string; total_guesses: number; correct_guesses: number; my_guess_correct: number | null;
       }>();
+  const revealPickers = Boolean(event.reveal_pickers);
+  // Pickers stay secret on the guest page unless the host turned reveals on or the party is over. The host always sees them.
+  const canRevealPicker = isHost || revealPickers || event.status === "ended";
   const lastSong: LastSongReveal | null = lastSongRow ? {
     queueId: lastSongRow.id,
     title: lastSongRow.title,
     artist: lastSongRow.artist,
-    submittedBy: lastSongRow.submitter_id === viewerId ? "You" : lastSongRow.display_name,
-    submitterAvatar: lastSongRow.initials,
-    submitterColor: lastSongRow.color as PartyColor,
+    submittedBy: canRevealPicker || lastSongRow.submitter_id === viewerId ? (lastSongRow.submitter_id === viewerId ? "You" : lastSongRow.display_name) : null,
+    submitterAvatar: canRevealPicker || lastSongRow.submitter_id === viewerId ? lastSongRow.initials : null,
+    submitterColor: canRevealPicker || lastSongRow.submitter_id === viewerId ? lastSongRow.color as PartyColor : null,
     mine: lastSongRow.submitter_id === viewerId,
     status: lastSongRow.status,
     skipReason: lastSongRow.skip_reason,
@@ -286,6 +289,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
     requiresPasscode: Boolean(event.join_passcode_hash),
     musicSource: event.music_source ?? "spotify",
     theme: event.theme ?? null,
+    revealPickers,
     viewer,
     viewerDisplayName,
     people,
@@ -586,6 +590,13 @@ export async function guessSubmitter(code: string, participantId: string, guesse
     ON CONFLICT(submission_id, participant_id) DO UPDATE SET guessed_participant_id = excluded.guessed_participant_id, created_at = excluded.created_at
     WHERE song_guesses.correct IS NULL`)
     .bind(`guess-${crypto.randomUUID()}`, event.id, current.id, participantId, guessed.id, new Date().toISOString()).run();
+}
+
+export async function setRevealPickers(code: string, hostKey: string, reveal: boolean) {
+  const event = await loadEvent(code);
+  if (!event || event.host_pin !== hostKey) throw new PublicError("Host controls belong to the browser holding the aux cable.", 403);
+  if (event.status === "ended") throw new PublicError("This party has ended, so its settings are frozen.");
+  await getD1().prepare("UPDATE events SET reveal_pickers = ? WHERE id = ?").bind(reveal ? 1 : 0, event.id).run();
 }
 
 export async function setRoundTheme(code: string, hostKey: string, themeInput: string) {

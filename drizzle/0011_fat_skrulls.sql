@@ -1,0 +1,1 @@
+ALTER TABLE `events` ADD `reveal_pickers` integer DEFAULT 0 NOT NULL;

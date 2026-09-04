@@ -340,6 +340,8 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /The last song left the chat/);
   assert.match(source, /Played earlier:/);
   assert.match(source, /myOwnSongPlaying/);
+  assert.match(source, /MYSTERY CONTINUES/);
+  assert.match(source, /Still a mystery/);
   assert.match(source, /no self-cheering/);
   assert.match(source, /disabled=\{busy \|\| Boolean\(myReaction\) \|\| myOwnSongPlaying\}/);
   assert.match(source, /latestSongActivityId/);
@@ -489,6 +491,8 @@ test("renders a code-specific host control surface", async () => {
   assert.ok(source.indexOf("setParty(data.party);\n      setError(\"\");") < source.indexOf("runReactionEffects(data.party, incomingActivity, incomingFlair)"), "room data must be applied before effects run");
   assert.match(source, /📯 Airhorn/);
   assert.match(source, /action: "theme"/);
+  assert.match(source, /action: "revealPickers"/);
+  assert.match(source, /Pickers secret until the end/);
   assert.match(source, /ONE MORE BOO/);
   assert.match(source, /PLUG PULLED/);
   assert.match(source, /THREE CHEERS IN A ROW/);

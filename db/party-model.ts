@@ -12,6 +12,7 @@ export type EventRow = {
   queue_mode: QueueMode;
   music_source: MusicSource;
   theme: string | null;
+  reveal_pickers?: number;
   current_submission_id: string | null;
   host_pin: string;
   join_passcode_hash: string | null;
@@ -129,7 +130,7 @@ export function collapseLegacyReactionActivity(rows: ActivityRow[]) {
 
 export async function loadEvent(code: string) {
   await ensurePartySchema();
-  return getD1().prepare(`SELECT id, code, title, status, scheduled_for, queue_mode, music_source, theme,
+  return getD1().prepare(`SELECT id, code, title, status, scheduled_for, queue_mode, music_source, theme, reveal_pickers,
       current_submission_id, host_pin, join_passcode_hash, join_passcode_salt, created_at
     FROM events WHERE code = ?`)
     .bind(normalizeRoomCode(code)).first<EventRow>();

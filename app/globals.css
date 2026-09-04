@@ -1759,6 +1759,8 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .reveal-artist { margin: 6px 0 0; font-size: 13px; font-weight: 750; }
 .reveal-picker { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; margin-top: 14px; border: 2px solid var(--ink); background: var(--sun); padding: 10px 12px; }
 .reveal-picker .avatar { width: 44px; height: 44px; font-size: 20px; }
+.reveal-picker .avatar.mystery { background: var(--paper); }
+.reveal-picker em { display: block; margin-top: 2px; font-size: 10px; font-style: normal; font-weight: 700; }
 .reveal-picker small { display: block; font-size: 9px; font-weight: 950; letter-spacing: .1em; }
 .reveal-picker strong { display: block; font-size: 15px; }
 .reveal-guesses { text-align: right; }
@@ -1806,6 +1808,9 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 @keyframes alert-wobble { 0%, 100% { transform: translateX(-50%) rotate(-1deg); } 50% { transform: translateX(-50%) rotate(1.5deg) scale(1.03); } }
 @keyframes alert-out { to { opacity: 0; transform: translateX(-50%) scale(.9); } }
 .host-theme-pill { display: inline-block; margin: 8px 10px 0 0; border: 2px solid var(--ink); background: var(--sun); padding: 4px 8px; font-size: 11px; font-weight: 950; }
+.host-reveal-toggle { width: 100%; min-height: 46px; margin-bottom: 12px; border: 2px solid var(--ink); background: var(--white); cursor: pointer; font-size: 11px; font-weight: 900; }
+.host-reveal-toggle.armed { background: var(--sun); box-shadow: 4px 4px 0 var(--ink); }
+.host-reveal-toggle:disabled { opacity: .6; cursor: wait; }
 .host-airhorn { width: 100%; min-height: 50px; margin-bottom: 12px; border: 2px solid var(--ink); background: var(--coral); box-shadow: 4px 4px 0 var(--ink); cursor: pointer; font-size: 15px; font-weight: 950; transition: transform .15s cubic-bezier(.2, .8, .25, 1.4), box-shadow .15s ease; }
 .host-airhorn:not(:disabled):active { transform: translate(3px, 3px) scale(.98); box-shadow: 1px 1px 0 var(--ink); }
 .host-airhorn:disabled { box-shadow: none; opacity: .55; cursor: not-allowed; }
