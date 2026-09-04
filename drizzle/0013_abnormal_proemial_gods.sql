@@ -1,0 +1,1 @@
+ALTER TABLE `device_moves` ADD `host_pin` text;

@@ -582,3 +582,25 @@ test("a guest can move their seat to another device with everything intact, and 
   const newHost = await action(db, { action: "queueMode", code: room.code, participantId: hostClaimed.data.participantId, pin: hostClaimed.data.hostKey, queueMode: "random" });
   assert.equal(newHost.response.status, 200, JSON.stringify(newHost.data));
 });
+
+test("a host move prepared before a handoff cannot steal the room from the new host", async () => {
+  const created = await action(db, { action: "create", title: "Stale Move Party", name: "Host Human", passcode: "VIBE42" }, { "cf-connecting-ip": "203.0.113.160" });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  const room = created.data.room;
+  const chosen = await joinRoom(db, room, "Chosen Human");
+  assert.equal(chosen.response.status, 200, JSON.stringify(chosen.data));
+  // Host prepares a move (with host key), then hands the aux cable to someone else before scanning.
+  const prepared = await action(db, { action: "prepareDeviceMove", code: room.code, participantId: room.participantId, pin: room.hostKey });
+  assert.equal(prepared.data.move.includesHost, true);
+  const transfer = await action(db, { action: "prepareHostTransfer", code: room.code, participantId: room.participantId, pin: room.hostKey, targetParticipantId: chosen.data.party.viewer.id });
+  assert.equal(transfer.response.status, 200, JSON.stringify(transfer.data));
+  const claimedHost = await action(db, { action: "claimHost", code: room.code, participantId: chosen.participantId, transferToken: transfer.data.transfer.token });
+  assert.equal(claimedHost.response.status, 200, JSON.stringify(claimedHost.data));
+  // The stale move still moves the seat, but not the host role.
+  const moved = await action(db, { action: "claimDeviceMove", code: room.code, transferToken: prepared.data.move.token }, { "cf-connecting-ip": "203.0.113.161" });
+  assert.equal(moved.response.status, 200, JSON.stringify(moved.data));
+  assert.equal(moved.data.hostKey, undefined, "host role stays with the new host");
+  assert.equal(db.first("SELECT host_pin FROM events WHERE code = ?", room.code).host_pin, claimedHost.data.hostKey);
+  const stillHost = await action(db, { action: "queueMode", code: room.code, participantId: chosen.participantId, pin: claimedHost.data.hostKey, queueMode: "fair" });
+  assert.equal(stillHost.response.status, 200, JSON.stringify(stillHost.data));
+});

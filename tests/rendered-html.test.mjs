@@ -341,6 +341,8 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /Played earlier:/);
   assert.match(source, /BOOS UNMASKED/);
   assert.match(source, /Move me to my phone/);
+  assert.match(source, /hackmusic:\$\{code\}:moving/);
+  assert.match(source, /Host controls moved here too/);
   assert.match(source, /action: "prepareDeviceMove"/);
   assert.match(source, /action: "claimDeviceMove"/);
   assert.match(source, /aria-labelledby="move-title"/);
@@ -534,8 +536,8 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /action: "cancelHostTransfer"/);
   assert.match(source, /action: "claimHost"/);
   assert.match(source, /#handoff=/);
-  assert.match(source, /window\.localStorage\.setItem\(`hackmusic:\$\{code\}:host`/);
-  assert.match(source, /window\.localStorage\.removeItem\(`hackmusic:\$\{code\}:host`/);
+  assert.match(source, /window\.localStorage\.setItem\(hostStorageKey\(code/);
+  assert.match(source, /window\.localStorage\.removeItem\(hostStorageKey\(code/);
   assert.match(source, /Spotify cannot teleport/);
   assert.match(source, /PRE-PARTY LOBBY IS OPEN/);
   assert.match(source, /Start the party now/);
@@ -644,6 +646,8 @@ test("adds API and private-route security headers", async () => {
   assert.equal(storage.participantStorageKey("ABC123", "../evil key!"), "hackmusic:ABC123:participant:evilkey");
   assert.equal(storage.personaFromSearch("?persona=guest-3&passcode=VIBE42"), "guest-3");
   assert.equal(storage.personaDisplayName("guest-3"), "Guest 3");
+  assert.equal(storage.hostStorageKey("ABC123"), "hackmusic:ABC123:host");
+  assert.equal(storage.hostStorageKey("ABC123", "guest-2"), "hackmusic:ABC123:host:guest-2");
   const participantSource = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
   assert.match(participantSource, /isDevelopmentHost\(window\.location\.hostname\) \? personaFromSearch\(window\.location\.search\) : ""/);
   const devOnly = await loadTypeScriptModule("lib/dev-only.ts");

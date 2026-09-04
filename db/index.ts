@@ -114,6 +114,7 @@ async function initializePartySchema() {
       event_id TEXT NOT NULL,
       token_hash TEXT NOT NULL UNIQUE,
       includes_host INTEGER NOT NULL DEFAULT 0,
+      host_pin TEXT,
       expires_at INTEGER NOT NULL,
       created_at TEXT NOT NULL
     )`),

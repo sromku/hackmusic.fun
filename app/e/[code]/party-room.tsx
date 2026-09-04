@@ -9,7 +9,7 @@ import { extractYouTubeVideoId, youtubeThumbnailUrl } from "../../../lib/youtube
 import { FLAIR_EMOJIS, boosNeededToSkip } from "../../../lib/party-fun";
 import { MAX_PENDING_TRACKS_PER_PERSON, REACTION_GRACE_MS } from "../../../lib/party-rules";
 import { isDevelopmentHost } from "../../../lib/dev-only";
-import { participantStorageKey, personaDisplayName, personaFromSearch } from "../../../lib/party-storage";
+import { hostStorageKey, participantStorageKey, personaDisplayName, personaFromSearch } from "../../../lib/party-storage";
 import { shareRecapCard } from "../../../lib/recap-card";
 import type { DeviceMove, MySong, ParticipantParty, PartyActivity, PartyColor, PartyTrack, RoomSummary } from "../../../lib/party-contract";
 
@@ -49,6 +49,8 @@ export default function PartyRoom({ code }: { code: string }) {
   const [moveBusy, setMoveBusy] = useState(false);
   const [moveInvite, setMoveInvite] = useState<(DeviceMove & { url: string; qr: string }) | null>(null);
   const [movedAway, setMovedAway] = useState(false);
+  const [movedInAsHost, setMovedInAsHost] = useState(false);
+  const movePreparedRef = useRef(false);
   const moveCloseRef = useRef<HTMLButtonElement>(null);
   const spotifyHelpCloseRef = useRef<HTMLButtonElement>(null);
   const youtubeHelpCloseRef = useRef<HTMLButtonElement>(null);
@@ -79,7 +81,7 @@ export default function PartyRoom({ code }: { code: string }) {
           const data = await response.json() as { error?: string; participantId?: string; hostKey?: string; party?: ParticipantParty };
           if (!response.ok || !data.participantId || !data.party) throw new Error(data.error ?? "That move could not finish.");
           window.localStorage.setItem(participantStorageKey(code, persona), data.participantId);
-          if (data.hostKey) window.localStorage.setItem(`hackmusic:${code}:host`, data.hostKey);
+          if (data.hostKey) { window.localStorage.setItem(hostStorageKey(code, persona), data.hostKey); setMovedInAsHost(true); }
           window.history.replaceState(null, "", cleanUrl);
           setParticipantId(data.participantId);
           setParty({ ...data.party, activity: [] });
@@ -94,6 +96,7 @@ export default function PartyRoom({ code }: { code: string }) {
       return;
     }
     const saved = window.localStorage.getItem(participantStorageKey(code, persona)) ?? "";
+    movePreparedRef.current = window.sessionStorage.getItem(`hackmusic:${code}:moving`) === "1";
     const pendingHandoff = window.sessionStorage.getItem(`hackmusic:${code}:handoff`) ?? "";
     if (persona && !saved) {
       const presetPasscode = new URLSearchParams(window.location.search).get("passcode") ?? "";
@@ -143,13 +146,18 @@ export default function PartyRoom({ code }: { code: string }) {
         const message = String(reason instanceof Error ? reason.message : reason);
         if (message.includes("not joined") || message.includes("Join this room")) {
           setParticipantId("");
-          if (moveInvite) { setMovedAway(true); setMoveOpen(false); }
+          if (movePreparedRef.current) {
+            window.sessionStorage.removeItem(`hackmusic:${code}:moving`);
+            movePreparedRef.current = false;
+            setMovedAway(true);
+            setMoveOpen(false);
+          }
         }
       });
     void refresh();
     const timer = window.setInterval(refresh, 2000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [code, moveInvite, participantId]);
+  }, [code, participantId]);
 
   useEffect(() => {
     if (!moveOpen) return;
@@ -370,9 +378,12 @@ export default function PartyRoom({ code }: { code: string }) {
     if (moveInvite && new Date(moveInvite.expiresAt).getTime() > Date.now() + 30_000) return;
     setMoveBusy(true);
     try {
-      const hostKey = window.localStorage.getItem(`hackmusic:${code}:host`) ?? "";
+      const persona = isDevelopmentHost(window.location.hostname) ? personaFromSearch(window.location.search) : "";
+      const hostKey = window.localStorage.getItem(hostStorageKey(code, persona)) ?? "";
       const data = await postAction({ action: "prepareDeviceMove", ...(hostKey ? { pin: hostKey } : {}) }) as unknown as { party: ParticipantParty; move?: DeviceMove };
       if (!data.move) throw new Error("The move link did not arrive.");
+      window.sessionStorage.setItem(`hackmusic:${code}:moving`, "1");
+      movePreparedRef.current = true;
       const url = `${window.location.origin}/e/${code}?move=${encodeURIComponent(data.move.token)}`;
       const qr = await QRCode.toDataURL(url, { width: 240, margin: 1, color: { dark: "#151515", light: "#fffef9" } });
       setMoveInvite({ ...data.move, url, qr });
@@ -457,6 +468,7 @@ export default function PartyRoom({ code }: { code: string }) {
         {!ended && party && <button className="add-song-button" type="button" onClick={() => setAddOpen(true)}><span aria-hidden="true">🎵</span> Add a song</button>}
       </section>
 
+      {party && movedInAsHost && !ended && <section className="moved-host-banner" role="status"><div><strong>🎛️ Host controls moved here too.</strong><span>The speaker did not: open the host page on this device and tap Start speaker.</span></div><a href={`/e/${code}/host${isDevelopmentHost(window.location.hostname) && personaFromSearch(window.location.search) ? `?persona=${encodeURIComponent(personaFromSearch(window.location.search))}` : ""}`}>Open host controls →</a></section>}
       {party && !ended && party.theme && <section className="theme-banner" role="status"><span>🎯 ROUND THEME</span><strong dir="auto">{party.theme}</strong><small>Set by the host. Pick accordingly, or rebel loudly.</small></section>}
       {party && ended && <section className="ended-banner"><strong>🏁 THAT’S A WRAP.</strong><span>🏆 No more votes. Boos are unmasked below. Bragging may continue indefinitely.</span><button type="button" className="recap-share" onClick={() => void shareRecap()} disabled={recapBusy}>{recapBusy ? "📸 Drawing…" : "📸 Share the recap card"}</button></section>}
       {party && ended && party.awards && party.awards.length > 0 && <section className="awards-card" aria-labelledby="awards-title"><div className="card-title-row"><h2 id="awards-title">🎖️ PARTY AWARDS</h2><span>{party.awards.length} {party.awards.length === 1 ? "TROPHY" : "TROPHIES"}</span></div><div className="awards-grid">{party.awards.map((entry) => <article className={`award ${entry.winnerName === "You" ? "mine" : ""}`} key={entry.id}><span className="award-emoji" aria-hidden="true">{entry.emoji}</span><div><strong>{entry.title}</strong><p><span className={`avatar ${entry.winnerColor}`}>{entry.winnerAvatar}</span> <b>{entry.winnerName}</b></p><small>{entry.detail}</small></div></article>)}</div></section>}

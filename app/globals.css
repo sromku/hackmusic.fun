@@ -1957,5 +1957,9 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .move-qr code { overflow-wrap: anywhere; border: 2px dashed var(--ink); padding: 8px; font-size: 10px; user-select: all; }
 .move-qr button { min-height: 40px; border: 2px solid var(--ink); background: var(--mint); box-shadow: 3px 3px 0 var(--ink); cursor: pointer; font-size: 11px; font-weight: 950; }
 .move-footnote { display: block; margin-top: 14px; font-size: 10px; font-weight: 750; line-height: 1.4; }
+.moved-host-banner { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 18px; border: 2px solid var(--ink); background: var(--sun); box-shadow: 6px 6px 0 var(--ink); padding: 12px 16px; }
+.moved-host-banner strong { display: block; font-size: 14px; }
+.moved-host-banner span { display: block; margin-top: 3px; font-size: 11px; font-weight: 750; }
+.moved-host-banner a { min-height: 40px; display: inline-flex; align-items: center; border: 2px solid var(--ink); background: var(--ink); box-shadow: 3px 3px 0 var(--coral); padding: 0 14px; color: var(--white); font-size: 11px; font-weight: 950; text-decoration: none; }
 .join-moved-note { margin: 0 0 12px; border: 2px solid var(--ink); background: var(--blue); padding: 8px 10px; font-size: 11px; font-weight: 800; line-height: 1.4; }
 @media (max-width: 560px) { .move-card { padding: 16px; } .move-qr { grid-template-columns: 1fr; justify-items: center; } .move-qr > div { width: 100%; } }

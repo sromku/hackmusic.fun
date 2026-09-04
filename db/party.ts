@@ -522,11 +522,11 @@ export async function prepareDeviceMove(code: string, participantId: string, hos
   const expiresAt = now + DEVICE_MOVE_TTL_MS;
   await d1.batch([
     d1.prepare("DELETE FROM device_moves WHERE expires_at <= ?").bind(now),
-    d1.prepare(`INSERT INTO device_moves (participant_id, event_id, token_hash, includes_host, expires_at, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+    d1.prepare(`INSERT INTO device_moves (participant_id, event_id, token_hash, includes_host, host_pin, expires_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(participant_id) DO UPDATE SET token_hash = excluded.token_hash, includes_host = excluded.includes_host,
-        expires_at = excluded.expires_at, created_at = excluded.created_at`)
-      .bind(participantId, event.id, tokenHash, includesHost ? 1 : 0, expiresAt, new Date(now).toISOString()),
+        host_pin = excluded.host_pin, expires_at = excluded.expires_at, created_at = excluded.created_at`)
+      .bind(participantId, event.id, tokenHash, includesHost ? 1 : 0, includesHost ? event.host_pin : null, expiresAt, new Date(now).toISOString()),
   ]);
   return { token, expiresAt: new Date(expiresAt).toISOString(), includesHost };
 }
@@ -543,15 +543,17 @@ export async function claimDeviceMove(code: string, transferToken: string) {
   const d1 = getD1();
   const tokenHash = await hashTransferToken(`device-move|${transferToken}`);
   const now = Date.now();
-  const move = await d1.prepare("SELECT participant_id, includes_host FROM device_moves WHERE event_id = ? AND token_hash = ? AND expires_at > ?")
-    .bind(event.id, tokenHash, now).first<{ participant_id: string; includes_host: number }>();
+  const move = await d1.prepare("SELECT participant_id, includes_host, host_pin FROM device_moves WHERE event_id = ? AND token_hash = ? AND expires_at > ?")
+    .bind(event.id, tokenHash, now).first<{ participant_id: string; includes_host: number; host_pin: string | null }>();
   if (!move) {
     await d1.prepare("DELETE FROM device_moves WHERE event_id = ? AND expires_at <= ?").bind(event.id, now).run();
     throw new PublicError("That move link is expired or already used. Open the QR code again on your other device.", 401);
   }
   const oldId = move.participant_id;
   const newId = `p-${crypto.randomUUID()}`;
-  const includesHost = Boolean(move.includes_host);
+  // The host role moves only if the key this move was prepared with is still the room's key. If the aux cable was handed
+  // to someone else in between, the seat still moves but the new host keeps the room.
+  const includesHost = Boolean(move.includes_host) && move.host_pin === event.host_pin;
   const nextHostKey = includesHost ? randomHostKey() : null;
   const statements = [
     d1.prepare("UPDATE participants SET id = ? WHERE id = ? AND event_id = ?").bind(newId, oldId, event.id),

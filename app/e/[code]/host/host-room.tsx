@@ -10,7 +10,7 @@ import { extractSpotifyTrackId } from "../../../../lib/spotify-track";
 import { trackSource, type TrackSource } from "../../../../lib/track-link";
 import { extractYouTubeVideoId, youtubeThumbnailUrl } from "../../../../lib/youtube-track";
 import { isDevelopmentHost } from "../../../../lib/dev-only";
-import { participantStorageKey, personaFromSearch } from "../../../../lib/party-storage";
+import { hostStorageKey, participantStorageKey, personaFromSearch } from "../../../../lib/party-storage";
 import type { SpotifyPlaybackState, SpotifyPlayer, SpotifyProgress } from "./spotify-sdk";
 import { useReactionSounds, type MusicVolumeControl } from "./use-reaction-sounds";
 import HostEffects, { HostEffectsBoundary, burstEmojisFor, makeBursts, type HostAlert, type HostBurst } from "./host-effects";
@@ -206,7 +206,7 @@ export default function HostRoom({ code }: { code: string }) {
   useEffect(() => {
     const persona = isDevelopmentHost(window.location.hostname) ? personaFromSearch(window.location.search) : "";
     const participant = window.localStorage.getItem(participantStorageKey(code, persona)) ?? "";
-    const key = window.localStorage.getItem(`hackmusic:${code}:host`) ?? "";
+    const key = window.localStorage.getItem(hostStorageKey(code, persona)) ?? "";
     const savedSpotifyClientId = window.localStorage.getItem("hackmusic:spotify:clientId") ?? "";
     const savedJoinPasscode = window.localStorage.getItem(`hackmusic:${code}:joinPasscode`) ?? "";
     const fragmentToken = new URLSearchParams(window.location.hash.slice(1)).get("handoff") ?? "";
@@ -314,7 +314,7 @@ export default function HostRoom({ code }: { code: string }) {
       const data = await response.json().catch(() => null) as { error?: string; party?: HostParty & { activity?: Array<{ id: string; tone: "up" | "down" | "song"; createdAt: string }> } } | null;
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
-          window.localStorage.removeItem(`hackmusic:${code}:host`);
+          window.localStorage.removeItem(hostStorageKey(code, isDevelopmentHost(window.location.hostname) ? personaFromSearch(window.location.search) : ""));
           spotifyPlayerRef.current?.disconnect();
           spotifyPlayerRef.current = null;
           setSpeakerArmed(false);
@@ -945,7 +945,7 @@ export default function HostRoom({ code }: { code: string }) {
       const response = await fetch("/api/party", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "claimHost", code, participantId, transferToken: handoffToken }) });
       const data = await response.json() as { error?: string; hostKey?: string; party?: HostParty };
       if (!response.ok || !data.hostKey || !data.party) throw new Error(data.error ?? "Could not accept the host controls.");
-      window.localStorage.setItem(`hackmusic:${code}:host`, data.hostKey);
+      window.localStorage.setItem(hostStorageKey(code, isDevelopmentHost(window.location.hostname) ? personaFromSearch(window.location.search) : ""), data.hostKey);
       window.sessionStorage.removeItem(`hackmusic:${code}:handoff`);
       window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
       rememberHostedRoom(data.party);

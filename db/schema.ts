@@ -114,6 +114,7 @@ export const deviceMoves = sqliteTable("device_moves", {
   eventId: text("event_id").notNull(),
   tokenHash: text("token_hash").notNull().unique(),
   includesHost: integer("includes_host").notNull().default(0),
+  hostPin: text("host_pin"),
   expiresAt: integer("expires_at").notNull(),
   createdAt: text("created_at").notNull(),
 }, (table) => [

@@ -27,3 +27,8 @@ export function personaDisplayName(persona: string) {
   const spaced = scope.replace(/[-_]+/g, " ").trim();
   return spaced.replace(/\b\w/g, (letter) => letter.toUpperCase()).slice(0, 24);
 }
+
+export function hostStorageKey(code: string, persona = "") {
+  const scope = normalizePersona(persona);
+  return scope ? `hackmusic:${code}:host:${scope}` : `hackmusic:${code}:host`;
+}
