@@ -187,6 +187,12 @@ export type HostParty = {
   flair?: HostFlair[];
 };
 
+export type DeviceMove = {
+  token: string;
+  expiresAt: string;
+  includesHost: boolean;
+};
+
 export type HostTransfer = {
   token: string;
   targetName: string;
@@ -216,7 +222,9 @@ export type PartyAction =
   | "shield"
   | "guess"
   | "theme"
-  | "revealPickers";
+  | "revealPickers"
+  | "prepareDeviceMove"
+  | "claimDeviceMove";
 
 export type PartyRequest = {
   action?: PartyAction;

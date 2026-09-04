@@ -2,11 +2,13 @@ import {
   assertMusicSource,
   assertPartyParticipant,
   cancelHostTransfer,
+  claimDeviceMove,
   claimHostTransfer,
   createRoom,
   guessSubmitter,
   hostControl,
   joinParty,
+  prepareDeviceMove,
   reactToCurrent,
   readParty,
   recordFlair,
@@ -48,6 +50,8 @@ export function partyActionFallback(action?: PartyAction) {
   if (action === "guess") return "Your guess did not go through. Try again.";
   if (action === "theme") return "The theme did not save. Try again.";
   if (action === "revealPickers") return "The reveal setting did not save. Try again.";
+  if (action === "prepareDeviceMove") return "We could not prepare the move. Your seat stays on this device.";
+  if (action === "claimDeviceMove") return "That move could not finish. Open the QR code again on your other device.";
   return "That host action did not finish. Refresh the host page and try again.";
 }
 
@@ -180,6 +184,17 @@ export async function executePartyAction(request: Request, input: PartyRequest):
       await protectPartyAction(request, input.action, code, participantId);
       const nextHostKey = await claimHostTransfer(code, participantId, input.transferToken);
       return { body: { party: await readParty(code, participantId, nextHostKey), hostKey: nextHostKey } };
+    }
+    case "prepareDeviceMove": {
+      await protectPartyAction(request, input.action, code, participantId);
+      const move = await prepareDeviceMove(code, participantId, input.pin ?? "");
+      return { body: { party: await readParty(code, participantId), move } };
+    }
+    case "claimDeviceMove": {
+      if (!input.transferToken) invalidAction();
+      await protectPartyAction(request, input.action, code);
+      const moved = await claimDeviceMove(code, input.transferToken);
+      return { body: { participantId: moved.participantId, ...(moved.hostKey ? { hostKey: moved.hostKey } : {}), party: await readParty(code, moved.participantId, moved.hostKey ?? "") } };
     }
     case "skipProgress":
       if (!input.trackId || typeof input.skipPercent !== "number" || !input.pin) invalidAction();

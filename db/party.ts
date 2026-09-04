@@ -44,6 +44,7 @@ type CreateRoomOptions = {
 };
 
 const HOST_TRANSFER_TTL_MS = 10 * 60 * 1000;
+const DEVICE_MOVE_TTL_MS = 10 * 60 * 1000;
 
 function randomHostKey() {
   return `host-${crypto.randomUUID()}-${crypto.randomUUID()}`;
@@ -501,6 +502,73 @@ export async function claimHostTransfer(code: string, participantId: string, tra
   }
   await d1.prepare("DELETE FROM host_transfers WHERE event_id = ?").bind(event.id).run();
   return nextHostKey;
+}
+
+/**
+ * A participant asks to move their seat to another device. If they also hold the host key, the host role moves with them.
+ * The returned token is shown only as a QR code / link on the current device and is hashed at rest.
+ */
+export async function prepareDeviceMove(code: string, participantId: string, hostKey = "") {
+  const event = await loadEvent(code);
+  if (!event) throw new PublicError("Room not found. Check the six-character code and try again.", 404);
+  if (event.status === "ended") throw new PublicError("This party has ended. Seats are frozen along with the scores.");
+  const d1 = getD1();
+  const member = await d1.prepare("SELECT id, display_name FROM participants WHERE id = ? AND event_id = ?").bind(participantId, event.id).first<{ id: string; display_name: string }>();
+  if (!member) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);
+  const includesHost = Boolean(hostKey) && hostKey === event.host_pin;
+  const token = randomTransferToken();
+  const tokenHash = await hashTransferToken(`device-move|${token}`);
+  const now = Date.now();
+  const expiresAt = now + DEVICE_MOVE_TTL_MS;
+  await d1.batch([
+    d1.prepare("DELETE FROM device_moves WHERE expires_at <= ?").bind(now),
+    d1.prepare(`INSERT INTO device_moves (participant_id, event_id, token_hash, includes_host, expires_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(participant_id) DO UPDATE SET token_hash = excluded.token_hash, includes_host = excluded.includes_host,
+        expires_at = excluded.expires_at, created_at = excluded.created_at`)
+      .bind(participantId, event.id, tokenHash, includesHost ? 1 : 0, expiresAt, new Date(now).toISOString()),
+  ]);
+  return { token, expiresAt: new Date(expiresAt).toISOString(), includesHost };
+}
+
+/**
+ * The new device redeems the token. The participant's credential (their id) is rotated so the old device is locked out on
+ * its next request, while the public identity, songs, reactions, guesses, and score all carry over untouched.
+ */
+export async function claimDeviceMove(code: string, transferToken: string) {
+  const event = await loadEvent(code);
+  if (!event) throw new PublicError("Room not found. Check the move link and try again.", 404);
+  if (event.status === "ended") throw new PublicError("This party already ended, so there is nothing left to move.");
+  if (!/^[A-Za-z0-9_-]{40,64}$/.test(transferToken)) throw new PublicError("That move link is incomplete. Open the QR code again on your other device.", 401);
+  const d1 = getD1();
+  const tokenHash = await hashTransferToken(`device-move|${transferToken}`);
+  const now = Date.now();
+  const move = await d1.prepare("SELECT participant_id, includes_host FROM device_moves WHERE event_id = ? AND token_hash = ? AND expires_at > ?")
+    .bind(event.id, tokenHash, now).first<{ participant_id: string; includes_host: number }>();
+  if (!move) {
+    await d1.prepare("DELETE FROM device_moves WHERE event_id = ? AND expires_at <= ?").bind(event.id, now).run();
+    throw new PublicError("That move link is expired or already used. Open the QR code again on your other device.", 401);
+  }
+  const oldId = move.participant_id;
+  const newId = `p-${crypto.randomUUID()}`;
+  const includesHost = Boolean(move.includes_host);
+  const nextHostKey = includesHost ? randomHostKey() : null;
+  const statements = [
+    d1.prepare("UPDATE participants SET id = ? WHERE id = ? AND event_id = ?").bind(newId, oldId, event.id),
+    d1.prepare("UPDATE submissions SET participant_id = ? WHERE participant_id = ? AND event_id = ?").bind(newId, oldId, event.id),
+    d1.prepare("UPDATE reactions SET participant_id = ? WHERE participant_id = ? AND event_id = ?").bind(newId, oldId, event.id),
+    d1.prepare("UPDATE activity_events SET participant_id = ? WHERE participant_id = ? AND event_id = ?").bind(newId, oldId, event.id),
+    d1.prepare("UPDATE flair_events SET participant_id = ? WHERE participant_id = ? AND event_id = ?").bind(newId, oldId, event.id),
+    d1.prepare("UPDATE song_guesses SET participant_id = ? WHERE participant_id = ? AND event_id = ?").bind(newId, oldId, event.id),
+    d1.prepare("UPDATE song_guesses SET guessed_participant_id = ? WHERE guessed_participant_id = ? AND event_id = ?").bind(newId, oldId, event.id),
+    d1.prepare("UPDATE host_transfers SET target_participant_id = ? WHERE target_participant_id = ? AND event_id = ?").bind(newId, oldId, event.id),
+    d1.prepare("DELETE FROM device_moves WHERE participant_id = ?").bind(oldId),
+  ];
+  if (nextHostKey) statements.push(d1.prepare("UPDATE events SET host_pin = ? WHERE id = ?").bind(nextHostKey, event.id));
+  await d1.batch(statements);
+  const moved = await d1.prepare("SELECT id FROM participants WHERE id = ? AND event_id = ?").bind(newId, event.id).first<{ id: string }>();
+  if (!moved) throw new PublicError("The seat could not be moved. Open the QR code again on your other device.", 409);
+  return { participantId: newId, hostKey: nextHostKey };
 }
 
 export async function reactToCurrent(code: string, participantId: string, kind: "up" | "down", boost = false, intendedTrackId = "") {

@@ -9,6 +9,8 @@ import type { HostParty, HostTransfer } from "../../../../lib/party-contract";
 import { extractSpotifyTrackId } from "../../../../lib/spotify-track";
 import { trackSource, type TrackSource } from "../../../../lib/track-link";
 import { extractYouTubeVideoId, youtubeThumbnailUrl } from "../../../../lib/youtube-track";
+import { isDevelopmentHost } from "../../../../lib/dev-only";
+import { participantStorageKey, personaFromSearch } from "../../../../lib/party-storage";
 import type { SpotifyPlaybackState, SpotifyPlayer, SpotifyProgress } from "./spotify-sdk";
 import { useReactionSounds, type MusicVolumeControl } from "./use-reaction-sounds";
 import HostEffects, { HostEffectsBoundary, burstEmojisFor, makeBursts, type HostAlert, type HostBurst } from "./host-effects";
@@ -202,7 +204,8 @@ export default function HostRoom({ code }: { code: string }) {
       : `💤 Keep this ${hostDeviceName} awake during the party.`;
 
   useEffect(() => {
-    const participant = window.localStorage.getItem(`hackmusic:${code}:participant`) ?? "";
+    const persona = isDevelopmentHost(window.location.hostname) ? personaFromSearch(window.location.search) : "";
+    const participant = window.localStorage.getItem(participantStorageKey(code, persona)) ?? "";
     const key = window.localStorage.getItem(`hackmusic:${code}:host`) ?? "";
     const savedSpotifyClientId = window.localStorage.getItem("hackmusic:spotify:clientId") ?? "";
     const savedJoinPasscode = window.localStorage.getItem(`hackmusic:${code}:joinPasscode`) ?? "";
@@ -1024,7 +1027,7 @@ export default function HostRoom({ code }: { code: string }) {
     }
   }
 
-  if (handoffToken && !party) return <main className="host-claim-shell"><section className="host-claim-card"><span className="brand-mark">HM</span><p className="eyebrow">🎚️ CONTROLLED MUTINY · ROOM {code}</p><h1>The aux cable chose you.</h1><p className="host-claim-intro">Accept this one-use handoff and this browser becomes the only host. The previous host is politely demoted to audience.</p><div className="host-claim-truth"><strong>Spotify cannot teleport. Rude, honestly.</strong><span>After accepting, start the speaker here. YouTube rooms need no setup; Spotify rooms need Spotify Premium connected on this device. The previous device will disconnect from host duty.</span></div>{participantId ? <button type="button" onClick={() => void claimHandoff()} disabled={handoffClaimBusy}>{handoffClaimBusy ? "🎛️ Moving the giant imaginary switch…" : "🎛️ Accept host controls →"}</button> : <><div className="host-claim-join"><strong>First, enter the party on this browser.</strong><span>We saved the handoff in this tab. Join normally, and HackMusic will bring you straight back.</span></div><a className="host-claim-link" href={`/e/${code}`}>🥳 Join room {code} first →</a></>}{handoffClaimError && <p className="host-claim-error" role="alert">⚠️ {handoffClaimError}</p>}<small>🔐 Targeted human · one use · expires after 10 minutes</small></section></main>;
+  if (handoffToken && !party) return <main className="host-claim-shell"><section className="host-claim-card"><span className="brand-mark">HM</span><p className="eyebrow">🎚️ CONTROLLED MUTINY · ROOM {code}</p><h1>The aux cable chose you.</h1><p className="host-claim-intro">Accept this one-use handoff and this browser becomes the only host. The previous host is politely demoted to audience.</p><div className="host-claim-truth"><strong>Spotify cannot teleport. Rude, honestly.</strong><span>After accepting, start the speaker here. YouTube rooms need no setup; Spotify rooms need Spotify Premium connected on this device. The previous device will disconnect from host duty.</span></div>{participantId ? <button type="button" onClick={() => void claimHandoff()} disabled={handoffClaimBusy}>{handoffClaimBusy ? "🎛️ Moving the giant imaginary switch…" : "🎛️ Accept host controls →"}</button> : <><div className="host-claim-join"><strong>First, enter the party on this browser.</strong><span>We saved the handoff in this tab. Join normally, and HackMusic will bring you straight back.</span></div><a className="host-claim-link" href={`/e/${code}${typeof window !== "undefined" && isDevelopmentHost(window.location.hostname) && personaFromSearch(window.location.search) ? `?persona=${encodeURIComponent(personaFromSearch(window.location.search))}` : ""}`}>🥳 Join room {code} first →</a></>}{handoffClaimError && <p className="host-claim-error" role="alert">⚠️ {handoffClaimError}</p>}<small>🔐 Targeted human · one use · expires after 10 minutes</small></section></main>;
   if (error && !party) {
     const moved = error.includes("aux cable moved");
     return <main className="missing-room"><span className="brand-mark">HM</span><p className="eyebrow">{moved ? "🎚️ HOST ROLE MOVED" : "HOST KEY REQUIRED"}</p><h1>{moved ? "Audience era unlocked." : error}</h1>{moved && <p>{error}</p>}<a href={`/e/${code}`}>Open the participant room →</a><a href="/">Create a new room →</a></main>;

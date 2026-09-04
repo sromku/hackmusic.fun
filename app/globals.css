@@ -1935,3 +1935,27 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .host-sound-log p { margin: 8px 0 0; font-size: 10px; font-weight: 750; }
 .host-event-log li { grid-template-columns: 70px 160px 1fr; }
 @media (max-width: 560px) { .host-sound-log li { grid-template-columns: 62px 1fr; } .host-sound-log li span { grid-column: 2; } .host-sound-log li small { grid-column: 1 / -1; } }
+
+
+/* ---------- Move me to my phone ---------- */
+.party-move-trigger { display: grid; width: 100%; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; border: 2px solid var(--ink); background: var(--blue); box-shadow: 3px 3px 0 var(--ink); padding: 9px 11px; cursor: pointer; text-align: left; transition: transform .2s cubic-bezier(.2, .8, .25, 1.15), box-shadow .2s ease; }
+.party-move-trigger:hover { box-shadow: 5px 5px 0 var(--ink); transform: translate(-2px, -2px); }
+.party-move-trigger > span:first-child { font-size: 20px; }
+.party-move-trigger small { display: block; font-size: 8px; font-weight: 950; letter-spacing: .1em; }
+.party-move-trigger strong { display: block; font-size: 12px; }
+.party-move-trigger b { font-size: 9px; font-weight: 950; }
+.move-backdrop { z-index: 46; }
+.move-card { width: min(640px, 100%); max-height: calc(100dvh - 32px); overflow: auto; border: 2px solid var(--ink); background: var(--paper); box-shadow: 10px 10px 0 var(--ink); padding: 24px; }
+.move-card .modal-topline h2 { font-size: clamp(30px, 4vw, 44px); line-height: .98; }
+.move-intro { margin: 14px 0 18px; font-size: 13px; font-weight: 750; line-height: 1.45; }
+.move-loading { margin: 0; font-size: 12px; font-weight: 800; }
+.move-qr { display: grid; grid-template-columns: 240px 1fr; gap: 18px; align-items: start; border: 2px solid var(--ink); background: var(--white); box-shadow: 5px 5px 0 var(--ink); padding: 14px; }
+.move-qr img { display: block; border: 2px solid var(--ink); }
+.move-qr > div { display: grid; gap: 10px; }
+.move-qr span { font-size: 9px; font-weight: 950; letter-spacing: .1em; }
+.move-host-note { border: 2px solid var(--ink); background: var(--sun); padding: 8px 10px; font-size: 11px; }
+.move-qr code { overflow-wrap: anywhere; border: 2px dashed var(--ink); padding: 8px; font-size: 10px; user-select: all; }
+.move-qr button { min-height: 40px; border: 2px solid var(--ink); background: var(--mint); box-shadow: 3px 3px 0 var(--ink); cursor: pointer; font-size: 11px; font-weight: 950; }
+.move-footnote { display: block; margin-top: 14px; font-size: 10px; font-weight: 750; line-height: 1.4; }
+.join-moved-note { margin: 0 0 12px; border: 2px solid var(--ink); background: var(--blue); padding: 8px 10px; font-size: 11px; font-weight: 800; line-height: 1.4; }
+@media (max-width: 560px) { .move-card { padding: 16px; } .move-qr { grid-template-columns: 1fr; justify-items: center; } .move-qr > div { width: 100%; } }

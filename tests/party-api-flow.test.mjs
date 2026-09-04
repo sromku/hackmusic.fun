@@ -527,3 +527,58 @@ test("votes name their song: late boos for a finished song are refused, and a fr
   const onTime = await action(db, { action: "react", code: room.code, participantId: guest.participantId, kind: "down", trackId: newUri }, { "cf-connecting-ip": "203.0.113.144" });
   assert.equal(onTime.response.status, 200, JSON.stringify(onTime.data));
 });
+
+
+test("a guest can move their seat to another device with everything intact, and a host moves the host key too", async () => {
+  const created = await action(db, { action: "create", title: "Device Move Party", name: "Host Human", passcode: "VIBE42" }, { "cf-connecting-ip": "203.0.113.150" });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  const room = created.data.room;
+  const guest = await joinRoom(db, room, "Laptop Person");
+  assert.equal(guest.response.status, 200, JSON.stringify(guest.data));
+  const guestPublicId = guest.data.party.viewer.id;
+  const songId = seedTrack(db, room, room.participantId, { title: "Host Song" });
+  seedTrack(db, room, guest.participantId, { status: "pending", uri: `spotify:track:${"H".repeat(22)}`, title: "Laptop Pick" });
+  const cheer = await action(db, { action: "react", code: room.code, participantId: guest.participantId, kind: "up" }, { "cf-connecting-ip": "203.0.113.151" });
+  assert.equal(cheer.response.status, 200, JSON.stringify(cheer.data));
+
+  // Prepare on the laptop, claim on the phone.
+  const prepared = await action(db, { action: "prepareDeviceMove", code: room.code, participantId: guest.participantId });
+  assert.equal(prepared.response.status, 200, JSON.stringify(prepared.data));
+  assert.equal(prepared.data.move.includesHost, false);
+  assert.match(prepared.data.move.token, /^[A-Za-z0-9_-]{43}$/);
+  const wrongRoom = await action(db, { action: "claimDeviceMove", code: "ZZZZZZ", transferToken: prepared.data.move.token });
+  assert.equal(wrongRoom.response.status, 404);
+  const claimed = await action(db, { action: "claimDeviceMove", code: room.code, transferToken: prepared.data.move.token }, { "cf-connecting-ip": "203.0.113.152" });
+  assert.equal(claimed.response.status, 200, JSON.stringify(claimed.data));
+  assert.notEqual(claimed.data.participantId, guest.participantId, "the credential rotates");
+  assert.equal(claimed.data.hostKey, undefined);
+  assert.equal(claimed.data.party.viewer.id, guestPublicId, "public identity is unchanged");
+  assert.equal(claimed.data.party.viewerDisplayName, "Laptop Person");
+  assert.equal(claimed.data.party.mySongs.some((song) => song.title === "Laptop Pick"), true, "songs carry over");
+  assert.equal(claimed.data.party.myReactionHistory.length, 1, "reactions carry over");
+  assert.equal(claimed.data.party.reactions[0].mine, true);
+
+  // The laptop is locked out; the phone works; the token is spent.
+  const laptop = await requestWorker(`/api/party?code=${room.code}`, { headers: { "x-hackmusic-participant": guest.participantId, "cf-connecting-ip": "203.0.113.153" } }, { DB: db });
+  assert.equal(laptop.status, 401);
+  const phone = await requestWorker(`/api/party?code=${room.code}`, { headers: { "x-hackmusic-participant": claimed.data.participantId, "cf-connecting-ip": "203.0.113.154" } }, { DB: db });
+  assert.equal(phone.status, 200);
+  const reused = await action(db, { action: "claimDeviceMove", code: room.code, transferToken: prepared.data.move.token });
+  assert.equal(reused.response.status, 401);
+  assert.equal(db.first("SELECT participant_id FROM submissions WHERE title = ?", "Laptop Pick").participant_id, claimed.data.participantId);
+  assert.equal(db.first("SELECT participant_id FROM reactions WHERE submission_id = ?", songId).participant_id, claimed.data.participantId);
+  assert.equal(db.first("SELECT COUNT(*) AS count FROM participants WHERE event_id = (SELECT id FROM events WHERE code = ?)", room.code).count, 2, "no duplicate human");
+
+  // The host moves with the host key when they present it.
+  const hostPrepared = await action(db, { action: "prepareDeviceMove", code: room.code, participantId: room.participantId, pin: room.hostKey });
+  assert.equal(hostPrepared.response.status, 200, JSON.stringify(hostPrepared.data));
+  assert.equal(hostPrepared.data.move.includesHost, true);
+  const hostClaimed = await action(db, { action: "claimDeviceMove", code: room.code, transferToken: hostPrepared.data.move.token }, { "cf-connecting-ip": "203.0.113.155" });
+  assert.equal(hostClaimed.response.status, 200, JSON.stringify(hostClaimed.data));
+  assert.ok(hostClaimed.data.hostKey && hostClaimed.data.hostKey !== room.hostKey, "host key rotates with the move");
+  assert.ok(Array.isArray(hostClaimed.data.party.queuedTracks), "the phone gets the host view");
+  const oldHost = await action(db, { action: "queueMode", code: room.code, participantId: room.participantId, pin: room.hostKey, queueMode: "random" });
+  assert.equal(oldHost.response.status, 403, "the old browser lost host control");
+  const newHost = await action(db, { action: "queueMode", code: room.code, participantId: hostClaimed.data.participantId, pin: hostClaimed.data.hostKey, queueMode: "random" });
+  assert.equal(newHost.response.status, 200, JSON.stringify(newHost.data));
+});

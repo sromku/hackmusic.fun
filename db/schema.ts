@@ -109,6 +109,17 @@ export const hostTransfers = sqliteTable("host_transfers", {
   index("host_transfers_expires_idx").on(table.expiresAt),
 ]);
 
+export const deviceMoves = sqliteTable("device_moves", {
+  participantId: text("participant_id").primaryKey(),
+  eventId: text("event_id").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  includesHost: integer("includes_host").notNull().default(0),
+  expiresAt: integer("expires_at").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  index("device_moves_expires_idx").on(table.expiresAt),
+]);
+
 export const roomCreationLimits = sqliteTable("room_creation_limits", {
   clientKey: text("client_key").notNull(),
   windowKind: text("window_kind").notNull(),

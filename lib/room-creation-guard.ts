@@ -118,6 +118,11 @@ export async function protectPartyAction(request: Request, action: string, code:
     if (participantId) await consumeRequestLimit(request, { bucket: `${action}-person`, subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 12 * requestLimitScale(request) });
     return;
   }
+  if (action === "prepareDeviceMove" || action === "claimDeviceMove") {
+    await consumeRequestLimit(request, { bucket: `${action}-room`, subject: normalizedCode, windowMs: 60_000, maximum: 60 * requestLimitScale(request) });
+    if (participantId) await consumeRequestLimit(request, { bucket: `${action}-person`, subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 6 * requestLimitScale(request) });
+    return;
+  }
   if (action === "claimHost") {
     await consumeRequestLimit(request, { bucket: "claim-host-room", subject: normalizedCode, windowMs: 60_000, maximum: 30 * requestLimitScale(request) });
     if (participantId) await consumeRequestLimit(request, { bucket: "claim-host-person", subject: `${normalizedCode}|${participantId}`, windowMs: 60_000, maximum: 8 * requestLimitScale(request) });

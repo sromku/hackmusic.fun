@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import QRCode from "qrcode";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { AVATAR_EMOJIS } from "../../../lib/avatar-emojis";
 import { artworkVariant, durationSeconds, formatActivityTime, formatMusicDuration, formatPartyStart, mySongStatusLabel, trackSourceLabel, trackWebUrl } from "../../../lib/party-format";
@@ -10,7 +11,7 @@ import { MAX_PENDING_TRACKS_PER_PERSON, REACTION_GRACE_MS } from "../../../lib/p
 import { isDevelopmentHost } from "../../../lib/dev-only";
 import { participantStorageKey, personaDisplayName, personaFromSearch } from "../../../lib/party-storage";
 import { shareRecapCard } from "../../../lib/recap-card";
-import type { MySong, ParticipantParty, PartyActivity, PartyColor, PartyTrack, RoomSummary } from "../../../lib/party-contract";
+import type { DeviceMove, MySong, ParticipantParty, PartyActivity, PartyColor, PartyTrack, RoomSummary } from "../../../lib/party-contract";
 
 function makeFlyaway(emoji: string, x?: number) {
   return { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, emoji, x: x ?? 20 + Math.random() * 60 };
@@ -44,6 +45,11 @@ export default function PartyRoom({ code }: { code: string }) {
   const [recapBusy, setRecapBusy] = useState(false);
   const [flyaways, setFlyaways] = useState<Array<{ id: string; emoji: string; x: number }>>([]);
   const [clock, setClock] = useState(() => Date.now());
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [moveBusy, setMoveBusy] = useState(false);
+  const [moveInvite, setMoveInvite] = useState<(DeviceMove & { url: string; qr: string }) | null>(null);
+  const [movedAway, setMovedAway] = useState(false);
+  const moveCloseRef = useRef<HTMLButtonElement>(null);
   const spotifyHelpCloseRef = useRef<HTMLButtonElement>(null);
   const youtubeHelpCloseRef = useRef<HTMLButtonElement>(null);
 
@@ -63,6 +69,30 @@ export default function PartyRoom({ code }: { code: string }) {
   useEffect(() => {
     // Test personas exist only on development hosts; production ignores the parameter entirely.
     const persona = isDevelopmentHost(window.location.hostname) ? personaFromSearch(window.location.search) : "";
+    const personaQuery = persona ? `?persona=${encodeURIComponent(persona)}` : "";
+    const moveToken = new URLSearchParams(window.location.search).get("move") ?? "";
+    if (moveToken) {
+      // This device is redeeming a "move me to my phone" link: claim the seat, then continue as that human.
+      const cleanUrl = `${window.location.pathname}${personaQuery}`;
+      fetch("/api/party", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "claimDeviceMove", code, transferToken: moveToken }) })
+        .then(async (response) => {
+          const data = await response.json() as { error?: string; participantId?: string; hostKey?: string; party?: ParticipantParty };
+          if (!response.ok || !data.participantId || !data.party) throw new Error(data.error ?? "That move could not finish.");
+          window.localStorage.setItem(participantStorageKey(code, persona), data.participantId);
+          if (data.hostKey) window.localStorage.setItem(`hackmusic:${code}:host`, data.hostKey);
+          window.history.replaceState(null, "", cleanUrl);
+          setParticipantId(data.participantId);
+          setParty({ ...data.party, activity: [] });
+          setRoom({ code: data.party.code, title: data.party.title, status: data.party.status, scheduledFor: data.party.scheduledFor, requiresPasscode: false, musicSource: data.party.musicSource ?? "spotify" });
+          setNotice(data.hostKey ? "📱 Moved! This device is you now, host controls included." : "📱 Moved! This device is you now. Your old one just became a spectator.");
+        })
+        .catch((reason) => {
+          window.history.replaceState(null, "", cleanUrl);
+          setNotice(reason instanceof Error ? reason.message : "That move could not finish.");
+          fetch(`/api/party?code=${encodeURIComponent(code)}`).then(async (response) => { const data = await response.json(); if (response.ok) setRoom(data.room); }).catch(() => undefined);
+        });
+      return;
+    }
     const saved = window.localStorage.getItem(participantStorageKey(code, persona)) ?? "";
     const pendingHandoff = window.sessionStorage.getItem(`hackmusic:${code}:handoff`) ?? "";
     if (persona && !saved) {
@@ -74,7 +104,7 @@ export default function PartyRoom({ code }: { code: string }) {
     }
     if (saved && pendingHandoff) {
       window.sessionStorage.removeItem(`hackmusic:${code}:handoff`);
-      window.location.replace(`/e/${code}/host#handoff=${encodeURIComponent(pendingHandoff)}`);
+      window.location.replace(`/e/${code}/host${personaQuery}#handoff=${encodeURIComponent(pendingHandoff)}`);
       return;
     }
     if (saved) queueMicrotask(() => setParticipantId(saved));
@@ -108,11 +138,26 @@ export default function PartyRoom({ code }: { code: string }) {
           setRoom({ code: data.party.code, title: data.party.title, status: data.party.status, scheduledFor: data.party.scheduledFor, requiresPasscode: false, musicSource: data.party.musicSource ?? "spotify" });
         }
       })
-      .catch((reason) => { if (active && String(reason).includes("Join this room")) setParticipantId(""); });
+      .catch((reason) => {
+        if (!active) return;
+        const message = String(reason instanceof Error ? reason.message : reason);
+        if (message.includes("not joined") || message.includes("Join this room")) {
+          setParticipantId("");
+          if (moveInvite) { setMovedAway(true); setMoveOpen(false); }
+        }
+      });
     void refresh();
     const timer = window.setInterval(refresh, 2000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [code, participantId]);
+  }, [code, moveInvite, participantId]);
+
+  useEffect(() => {
+    if (!moveOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setMoveOpen(false); };
+    window.queueMicrotask(() => moveCloseRef.current?.focus());
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [moveOpen]);
 
   useEffect(() => {
     if (!warmingUp) return;
@@ -238,7 +283,8 @@ export default function PartyRoom({ code }: { code: string }) {
       const pendingHandoff = window.sessionStorage.getItem(`hackmusic:${code}:handoff`) ?? "";
       if (pendingHandoff) {
         window.sessionStorage.removeItem(`hackmusic:${code}:handoff`);
-        window.location.assign(`/e/${code}/host#handoff=${encodeURIComponent(pendingHandoff)}`);
+        const persona = isDevelopmentHost(window.location.hostname) ? personaFromSearch(window.location.search) : "";
+        window.location.assign(`/e/${code}/host${persona ? `?persona=${encodeURIComponent(persona)}` : ""}#handoff=${encodeURIComponent(pendingHandoff)}`);
         return;
       }
       setParticipantId(id);
@@ -317,6 +363,31 @@ export default function PartyRoom({ code }: { code: string }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function openDeviceMove() {
+    setMoveOpen(true);
+    if (moveInvite && new Date(moveInvite.expiresAt).getTime() > Date.now() + 30_000) return;
+    setMoveBusy(true);
+    try {
+      const hostKey = window.localStorage.getItem(`hackmusic:${code}:host`) ?? "";
+      const data = await postAction({ action: "prepareDeviceMove", ...(hostKey ? { pin: hostKey } : {}) }) as unknown as { party: ParticipantParty; move?: DeviceMove };
+      if (!data.move) throw new Error("The move link did not arrive.");
+      const url = `${window.location.origin}/e/${code}?move=${encodeURIComponent(data.move.token)}`;
+      const qr = await QRCode.toDataURL(url, { width: 240, margin: 1, color: { dark: "#151515", light: "#fffef9" } });
+      setMoveInvite({ ...data.move, url, qr });
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "We could not prepare the move.");
+      setMoveOpen(false);
+    } finally {
+      setMoveBusy(false);
+    }
+  }
+
+  async function copyMoveLink() {
+    if (!moveInvite) return;
+    try { await navigator.clipboard.writeText(moveInvite.url); setNotice("📋 Move link copied. Open it on the other device."); }
+    catch { setNotice("Copy the link shown in the sheet."); }
   }
 
   function openNameEditor() {
@@ -409,6 +480,7 @@ export default function PartyRoom({ code }: { code: string }) {
             <div className="party-identity-actions">
               <button className="party-avatar-trigger" type="button" onClick={() => setAvatarOpen(true)}><span className={`avatar ${party.viewer.color}`}>{party.viewer.initials}</span><span><small>YOUR PARTY FACE</small><strong>Tap to unleash an emoji</strong></span><b>CHANGE →</b></button>
               <button className="party-name-trigger" type="button" onClick={openNameEditor}><span aria-hidden="true">✎</span><span><small>YOUR PARTY NAME</small><strong>{party.viewerDisplayName}</strong></span><b>EDIT →</b></button>
+              {!ended && <button className="party-move-trigger" type="button" onClick={() => void openDeviceMove()}><span aria-hidden="true">📱</span><span><small>SWITCHING DEVICES?</small><strong>Move me to my phone</strong></span><b>QR →</b></button>}
             </div>
             <div className="people-list">{visiblePeople.map((person) => <div className="person-row" key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><strong>{person.name}</strong>{ended && <span className="person-score">{person.score ?? "—"}</span>}</div>)}</div>{!ended && party.people.length > 4 && <button className="text-button" type="button" onClick={() => setShowEveryone((value) => !value)}>{showEveryone ? "Show less ↑" : "Show everybody →"}</button>}
           </section>
@@ -472,9 +544,11 @@ export default function PartyRoom({ code }: { code: string }) {
 
       {avatarOpen && party && <div className="modal-backdrop avatar-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setAvatarOpen(false)}><section className="avatar-picker-card" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title"><div className="modal-topline"><div><p className="eyebrow">🎭 IDENTITY, BUT LOUDER</p><h2 id="avatar-picker-title">Pick your party face</h2></div><button className="close-button" type="button" onClick={() => setAvatarOpen(false)} aria-label="Close avatar picker">×</button></div><p className="avatar-picker-intro">Choose wisely. This tiny face will represent your enormous musical opinions.</p><div className="avatar-grid" role="group" aria-label="Party face emojis">{AVATAR_EMOJIS.map((option) => <button className={party.viewer.initials === option.emoji ? "selected" : ""} type="button" onClick={() => void changeAvatar(option.emoji)} disabled={busy} aria-label={`Use ${option.label} as my party face`} aria-pressed={party.viewer.initials === option.emoji} key={option.emoji}><span aria-hidden="true">{option.emoji}</span><small>{option.label}</small></button>)}</div><button className="avatar-surprise" type="button" onClick={surpriseAvatar} disabled={busy}>{busy ? "✨ Summoning chaos…" : "🎲 Surprise me, algorithm →"}</button><p className="avatar-privacy-note">🔐 Only your avatar changes. Your anonymous boos remain delightfully anonymous.</p></section></div>}
 
+      {moveOpen && party && <div className="modal-backdrop move-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setMoveOpen(false)}><section className="move-card" role="dialog" aria-modal="true" aria-labelledby="move-title"><div className="modal-topline"><div><p className="eyebrow">📱 SAME HUMAN, NEW DEVICE</p><h2 id="move-title">Take yourself to your phone.</h2></div><button ref={moveCloseRef} className="close-button" type="button" onClick={() => setMoveOpen(false)} aria-label="Close device move">×</button></div><p className="move-intro">Scan this with the device you are taking to the party. It becomes <strong>{party.viewerDisplayName}</strong> with every song, reaction, guess, and point intact. This browser turns into a spectator the moment the scan lands.</p>{moveBusy || !moveInvite ? <p className="move-loading">🔐 Minting a one-use link…</p> : <><div className="move-qr"><Image unoptimized src={moveInvite.qr} width={240} height={240} alt="QR code that moves your seat to another device" /><div><span>ONE USE · EXPIRES {new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(moveInvite.expiresAt))}</span>{moveInvite.includesHost && <strong className="move-host-note">🎛️ You are the host: host controls move too. The speaker does not, so tap Start speaker on the phone.</strong>}<code>{moveInvite.url}</code><button type="button" onClick={() => void copyMoveLink()}>📋 Copy link instead</button></div></div><small className="move-footnote">🔐 The link is a one-way hash on the server and works once. Anyone holding it becomes you, so send it only to yourself.</small></>}</section></div>}
+
       {nameOpen && party && <div className="modal-backdrop name-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setNameOpen(false)}><form className="name-picker-card" role="dialog" aria-modal="true" aria-labelledby="name-picker-title" onSubmit={(event) => void changeName(event)}><div className="modal-topline"><div><p className="eyebrow">🎤 WITNESS PROTECTION, BUT FESTIVE</p><h2 id="name-picker-title">Rename your human</h2></div><button className="close-button" type="button" onClick={() => setNameOpen(false)} aria-label="Close name editor">×</button></div><p className="name-picker-intro">New nickname, same suspicious music taste. Everyone in this room will see the update.</p><label htmlFor="party-name-edit">YOUR NEW PARTY NAME</label><input id="party-name-edit" value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} minLength={2} maxLength={24} autoComplete="nickname" required /><div className="name-picker-count"><span>Keep it recognizable-ish.</span><b>{nameDraft.length}/24</b></div><button className="name-save-button" type="submit" disabled={busy}>{busy ? "🎛️ Remixing identity…" : "✨ Save my new legend →"}</button><p className="avatar-privacy-note">👻 Your boos remain anonymous. Even from your new identity.</p></form></div>}
 
-      {!participantId && !ended && <div className="modal-backdrop join-backdrop"><form className="join-card" onSubmit={join}><span className="join-mark">HM</span><p className="eyebrow">🎟️ ROOM {room.code}</p><h2>{lobby ? "The pre-party is open 🌙" : "Who just walked in? 👀"}</h2><p>You’re joining <strong>{room.title}</strong>. {lobby ? "Tell the room what to call you, then start hiding songs in the queue." : "Tell the room what to call you, then collect your 30 points ⭐"}</p><label htmlFor="join-name">YOUR NAME — SHOWN TO EVERYONE</label><input id="join-name" value={joinName} onChange={(event) => setJoinName(event.target.value)} maxLength={24} autoComplete="nickname" placeholder="Type your name or nickname (e.g. Maya)" required /><small className="join-name-hint">👋 This is how other humans will see you. It is not the room code.</small><small className="join-source-hint">{room.musicSource === "youtube" ? "▶️ This room plays YouTube videos. Have your video links ready." : "🟢 This room plays Spotify tracks. Have your song links ready."}</small>{room.requiresPasscode && <><label htmlFor="join-passcode">ROOM PASSCODE — ASK THE HOST</label><input id="join-passcode" value={joinPasscode} onChange={(event) => setJoinPasscode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} minLength={4} maxLength={12} autoComplete="one-time-code" placeholder="Enter the host’s passcode" required /></>}<button type="submit" disabled={busy}>{busy ? "🔐 Checking the guest list…" : lobby ? "🌙 Enter the lobby →" : "🥳 Enter the party →"}</button><small>🔐 Room code + passcode keeps random party crashers outside.</small></form></div>}
+      {!participantId && !ended && <div className="modal-backdrop join-backdrop"><form className="join-card" onSubmit={join}><span className="join-mark">HM</span>{movedAway && <p className="join-moved-note">📱 Your seat moved to your other device. This browser is a spectator now. Joining again here creates a second, separate human.</p>}<p className="eyebrow">🎟️ ROOM {room.code}</p><h2>{lobby ? "The pre-party is open 🌙" : "Who just walked in? 👀"}</h2><p>You’re joining <strong>{room.title}</strong>. {lobby ? "Tell the room what to call you, then start hiding songs in the queue." : "Tell the room what to call you, then collect your 30 points ⭐"}</p><label htmlFor="join-name">YOUR NAME — SHOWN TO EVERYONE</label><input id="join-name" value={joinName} onChange={(event) => setJoinName(event.target.value)} maxLength={24} autoComplete="nickname" placeholder="Type your name or nickname (e.g. Maya)" required /><small className="join-name-hint">👋 This is how other humans will see you. It is not the room code.</small><small className="join-source-hint">{room.musicSource === "youtube" ? "▶️ This room plays YouTube videos. Have your video links ready." : "🟢 This room plays Spotify tracks. Have your song links ready."}</small>{room.requiresPasscode && <><label htmlFor="join-passcode">ROOM PASSCODE — ASK THE HOST</label><input id="join-passcode" value={joinPasscode} onChange={(event) => setJoinPasscode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} minLength={4} maxLength={12} autoComplete="one-time-code" placeholder="Enter the host’s passcode" required /></>}<button type="submit" disabled={busy}>{busy ? "🔐 Checking the guest list…" : lobby ? "🌙 Enter the lobby →" : "🥳 Enter the party →"}</button><small>🔐 Room code + passcode keeps random party crashers outside.</small></form></div>}
       <div className="flyaway-layer" aria-hidden="true">{flyaways.map((item) => <span style={{ left: `${item.x}%` }} key={item.id}>{item.emoji}</span>)}</div>
       {notice && <div className="toast" role="status">{notice}</div>}
     </main>

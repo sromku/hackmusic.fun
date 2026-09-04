@@ -340,6 +340,11 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /The last song left the chat/);
   assert.match(source, /Played earlier:/);
   assert.match(source, /BOOS UNMASKED/);
+  assert.match(source, /Move me to my phone/);
+  assert.match(source, /action: "prepareDeviceMove"/);
+  assert.match(source, /action: "claimDeviceMove"/);
+  assert.match(source, /aria-labelledby="move-title"/);
+  assert.match(source, /\/e\/\$\{code\}\/host\$\{personaQuery\}#handoff=/);
   assert.match(source, /myOwnSongPlaying/);
   assert.match(source, /MYSTERY CONTINUES/);
   assert.match(source, /Still a mystery/);

@@ -50,6 +50,7 @@ These rules are enforced on the server, not merely hidden in the UI:
 - A host key is required for host-only controls.
 - A room passcode is required to join.
 - A room accepts at most 100 participants.
+- A participant can move their seat to another device through a one-use, hashed QR link; the credential rotates, the old device is locked out, and the host key moves along when the mover holds it.
 - A participant may keep at most 100 pending songs.
 - A room plays one music source, Spotify or YouTube, chosen at creation; links from the other service are rejected.
 - A track may appear only once in an event.
