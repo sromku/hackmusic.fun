@@ -12,7 +12,7 @@ export type ReadinessInputs = {
   spotifyStatus: "checking" | "disconnected" | "loading" | "ready" | "error";
   youtubeStatus: "idle" | "loading" | "ready" | "error";
   enableReactionAudio: () => Promise<void>;
-  inspectReactionAudio: () => { contextState: string | null; buffersLoaded: boolean; unlockedElements: number; poolSize: number };
+  inspectReactionAudio: () => { contextState: string | null; buffersLoaded: boolean; unlockedElements: number; poolSize: number; recentSounds: Array<{ at: string; sound: string; path: string; reason: string }> };
   requestScreenWakeLock: (announce?: boolean) => Promise<boolean>;
   wakeLockSupported: boolean | null;
   probeRoomData: () => Promise<boolean>;

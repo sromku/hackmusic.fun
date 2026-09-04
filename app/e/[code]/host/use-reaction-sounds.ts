@@ -8,6 +8,8 @@ export type MusicVolumeControl = {
 };
 
 type ReactionKind = "up" | "down";
+export type SoundLogEntry = { at: string; sound: string; path: "webaudio" | "element" | "synth" | "skipped"; reason: string };
+const SOUND_LOG_LIMIT = 20;
 export type SoundEffectKind = "sting" | "scratch" | "airhorn" | "slam";
 type AudioSessionNavigator = Navigator & { audioSession?: { type: string } };
 
@@ -57,6 +59,10 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
   const volumeBeforeDuckRef = useRef<number | null>(null);
   const soundTokenRef = useRef(0);
   const unlockedElementsRef = useRef(0);
+  const soundLogRef = useRef<SoundLogEntry[]>([]);
+  const logSound = useCallback((sound: string, path: SoundLogEntry["path"], reason: string) => {
+    soundLogRef.current = [{ at: new Date().toISOString(), sound, path, reason }, ...soundLogRef.current].slice(0, SOUND_LOG_LIMIT);
+  }, []);
 
   const ensureElementPool = useCallback(() => {
     if (!elementPoolRef.current) elementPoolRef.current = createElementPool();
@@ -97,7 +103,12 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
     if (!audioContextRef.current) {
       audioContextRef.current = context;
       context.onstatechange = () => {
-        if (enabledRef.current && (context.state as string) !== "running" && (context.state as string) !== "closed") void context.resume().catch(() => undefined);
+        const state = context.state as string;
+        if (state === "running" || state === "closed") return;
+        // Anything still scheduled would otherwise play whenever the context wakes up again, seemingly out of nowhere.
+        activeSourcesRef.current.forEach((source) => { try { source.stop(); } catch { /* already stopped */ } });
+        activeSourcesRef.current.clear();
+        if (enabledRef.current) void context.resume().catch(() => undefined);
       };
     }
     await ensureContextRunning(context);
@@ -111,8 +122,8 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
     return context;
   }, []);
 
-  const play = useCallback((kind: ReactionKind) => {
-    if (!enabledRef.current) return;
+  const play = useCallback((kind: ReactionKind, reason = "unspecified") => {
+    if (!enabledRef.current) { logSound(kind, "skipped", `${reason} (sounds disabled)`); return; }
     const hasWebAudio = Boolean(audioContextRef.current && buffersRef.current?.[kind]);
     const hasElements = Boolean(elementPoolRef.current?.[kind].length);
     if (!hasWebAudio && !hasElements) return;
@@ -170,6 +181,7 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
       activeSourcesRef.current.add(source);
       source.start(0);
       scheduleSafetyRestore(buffer.duration);
+      logSound(kind, "webaudio", reason);
       return true;
     };
 
@@ -189,6 +201,7 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
       activeElementsRef.current.add(element);
       await element.play();
       scheduleSafetyRestore(element.duration);
+      logSound(kind, "element", reason);
       return true;
     };
 
@@ -211,9 +224,10 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
 
     void playOverDuckedMusic().catch(() => {
       restoreMusic();
+      logSound(kind, "skipped", `${reason} (playback failed)`);
       onMessage("The phone blocked reaction audio. Tap Enable & test funny sounds again.");
     });
-  }, [musicRef, onMessage]);
+  }, [logSound, musicRef, onMessage]);
 
   const disable = useCallback(() => {
     enabledRef.current = false;
@@ -239,8 +253,8 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
     await Promise.all([unlocking, preparing]);
     enabledRef.current = true;
     setEnabled(true);
-    play("up");
-    window.setTimeout(() => play("down"), 650);
+    play("up", "test after enabling");
+    window.setTimeout(() => play("down", "test after enabling"), 650);
   }, [play, prepare, unlockElementPool]);
 
   useEffect(() => {
@@ -250,7 +264,10 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
     ensureElementPool();
     const resumeWhenVisible = () => {
       const context = audioContextRef.current;
-      if (document.visibilityState === "visible" && enabledRef.current && context) void ensureContextRunning(context);
+      if (!context) return;
+      if (document.visibilityState === "visible") { if (enabledRef.current) void ensureContextRunning(context); return; }
+      activeSourcesRef.current.forEach((source) => { try { source.stop(); } catch { /* already stopped */ } });
+      activeSourcesRef.current.clear();
     };
     document.addEventListener("visibilitychange", resumeWhenVisible);
     return () => {
@@ -267,9 +284,10 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
   }, [ensureElementPool]);
 
   /** Synthesized one-shot effects for dramatic moments. Web Audio only; silently skipped when the mixer is not running. */
-  const playEffect = useCallback((kind: SoundEffectKind) => {
+  const playEffect = useCallback((kind: SoundEffectKind, reason = "unspecified") => {
     const context = audioContextRef.current;
-    if (!enabledRef.current || !context || (context.state as string) !== "running") return;
+    if (!enabledRef.current || !context || (context.state as string) !== "running") { logSound(kind, "skipped", `${reason} (mixer not running)`); return; }
+    logSound(kind, "synth", reason);
     const now = context.currentTime;
     const master = context.createGain();
     master.connect(context.destination);
@@ -359,13 +377,14 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
       total = 0.95;
     }
     window.setTimeout(() => { try { master.disconnect(); } catch { /* already gone */ } }, total * 1_000 + 100);
-  }, []);
+  }, [logSound]);
 
   const inspect = useCallback(() => ({
     contextState: (audioContextRef.current?.state as string | undefined) ?? null,
     buffersLoaded: Boolean(buffersRef.current),
     unlockedElements: unlockedElementsRef.current,
     poolSize: ELEMENT_POOL_SIZE * 2,
+    recentSounds: soundLogRef.current,
   }), []);
 
   return { enabled, play, playEffect, enableAndTest, disable, inspect };
