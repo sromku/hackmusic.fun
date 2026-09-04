@@ -68,7 +68,7 @@ export default function LabRoom({ code }: { code: string }) {
       </article>}
       {guests.map((index) => <article className="lab-frame" key={`guest-${index}-${reloadToken}`}>
         <div className="lab-frame-bar"><strong>🧑‍🎤 Guest {index}</strong><a href={guestUrl(index)} target="_blank" rel="noreferrer">Open in tab ↗</a></div>
-        <iframe src={guestUrl(index)} title={`Guest ${index} view of room ${code}`} allow="vibrate" />
+        <iframe src={guestUrl(index)} title={`Guest ${index} view of room ${code}`} />
       </article>)}
     </section>
     <footer className="lab-footer"><span>Direct links for phones or extra tabs:</span>{guests.map((index) => <code key={index}>{origin}{guestUrl(index)}</code>)}</footer>
