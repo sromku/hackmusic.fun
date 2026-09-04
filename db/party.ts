@@ -3,7 +3,7 @@ import { isAvatarEmoji } from "../lib/avatar-emojis";
 import { MUSIC_SOURCES, type LastSongReveal, type MusicSource, type PartyColor } from "../lib/party-contract";
 import { BASE_REACTION_POINTS, BOOST_CHEER_POINTS, boosNeededToSkip, isFlairEmoji, normalizeTheme } from "../lib/party-fun";
 import { computePartyAwards } from "./party-awards";
-import { MAX_PARTICIPANTS_PER_ROOM, MAX_PENDING_TRACKS_PER_PERSON } from "../lib/party-rules";
+import { MAX_PARTICIPANTS_PER_ROOM, MAX_PENDING_TRACKS_PER_PERSON, REACTION_GRACE_MS } from "../lib/party-rules";
 import { PublicError } from "../lib/public-error";
 import { hashRoomPasscode, verifyRoomPasscode } from "../lib/room-passcode";
 import { resolveSpotifyTrack } from "../lib/spotify-track";
@@ -187,6 +187,10 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
         ORDER BY r.created_at DESC`)
       .bind(event.id, viewerId).all<MyReactionHistoryRow>()
     : null;
+  const currentStart = current
+    ? await d1.prepare("SELECT created_at FROM activity_events WHERE submission_id = ? AND kind = 'song_start' ORDER BY created_at DESC LIMIT 1")
+      .bind(current.id).first<{ created_at: string }>()
+    : null;
   const myGuessRow = current && !isHost
     ? await d1.prepare(`SELECT p.public_id FROM song_guesses g JOIN participants p ON p.id = g.guessed_participant_id
         WHERE g.submission_id = ? AND g.participant_id = ?`).bind(current.id, viewerId).first<{ public_id: string }>()
@@ -290,6 +294,7 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
     musicSource: event.music_source ?? "spotify",
     theme: event.theme ?? null,
     revealPickers,
+    currentTrackStartedAt: currentStart?.created_at ?? null,
     viewer,
     viewerDisplayName,
     people,
@@ -496,7 +501,7 @@ export async function claimHostTransfer(code: string, participantId: string, tra
   return nextHostKey;
 }
 
-export async function reactToCurrent(code: string, participantId: string, kind: "up" | "down", boost = false) {
+export async function reactToCurrent(code: string, participantId: string, kind: "up" | "down", boost = false, intendedTrackId = "") {
   const event = await loadEvent(code);
   if (event?.status === "lobby") throw new PublicError("Reactions unlock when the host starts the party.");
   if (!event?.current_submission_id) throw new PublicError("Nothing is playing yet. Wait for the host to start a song.");
@@ -505,6 +510,12 @@ export async function reactToCurrent(code: string, participantId: string, kind: 
   const current = await d1.prepare("SELECT id, participant_id, provider_track_id, title, artist, duration, color, shielded, shield_absorbed FROM submissions WHERE id = ?")
     .bind(event.current_submission_id).first<SubmissionRow>();
   if (!current) throw new PublicError("Nothing is playing yet. Wait for the host to start a song.");
+  // A vote names the song it was cast on. If that song already left, it must not land on the next one.
+  if (intendedTrackId && intendedTrackId !== current.provider_track_id) throw new PublicError("That song already left the speaker, so your vote did not carry over. React to the new one when you are ready.", 409);
+  const currentStart = await d1.prepare("SELECT created_at FROM activity_events WHERE submission_id = ? AND kind = 'song_start' ORDER BY created_at DESC LIMIT 1")
+    .bind(current.id).first<{ created_at: string }>();
+  const startedAt = currentStart ? new Date(currentStart.created_at).getTime() : Number.NaN;
+  if (Number.isFinite(startedAt) && Date.now() - startedAt < REACTION_GRACE_MS) throw new PublicError("This song just started. Give it a few seconds before judging.", 425);
   if (current.participant_id === participantId) throw new PublicError("You cannot vote on your own song—but everyone else still can.");
   const member = await d1.prepare("SELECT id, boost_used FROM participants WHERE id = ? AND event_id = ?").bind(participantId, event.id).first<{ id: string; boost_used: number }>();
   if (!member) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);

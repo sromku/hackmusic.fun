@@ -88,7 +88,7 @@ export async function executePartyAction(request: Request, input: PartyRequest):
     case "react":
       if (!input.kind) invalidAction();
       await protectPartyAction(request, input.action, code, participantId);
-      ({ skipped, shieldAbsorbed, boosted } = await reactToCurrent(code, participantId, input.kind, Boolean(input.boost)));
+      ({ skipped, shieldAbsorbed, boosted } = await reactToCurrent(code, participantId, input.kind, Boolean(input.boost), input.trackId ?? ""));
       break;
     case "flair":
       if (!input.emoji) invalidAction();

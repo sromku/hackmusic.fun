@@ -121,6 +121,7 @@ export type ParticipantParty = {
   musicSource: MusicSource;
   theme: string | null;
   revealPickers: boolean;
+  currentTrackStartedAt: string | null;
   powerUps: PartyPowerUps;
   guessOptions: PartyPerson[];
   myGuess: string | null;
@@ -171,6 +172,7 @@ export type HostParty = {
   musicSource: MusicSource;
   theme: string | null;
   revealPickers: boolean;
+  currentTrackStartedAt: string | null;
   lastSong: LastSongReveal | null;
   awards?: PartyAward[];
   recap?: PartyRecap;

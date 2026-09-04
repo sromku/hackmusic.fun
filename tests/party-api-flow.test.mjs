@@ -36,7 +36,7 @@ function seedTrack(db, room, participantId, options = {}) {
   if (status === "playing") {
     db.prepare("UPDATE events SET current_submission_id = ? WHERE id = ?").bind(id, event.id).run();
     db.prepare("INSERT INTO activity_events (id, event_id, submission_id, participant_id, kind, created_at) VALUES (?, ?, ?, NULL, 'song_start', ?)")
-      .bind(`activity-${crypto.randomUUID()}`, event.id, id, new Date(Date.now() - 90_000).toISOString()).run();
+      .bind(`activity-${crypto.randomUUID()}`, event.id, id, new Date(Date.now() - (options.startedAgoMs ?? 90_000)).toISOString()).run();
   }
   return id;
 }
@@ -489,4 +489,35 @@ test("development hosts get 25x rate-limit headroom so a shared-IP test lab neve
     statuses.push(response.status);
   }
   assert.deepEqual(statuses, [201, 201, 201, 201, 201, 429]);
+});
+
+
+test("votes name their song: late boos for a finished song are refused, and a fresh song gets a short grace period", async () => {
+  const created = await action(db, { action: "create", title: "Grace Party", name: "Host Human", passcode: "VIBE42" }, { "cf-connecting-ip": "203.0.113.140" });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  const room = created.data.room;
+  const guest = await joinRoom(db, room, "Late Booer");
+  assert.equal(guest.response.status, 200, JSON.stringify(guest.data));
+  const oldUri = `spotify:track:${"F".repeat(22)}`;
+  const newUri = `spotify:track:${"G".repeat(22)}`;
+  seedTrack(db, room, room.participantId, { uri: newUri, title: "Fresh Song", startedAgoMs: 500 });
+
+  // A boo cast on the previous song must not land on the new one.
+  const stale = await action(db, { action: "react", code: room.code, participantId: guest.participantId, kind: "down", trackId: oldUri }, { "cf-connecting-ip": "203.0.113.141" });
+  assert.equal(stale.response.status, 409);
+  assert.match(stale.data.error, /already left the speaker/);
+
+  // The new song is half a second old: reactions wait for the grace period.
+  const early = await action(db, { action: "react", code: room.code, participantId: guest.participantId, kind: "down", trackId: newUri }, { "cf-connecting-ip": "203.0.113.142" });
+  assert.equal(early.response.status, 425);
+  assert.match(early.data.error, /just started/);
+  assert.equal(db.first("SELECT COUNT(*) AS count FROM reactions WHERE event_id = (SELECT id FROM events WHERE code = ?)", room.code).count, 0);
+
+  const view = await (await requestWorker(`/api/party?code=${room.code}`, { headers: { "x-hackmusic-participant": guest.participantId, "cf-connecting-ip": "203.0.113.143" } }, { DB: db })).json();
+  assert.ok(view.party.currentTrackStartedAt, "guests learn when the song started so buttons can warm up");
+
+  // Once the grace period has passed, the same vote counts.
+  db.prepare("UPDATE activity_events SET created_at = ? WHERE event_id = (SELECT id FROM events WHERE code = ?) AND kind = 'song_start'").bind(new Date(Date.now() - 10_000).toISOString(), room.code).run();
+  const onTime = await action(db, { action: "react", code: room.code, participantId: guest.participantId, kind: "down", trackId: newUri }, { "cf-connecting-ip": "203.0.113.144" });
+  assert.equal(onTime.response.status, 200, JSON.stringify(onTime.data));
 });

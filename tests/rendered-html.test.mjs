@@ -343,7 +343,9 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /MYSTERY CONTINUES/);
   assert.match(source, /Still a mystery/);
   assert.match(source, /no self-cheering/);
-  assert.match(source, /disabled=\{busy \|\| Boolean\(myReaction\) \|\| myOwnSongPlaying\}/);
+  assert.match(source, /warming up · \$\{warmUpSecondsLeft\}s/);
+  assert.match(source, /trackId: intendedTrackId/);
+  assert.match(source, /disabled=\{busy \|\| Boolean\(myReaction\) \|\| myOwnSongPlaying \|\| warmingUp\}/);
   assert.match(source, /latestSongActivityId/);
   assert.match(source, /Add another secret song and keep the speaker employed/);
   assert.match(source, /Add another song →/);
@@ -357,6 +359,7 @@ test("renders a code-specific participant room", async () => {
   const partyRulesSource = await readFile(new URL("lib/party-rules.ts", projectRoot), "utf8");
   assert.match(partyRulesSource, /MAX_PENDING_TRACKS_PER_PERSON = 100/);
   assert.match(partyRulesSource, /MAX_PARTICIPANTS_PER_ROOM = 100/);
+  assert.match(partyRulesSource, /REACTION_GRACE_MS = 3_000/);
 });
 
 test("publishes crawler, sitemap, and install metadata without exposing private rooms", async () => {
