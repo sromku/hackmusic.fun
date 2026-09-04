@@ -247,16 +247,19 @@ export default function HostRoom({ code }: { code: string }) {
     incomingActivity.forEach((item) => knownIds.add(item.id));
     knownSoundActivityRef.current = knownIds;
     if (seeded) {
-      // Stagger a burst of reactions slightly so five boos at once read as a crowd, not one loud clip.
+      // A burst of reactions plays as a swelling crowd: each one a third of a second later and a touch higher in pitch,
+      // so four cheers sound like four cheers instead of one thick clip.
       let soundIndex = 0;
       fresh.forEach((item) => {
         if (item.tone === "song") { cheerStreakRef.current = 0; return; }
         const tone = item.tone as "up" | "down";
-        const delay = Math.min(soundIndex, 8) * 140;
+        const position = Math.min(soundIndex, 9);
+        const delay = position * 330;
+        const pitch = 1 + position * 0.04;
         soundIndex += 1;
         window.setTimeout(() => {
           try {
-            playReactionSound(tone, `${tone === "up" ? "cheer" : "boo"} activity ${item.id} at ${item.createdAt}`);
+            playReactionSound(tone, `${tone === "up" ? "cheer" : "boo"} activity ${item.id} at ${item.createdAt}${position ? ` (#${position + 1} in burst)` : ""}`, pitch);
             spawnBursts(tone, burstEmojisFor(tone));
           } catch (reason) {
             console.error("HackMusic: reaction effect failed.", reason);

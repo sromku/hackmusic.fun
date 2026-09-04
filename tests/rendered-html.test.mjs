@@ -545,6 +545,8 @@ test("renders a code-specific host control surface", async () => {
   assert.match(reactionSoundSource, /"airhorn"/);
   assert.match(reactionSoundSource, /playEffect/);
   assert.match(reactionSoundSource, /playbackRate/);
+  assert.match(reactionSoundSource, /ELEMENT_POOL_SIZE = 5/);
+  assert.match(source, /const delay = position \* 330/);
   assert.match(reactionSoundSource, /audioSession/);
   assert.match(reactionSoundSource, /playThroughElement/);
   assert.doesNotMatch(reactionSoundSource, /context\.state === "suspended"/);

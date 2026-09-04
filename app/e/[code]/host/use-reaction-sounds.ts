@@ -19,7 +19,7 @@ const REACTION_SOUND_FILES: Record<ReactionKind, string> = {
   up: `/sounds/woohoo-crowd.wav?v=${REACTION_SOUND_VERSION}`,
   down: `/sounds/boo.mp3?v=${REACTION_SOUND_VERSION}`,
 };
-const ELEMENT_POOL_SIZE = 3;
+const ELEMENT_POOL_SIZE = 5;
 const CONTEXT_RESUME_TIMEOUT_MS = 350;
 const waitForAudioFade = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
 
@@ -123,7 +123,8 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
     return context;
   }, []);
 
-  const play = useCallback((kind: ReactionKind, reason = "unspecified") => {
+  /** `pitch` lets a burst of reactions climb (1 = natural). */
+  const play = useCallback((kind: ReactionKind, reason = "unspecified", pitch = 1) => {
     if (!enabledRef.current) { logSound(kind, "skipped", `${reason} (sounds disabled)`); return; }
     const hasWebAudio = Boolean(audioContextRef.current && buffersRef.current?.[kind]);
     const hasElements = Boolean(elementPoolRef.current?.[kind].length);
@@ -176,7 +177,7 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
       source = context.createBufferSource();
       source.buffer = buffer;
       // Slight random pitch so a crowd of identical reactions does not sound like a sample pad.
-      source.playbackRate.value = 0.93 + Math.random() * 0.14;
+      source.playbackRate.value = (0.95 + Math.random() * 0.1) * pitch;
       source.connect(context.destination);
       source.onended = restoreMusic;
       activeSourcesRef.current.add(source);
@@ -195,7 +196,7 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
       element.muted = false;
       try {
         (element as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = false;
-        element.playbackRate = 0.93 + Math.random() * 0.14;
+        element.playbackRate = (0.95 + Math.random() * 0.1) * pitch;
       } catch { /* pitch variation is optional */ }
       element.onended = restoreMusic;
       element.onerror = restoreMusic;
