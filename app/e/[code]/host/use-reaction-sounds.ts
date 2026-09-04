@@ -58,6 +58,7 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
   const effectTimersRef = useRef<Set<number>>(new Set());
   const volumeBeforeDuckRef = useRef<number | null>(null);
   const soundTokenRef = useRef(0);
+  const duckWatchdogRef = useRef<number | null>(null);
   const unlockedElementsRef = useRef(0);
   const soundLogRef = useRef<SoundLogEntry[]>([]);
   const logSound = useCallback((sound: string, path: SoundLogEntry["path"], reason: string) => {
@@ -210,12 +211,25 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
       if (player && firstActiveReaction) {
         let originalVolume = volumeBeforeDuckRef.current;
         if (originalVolume === null) {
-          originalVolume = await player.getVolume().catch(() => 0.8);
-          volumeBeforeDuckRef.current = originalVolume;
-          await player.setVolume(originalVolume + ((Math.min(originalVolume, REACTION_DUCK_VOLUME) - originalVolume) * 0.65)).catch(() => undefined);
-          await waitForAudioFade(45);
+          const reported = await player.getVolume().catch(() => Number.NaN);
+          // Unknown or muted volume: play the sound over the music untouched rather than risk restoring to silence.
+          originalVolume = Number.isFinite(reported) && reported > 0.05 && reported <= 1 ? reported : null;
+          if (originalVolume !== null) {
+            volumeBeforeDuckRef.current = originalVolume;
+            await player.setVolume(originalVolume + ((Math.min(originalVolume, REACTION_DUCK_VOLUME) - originalVolume) * 0.65)).catch(() => undefined);
+            await waitForAudioFade(45);
+          }
         }
-        if (player === musicRef.current) await player.setVolume(Math.min(originalVolume, REACTION_DUCK_VOLUME)).catch(() => undefined);
+        if (originalVolume !== null && player === musicRef.current) await player.setVolume(Math.min(originalVolume, REACTION_DUCK_VOLUME)).catch(() => undefined);
+        if (duckWatchdogRef.current) window.clearTimeout(duckWatchdogRef.current);
+        // Watchdog: whatever happens to the individual sounds, the music is back at full volume within a few seconds.
+        duckWatchdogRef.current = window.setTimeout(() => {
+          const stuckVolume = volumeBeforeDuckRef.current;
+          if (activeCountRef.current === 0 && stuckVolume !== null) {
+            volumeBeforeDuckRef.current = null;
+            void musicRef.current?.setVolume(stuckVolume).catch(() => undefined);
+          }
+        }, 8_000);
       }
       // Web Audio first; if the context is interrupted (iOS while another player has the audio session), use the unlocked media elements.
       const played = (await playThroughWebAudio()) || (await playThroughElement());
@@ -288,6 +302,25 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
     const context = audioContextRef.current;
     if (!enabledRef.current || !context || (context.state as string) !== "running") { logSound(kind, "skipped", `${reason} (mixer not running)`); return; }
     logSound(kind, "synth", reason);
+    try {
+      synthesizeEffect(context, kind);
+    } catch (error) {
+      console.error("HackMusic: sound effect failed.", error);
+    }
+  }, [logSound]);
+
+  const inspect = useCallback(() => ({
+    contextState: (audioContextRef.current?.state as string | undefined) ?? null,
+    buffersLoaded: Boolean(buffersRef.current),
+    unlockedElements: unlockedElementsRef.current,
+    poolSize: ELEMENT_POOL_SIZE * 2,
+    recentSounds: soundLogRef.current,
+  }), []);
+
+  return { enabled, play, playEffect, enableAndTest, disable, inspect };
+}
+
+function synthesizeEffect(context: AudioContext, kind: SoundEffectKind) {
     const now = context.currentTime;
     const master = context.createGain();
     master.connect(context.destination);
@@ -319,11 +352,16 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
         oscillator.start(now);
         oscillator.stop(now + 1.6);
       });
+      // The tremolo modulates its own stage, never the master envelope, so the tail can never swing negative and buzz.
+      const tremoloStage = context.createGain();
+      tremoloStage.gain.value = 0.65;
+      filter.disconnect();
+      filter.connect(tremoloStage).connect(master);
       const tremolo = context.createOscillator();
       const tremoloDepth = context.createGain();
       tremolo.frequency.value = 6.5;
-      tremoloDepth.gain.value = 0.35;
-      tremolo.connect(tremoloDepth).connect(master.gain);
+      tremoloDepth.gain.value = 0.3;
+      tremolo.connect(tremoloDepth).connect(tremoloStage.gain);
       tremolo.start(now);
       tremolo.stop(now + 1.6);
       envelope(master, 0.55, 0.08, 1.0, 0.45);
@@ -377,15 +415,4 @@ export function useReactionSounds(musicRef: RefObject<MusicVolumeControl | null>
       total = 0.95;
     }
     window.setTimeout(() => { try { master.disconnect(); } catch { /* already gone */ } }, total * 1_000 + 100);
-  }, [logSound]);
-
-  const inspect = useCallback(() => ({
-    contextState: (audioContextRef.current?.state as string | undefined) ?? null,
-    buffersLoaded: Boolean(buffersRef.current),
-    unlockedElements: unlockedElementsRef.current,
-    poolSize: ELEMENT_POOL_SIZE * 2,
-    recentSounds: soundLogRef.current,
-  }), []);
-
-  return { enabled, play, playEffect, enableAndTest, disable, inspect };
 }

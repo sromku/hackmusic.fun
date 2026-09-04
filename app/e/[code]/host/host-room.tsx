@@ -11,7 +11,7 @@ import { trackSource, type TrackSource } from "../../../../lib/track-link";
 import { extractYouTubeVideoId, youtubeThumbnailUrl } from "../../../../lib/youtube-track";
 import type { SpotifyPlaybackState, SpotifyPlayer, SpotifyProgress } from "./spotify-sdk";
 import { useReactionSounds, type MusicVolumeControl } from "./use-reaction-sounds";
-import HostEffects, { burstEmojisFor, makeBursts, type HostAlert, type HostBurst } from "./host-effects";
+import HostEffects, { HostEffectsBoundary, burstEmojisFor, makeBursts, type HostAlert, type HostBurst } from "./host-effects";
 import { boosNeededToSkip, MAX_THEME_LENGTH } from "../../../../lib/party-fun";
 import { shareRecapCard } from "../../../../lib/recap-card";
 import { useReadinessCheck } from "./use-readiness-check";
@@ -235,6 +235,65 @@ export default function HostRoom({ code }: { code: string }) {
     return () => window.clearInterval(timer);
   }, []);
 
+  const runReactionEffects = useCallback((snapshot: HostParty, incomingActivity: Array<{ id: string; tone: "up" | "down" | "song"; createdAt: string }>, incomingFlair: Array<{ id: string; emoji: string; avatar: string }>) => {
+    const seeded = knownSoundActivityRef.current !== null;
+    const knownIds = knownSoundActivityRef.current ?? new Set<string>();
+    const fresh = incomingActivity.filter((item) => !knownIds.has(item.id));
+    incomingActivity.forEach((item) => knownIds.add(item.id));
+    knownSoundActivityRef.current = knownIds;
+    if (seeded) {
+      // Stagger a burst of reactions slightly so five boos at once read as a crowd, not one loud clip.
+      let soundIndex = 0;
+      fresh.forEach((item) => {
+        if (item.tone === "song") { cheerStreakRef.current = 0; return; }
+        const tone = item.tone as "up" | "down";
+        const delay = Math.min(soundIndex, 8) * 140;
+        soundIndex += 1;
+        window.setTimeout(() => {
+          try {
+            playReactionSound(tone, `${tone === "up" ? "cheer" : "boo"} activity ${item.id} at ${item.createdAt}`);
+            spawnBursts(tone, burstEmojisFor(tone));
+          } catch (reason) {
+            console.error("HackMusic: reaction effect failed.", reason);
+          }
+        }, delay);
+        cheerStreakRef.current = tone === "up" ? cheerStreakRef.current + 1 : 0;
+        if (cheerStreakRef.current === 3) showAlert({ kind: "streak", title: "🔥 THREE CHEERS IN A ROW", detail: "This song is winning the room." });
+      });
+    }
+    const flairSeeded = knownFlairRef.current !== null;
+    const knownFlair = knownFlairRef.current ?? new Set<string>();
+    const freshFlair = incomingFlair.filter((item) => !knownFlair.has(item.id));
+    incomingFlair.forEach((item) => knownFlair.add(item.id));
+    knownFlairRef.current = knownFlair;
+    if (flairSeeded) freshFlair.slice(0, 12).forEach((item, index) => window.setTimeout(() => spawnBursts("flair", [item.emoji, item.emoji], item.avatar), index * 90));
+    // Boo-meter drama: warn on the penultimate boo, pull the plug when a song is booed off.
+    const trackId = snapshot.currentTrack?.id ?? "";
+    const shielded = Boolean(snapshot.currentTrack?.shielded);
+    const boosNow = snapshot.reactions.filter((reaction) => reaction.tone === "down").length;
+    const previousBoo = previousBooCountRef.current;
+    if (trackId && previousBoo.trackId === trackId) {
+      if (shielded && !previousBoo.shielded) showAlert({ kind: "shield", title: "🛡️ SHIELD UP", detail: `This song now needs ${boosNeededToSkip(true)} boos.` });
+      if (boosNow > previousBoo.boos && boosNow === boosNeededToSkip(shielded) - 1) {
+        playEffect("sting", `boo ${boosNow} of ${boosNeededToSkip(shielded)} on ${trackId}`);
+        showAlert({ kind: "boo-warning", title: "😬 ONE MORE BOO…", detail: "The plug is in someone's hand." }, 3_200);
+      }
+    }
+    previousBooCountRef.current = { trackId, boos: boosNow, shielded };
+    // Plug-pulled is keyed on outcomes never seen before, so list ordering can never re-trigger it.
+    const knownOutcomes = knownOutcomesRef.current;
+    if (knownOutcomes) {
+      const freshBooSkip = snapshot.songHistory.find((track) => !knownOutcomes.has(track.queueId) && track.skipReason === "boos");
+      if (freshBooSkip) pullThePlug(freshBooSkip.title);
+    }
+    knownOutcomesRef.current = new Set(snapshot.songHistory.map((track) => track.queueId));
+    const leader = [...snapshot.people].sort((left, right) => right.score - left.score)[0];
+    if (leader && previousLeaderRef.current !== null && previousLeaderRef.current !== leader.id && snapshot.status === "live") {
+      showAlert({ kind: "leader", title: `👑 NEW LEADER: ${leader.name}`, detail: `${leader.score} points and climbing.` });
+    }
+    previousLeaderRef.current = leader?.id ?? "";
+  }, [playEffect, playReactionSound, pullThePlug, showAlert, spawnBursts]);
+
   const refreshParty = useCallback(async (announce = false) => {
     if (!participantId || !hostKey || roomRefreshInFlightRef.current) return false;
     roomRefreshInFlightRef.current = true;
@@ -261,62 +320,21 @@ export default function HostRoom({ code }: { code: string }) {
         setError("This browser no longer has the host key for this room.");
         return false;
       }
+      // Room data is applied first and unconditionally. Sounds and visual effects run afterwards, isolated, so a hiccup
+      // there can never freeze the host view, mark the room as offline, or touch playback.
       const incomingActivity = data.party.activity ?? [];
-      if (knownSoundActivityRef.current) {
-        incomingActivity
-          .filter((item) => !knownSoundActivityRef.current?.has(item.id))
-          .forEach((item) => {
-            if (item.tone === "song") { cheerStreakRef.current = 0; return; }
-            const tone = item.tone as "up" | "down";
-            playReactionSound(tone, `${tone === "up" ? "cheer" : "boo"} activity ${item.id} at ${item.createdAt}`);
-            spawnBursts(tone, burstEmojisFor(tone));
-            cheerStreakRef.current = tone === "up" ? cheerStreakRef.current + 1 : 0;
-            if (cheerStreakRef.current === 3) showAlert({ kind: "streak", title: "🔥 THREE CHEERS IN A ROW", detail: "This song is winning the room." });
-          });
-      }
-      const knownIds = knownSoundActivityRef.current ?? new Set<string>();
-      incomingActivity.forEach((item) => knownIds.add(item.id));
-      knownSoundActivityRef.current = knownIds;
       const incomingFlair = data.party.flair ?? [];
-      if (knownFlairRef.current) {
-        incomingFlair
-          .filter((item) => !knownFlairRef.current?.has(item.id))
-          .forEach((item) => spawnBursts("flair", [item.emoji, item.emoji], item.avatar));
-      }
-      const knownFlair = knownFlairRef.current ?? new Set<string>();
-      incomingFlair.forEach((item) => knownFlair.add(item.id));
-      knownFlairRef.current = knownFlair;
-      // Boo-meter drama: warn on the penultimate boo, pull the plug when a song is booed off.
-      const trackId = data.party.currentTrack?.id ?? "";
-      const shielded = Boolean(data.party.currentTrack?.shielded);
-      const boosNow = data.party.reactions.filter((reaction) => reaction.tone === "down").length;
-      const previousBoo = previousBooCountRef.current;
-      if (trackId && previousBoo.trackId === trackId) {
-        if (shielded && !previousBoo.shielded) showAlert({ kind: "shield", title: "🛡️ SHIELD UP", detail: `This song now needs ${boosNeededToSkip(true)} boos.` });
-        if (boosNow > previousBoo.boos && boosNow === boosNeededToSkip(shielded) - 1) {
-          playEffect("sting", `boo ${boosNow} of ${boosNeededToSkip(shielded)} on ${trackId}`);
-          showAlert({ kind: "boo-warning", title: "😬 ONE MORE BOO…", detail: "The plug is in someone's hand." }, 3_200);
-        }
-      }
-      previousBooCountRef.current = { trackId, boos: boosNow, shielded };
-      // Plug-pulled is keyed on outcomes never seen before, so list ordering can never re-trigger it.
-      const knownOutcomes = knownOutcomesRef.current;
-      if (knownOutcomes) {
-        const freshBooSkip = data.party.songHistory.find((track) => !knownOutcomes.has(track.queueId) && track.skipReason === "boos");
-        if (freshBooSkip) pullThePlug(freshBooSkip.title);
-      }
-      knownOutcomesRef.current = new Set(data.party.songHistory.map((track) => track.queueId));
-      const leader = [...data.party.people].sort((left, right) => right.score - left.score)[0];
-      if (leader && previousLeaderRef.current !== null && previousLeaderRef.current !== leader.id && data.party.status === "live") {
-        showAlert({ kind: "leader", title: `👑 NEW LEADER: ${leader.name}`, detail: `${leader.score} points and climbing.` });
-      }
-      previousLeaderRef.current = leader?.id ?? "";
       const lastActivity = incomingActivity[incomingActivity.length - 1];
       if (lastActivity) soundActivityCursorRef.current = `${lastActivity.createdAt}|${lastActivity.id}`;
       setParty(data.party);
       setError("");
       setSyncProblem("");
-      if (announce) setMessage("✅ Room data refreshed. Spotify kept playing without interruption.");
+      if (announce) setMessage("✅ Room data refreshed. The music kept playing without interruption.");
+      try {
+        runReactionEffects(data.party, incomingActivity, incomingFlair);
+      } catch (reason) {
+        console.error("HackMusic: reaction effects skipped this round.", reason);
+      }
       return true;
     } catch {
       setSyncProblem("HackMusic briefly lost the party service. Music playback is untouched, and room data will retry automatically.");
@@ -326,7 +344,7 @@ export default function HostRoom({ code }: { code: string }) {
       roomRefreshInFlightRef.current = false;
       if (announce) setRoomSyncing(false);
     }
-  }, [code, disableReactionAudio, hostKey, participantId, playEffect, playReactionSound, pullThePlug, releaseScreenWakeLock, showAlert, spawnBursts]);
+  }, [code, disableReactionAudio, hostKey, participantId, releaseScreenWakeLock, runReactionEffects]);
 
   useEffect(() => {
     if (!participantId || !hostKey || partyStatus === "ended") return;
@@ -1097,7 +1115,7 @@ export default function HostRoom({ code }: { code: string }) {
     <section className="host-history-card"><div className="card-title-row"><h2>📊 SONG OUTCOMES</h2><span>{party.songHistory.length} {party.songHistory.length === 1 ? "SONG" : "SONGS"}</span></div>{party.songHistory.length ? <ol>{party.songHistory.map((track) => { const outcome = hostSongOutcome(track); return <li key={track.queueId}><span className={`queue-art ${track.color}`}>{trackSource(track.id) === "youtube" ? "▶️" : "🎵"}</span><div className="history-track-copy"><strong dir="auto">{track.title}</strong><span dir="auto">🎤 {track.artist}{track.duration ? ` · ${track.duration}` : ""} · {trackSource(track.id) === "youtube" ? "YouTube" : "Spotify"}</span><small>Added by {track.submittedBy}</small></div><b className={`song-outcome ${outcome.tone}`}>{outcome.label}</b></li>; })}</ol> : <div className="host-history-empty"><span>🧪</span><div><strong>No outcomes yet.</strong><p>Completed songs and dramatic boo-skips will become permanent evidence here.</p></div></div>}</section>
     <section className="leaderboard-card"><div className="card-title-row"><h2>{party.status === "ended" ? "🏆 FINAL SCOREBOARD" : party.status === "lobby" ? "🌙 LOBBY ROSTER" : "⚡ LIVE SCOREBOARD"}</h2><span>🎉 {party.people.length} PLAYERS</span></div><ol>{[...party.people].sort((a, b) => b.score - a.score).map((person, index) => <li key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><b>{party.status === "lobby" ? index + 1 : index === 0 ? "👑" : index + 1}</b><strong>{person.name}</strong><span>{person.score} pts</span></li>)}</ol></section>
 
-    <HostEffects bursts={bursts} alert={hostAlert} shaking={shaking} blackout={blackout} />
+    <HostEffectsBoundary><HostEffects bursts={bursts} alert={hostAlert} shaking={shaking} blackout={blackout} /></HostEffectsBoundary>
     {message && <div className="toast host-toast" role="status">{message}</div>}
     {party.status !== "ended" && renameOpen && <div className="modal-backdrop host-rename-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && !renameBusy && setRenameOpen(false)}><section className="host-rename-card" role="dialog" aria-modal="true" aria-labelledby="host-rename-title" aria-describedby="host-rename-description"><div className="host-rename-handle" aria-hidden="true" /><div className="modal-topline"><div><p className="eyebrow">✏️ SAME PARTY, NEW LABEL</p><h2 id="host-rename-title">Rename the chaos.</h2></div><button className="close-button" type="button" onClick={() => setRenameOpen(false)} disabled={renameBusy} aria-label="Close event rename">×</button></div><p id="host-rename-description">Only the name changes. Room code, passcode, songs, scores, history, and questionable decisions remain exactly where you left them.</p><form className="host-rename-form" onSubmit={renameEvent}><label htmlFor="host-event-name">EVENT NAME</label><input ref={renameInputRef} id="host-event-name" value={renameTitle} onChange={(event) => setRenameTitle(event.target.value)} minLength={3} maxLength={60} required /><small>{renameTitle.trim().length}/60 characters · dramatic rebranding is optional</small><div><button className="host-rename-cancel" type="button" onClick={() => setRenameOpen(false)} disabled={renameBusy}>Never mind</button><button className="host-rename-save" type="submit" disabled={renameBusy || renameTitle.trim() === party.title}>{renameBusy ? "Renaming the paperwork…" : "✨ Save new name"}</button></div></form></section></div>}
     {readinessOpen && <div className="modal-backdrop host-readiness-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setReadinessOpen(false)}><section className="host-readiness-card" role="dialog" aria-modal="true" aria-labelledby="host-readiness-title"><div className="host-readiness-handle" aria-hidden="true" /><div className="modal-topline"><div><p className="eyebrow">🧪 PRE-FLIGHT · {hostDeviceName.toUpperCase()}</p><h2 id="host-readiness-title">{readinessRunning ? "Checking this device…" : readinessResults?.some((result) => result.status === "fail") ? "Fix these before guests arrive." : readinessResults?.some((result) => result.status === "warn") ? "Almost ready. Read the notes." : "This device is ready to host."}</h2></div><button ref={closeReadinessRef} className="close-button" type="button" onClick={() => setReadinessOpen(false)} aria-label="Close readiness check">×</button></div><p className="host-readiness-intro">One tap armed the sounds, requested the wake lock, and probed playback, the player, and the room connection. Results are for this browser only.</p><ol className="host-readiness-results" aria-live="polite">{(readinessResults ?? []).map((result) => <li className={`readiness-${result.status}`} key={result.id}><span aria-hidden="true">{result.status === "pass" ? "✅" : result.status === "warn" ? "⚠️" : result.status === "fail" ? "❌" : "ℹ️"}</span><div><strong>{result.label}</strong><p>{result.detail}</p></div></li>)}{readinessRunning && <li className="readiness-info"><span aria-hidden="true">⏳</span><div><strong>Running checks…</strong><p>Listening for the cheer and boo, then probing playback about two seconds later.</p></div></li>}</ol>{inspectReactionAudio().recentSounds.length > 0 && <details className="host-sound-log"><summary>🔎 Recent sounds on this device ({inspectReactionAudio().recentSounds.length})</summary><ol>{inspectReactionAudio().recentSounds.map((entry, index) => <li key={`${entry.at}-${index}`}><time dateTime={entry.at}>{new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" }).format(new Date(entry.at))}</time><strong>{entry.sound === "up" ? "🙌 cheer" : entry.sound === "down" ? "👻 boo" : `🎛️ ${entry.sound}`}</strong><span>{entry.path}</span><small>{entry.reason}</small></li>)}</ol><p>If a sound played that nobody triggered, the reason column tells you which activity item or effect caused it.</p></details>}<div className="host-readiness-reminders"><strong>📋 Before the party, on this device</strong><ul><li>Auto-Lock → Never, Low Power Mode off, charger connected.</li><li>Volume up, mute switch off, Do Not Disturb on so notifications cannot interrupt audio.</li><li>Keep this tab in the foreground for the whole event. No Split View, no app switching.</li><li>{partyMusicSource === "youtube" ? "When the first video arrives, tap Start speaker, then tap the video once if it does not begin." : "Keep the Spotify connection on this device; it cannot move to another one."}</li></ul></div><div className="host-readiness-actions"><button type="button" onClick={startReadinessCheck} disabled={readinessRunning}>{readinessRunning ? "Checking…" : "🔁 Run again"}</button><button className="host-readiness-done" type="button" onClick={() => setReadinessOpen(false)}>Got it</button></div>{readinessCheckedAt && !readinessRunning && <small>Checked at {new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" }).format(new Date(readinessCheckedAt))}</small>}</section></div>}

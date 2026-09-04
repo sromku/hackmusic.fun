@@ -418,7 +418,7 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /className="toast host-toast"/);
   assert.match(source, /REFRESH ROOM DATA/);
   assert.match(source, /Safe refresh · music keeps playing/);
-  assert.match(source, /Spotify kept playing without interruption/);
+  assert.match(source, /The music kept playing without interruption/);
   assert.match(source, /setInterval\(\(\) => \{ void refreshParty\(\); \}, 2000\)/);
   assert.match(source, /setSyncProblem\("HackMusic briefly lost the party service/);
   assert.match(source, /beforeunload/);
@@ -478,7 +478,9 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /state === "locked" \|\| step\.disabled/);
   assert.match(source, /Setup complete\. Music is playing on this device/);
   assert.match(source, /id="spotify-connect"/);
-  assert.match(source, /<HostEffects bursts=\{bursts\}/);
+  assert.match(source, /<HostEffectsBoundary><HostEffects bursts=\{bursts\}/);
+  assert.match(source, /runReactionEffects\(data\.party, incomingActivity, incomingFlair\)/);
+  assert.ok(source.indexOf("setParty(data.party);\n      setError(\"\");") < source.indexOf("runReactionEffects(data.party, incomingActivity, incomingFlair)"), "room data must be applied before effects run");
   assert.match(source, /📯 Airhorn/);
   assert.match(source, /action: "theme"/);
   assert.match(source, /ONE MORE BOO/);
@@ -489,6 +491,7 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /shareRecapCard/);
   const effectsSource = await readFile(new URL("app/e/[code]/host/host-effects.tsx", projectRoot), "utf8");
   assert.match(effectsSource, /host-blackout/);
+  assert.match(effectsSource, /class HostEffectsBoundary extends Component/);
   assert.match(effectsSource, /burst-\$\{burst\.kind\}/);
   assert.match(source, /useReadinessCheck/);
   assert.match(source, /readiness check/);

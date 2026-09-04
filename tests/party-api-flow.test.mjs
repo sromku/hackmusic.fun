@@ -421,3 +421,35 @@ test("a room rejects participant 101 without corrupting existing membership", as
   assert.match(rejected.data.error, /full/i);
   assert.equal(db.first("SELECT COUNT(*) AS count FROM participants WHERE event_id = ?", event.id).count, 100);
 });
+
+test("simultaneous cheers and boos from many guests are all recorded and never skip early", async () => {
+  const created = await action(db, { action: "create", title: "Burst Party", name: "Host Human", passcode: "VIBE42" }, { "cf-connecting-ip": "203.0.113.120" });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  const room = created.data.room;
+  const guests = [];
+  for (const name of ["Burst A", "Burst B", "Burst C", "Burst D", "Burst E"]) {
+    const joined = await joinRoom(db, room, name);
+    assert.equal(joined.response.status, 200, JSON.stringify(joined.data));
+    guests.push(joined.participantId);
+  }
+  const songId = seedTrack(db, room, room.participantId, { duration: "3:00", title: "Burst Song" });
+  seedTrack(db, room, guests[0], { status: "pending", uri: `spotify:track:${"E".repeat(22)}`, title: "After The Burst" });
+
+  // Two boos and three cheers fired at the same moment.
+  const results = await Promise.all([
+    action(db, { action: "react", code: room.code, participantId: guests[0], kind: "down" }, { "cf-connecting-ip": "203.0.113.121" }),
+    action(db, { action: "react", code: room.code, participantId: guests[1], kind: "down" }, { "cf-connecting-ip": "203.0.113.122" }),
+    action(db, { action: "react", code: room.code, participantId: guests[2], kind: "up" }, { "cf-connecting-ip": "203.0.113.123" }),
+    action(db, { action: "react", code: room.code, participantId: guests[3], kind: "up" }, { "cf-connecting-ip": "203.0.113.124" }),
+    action(db, { action: "react", code: room.code, participantId: guests[4], kind: "up" }, { "cf-connecting-ip": "203.0.113.125" }),
+  ]);
+  for (const result of results) assert.equal(result.response.status, 200, JSON.stringify(result.data));
+  assert.equal(results.every((result) => result.data.skipped === false), true, "two boos must never skip");
+  assert.equal(db.first("SELECT status FROM submissions WHERE id = ?", songId).status, "playing");
+  assert.equal(db.first("SELECT COUNT(*) AS count FROM reactions WHERE submission_id = ?", songId).count, 5);
+  assert.equal(db.first("SELECT score FROM participants WHERE id = ?", room.participantId).score, 30 + 9 - 6);
+
+  const hostView = await (await requestWorker(`/api/party?code=${room.code}&activityAfter=`, { headers: { "x-hackmusic-participant": room.participantId, "x-hackmusic-host-key": room.hostKey, "cf-connecting-ip": "203.0.113.126" } }, { DB: db })).json();
+  assert.equal(hostView.party.currentTrack.title, "Burst Song");
+  assert.deepEqual(hostView.party.activity.map((item) => item.tone).sort(), ["down", "down", "song", "up", "up", "up"]);
+});

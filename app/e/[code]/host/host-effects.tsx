@@ -1,5 +1,7 @@
 "use client";
 
+import { Component, type ReactNode } from "react";
+
 export type HostBurst = {
   id: string;
   emoji: string;
@@ -40,6 +42,14 @@ export function makeBursts(kind: "up" | "down" | "flair", emojis: string[], avat
     delay: Math.random() * 0.35,
     avatar: index === 0 ? avatar : undefined,
   }));
+}
+
+/** The overlay is decoration. If it ever throws, it disappears quietly and the player keeps going. */
+export class HostEffectsBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(error: unknown) { console.error("HackMusic: host effects overlay disabled after an error.", error); }
+  render() { return this.state.failed ? null : this.props.children; }
 }
 
 export default function HostEffects({ bursts, alert, shaking, blackout }: { bursts: HostBurst[]; alert: HostAlert | null; shaking: boolean; blackout: boolean }) {
