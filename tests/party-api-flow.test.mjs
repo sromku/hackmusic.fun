@@ -126,6 +126,12 @@ test("three distinct boos skip a song, preserve anonymity, and ending freezes th
   assert.equal(ended.data.party.status, "ended");
   assert.equal(ended.data.party.people.every((person) => typeof person.score === "number"), true);
 
+  const unmasked = await requestWorker(`/api/party?code=${room.code}&activityAfter=`, { headers: { "x-hackmusic-participant": guests[0], "cf-connecting-ip": "203.0.113.29" } }, { DB: db });
+  const unmaskedParty = (await unmasked.json()).party;
+  const unmaskedBoos = unmaskedParty.activity.filter((item) => item.tone === "down");
+  assert.equal(unmaskedBoos.length, 3);
+  assert.deepEqual(unmaskedBoos.map((item) => item.name).sort(), ["Boo Three", "Boo Two", "You"], "boos are unmasked once the party ends");
+  assert.equal(unmaskedBoos.every((item) => item.avatar !== "?"), true);
   const lateJoin = await joinRoom(db, room, "Too Late");
   assert.equal(lateJoin.response.status, 400);
   assert.match(lateJoin.data.error, /already ended/i);

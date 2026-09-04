@@ -56,7 +56,7 @@ These rules are enforced on the server, not merely hidden in the UI:
 - A participant gets one immutable reaction per played song.
 - A participant cannot react to their own song.
 - Song pickers stay hidden from participants until the party ends, unless the host turns on per-song reveals (off by default).
-- Boo identities are never revealed to participants or the admin dashboard.
+- Boo identities stay hidden from participants while the party runs; the final party page unmasks them in the room history. The admin dashboard never shows them.
 - Scores stay hidden until the event is ended.
 - Three distinct boos skip the current song.
 

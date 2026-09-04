@@ -34,7 +34,7 @@ const partyLessons = [
     kicker: "FEELINGS, BUT AUDIBLE",
     title: "React out loud.",
     shout: "CHEER IT. BOO IT. COMMIT.",
-    body: "Cheer and the host speaker ducks the music, fires a ridiculous happy sound, and gives the song picker +3. Boo and it fires an equally ridiculous complaint, removes 3 points, and keeps your identity gloriously anonymous.",
+    body: "Cheer and the host speaker ducks the music, fires a ridiculous happy sound, and gives the song picker +3. Boo and it fires an equally ridiculous complaint, removes 3 points, and keeps your identity gloriously anonymous until the party ends. Then the receipts come out.",
     equation: ["CHEER = +3 + YEAH!", "⚡", "BOO = −3 + BOOO!"],
     footnote: "One human. One vote per song. Democracy has guardrails now.",
   },

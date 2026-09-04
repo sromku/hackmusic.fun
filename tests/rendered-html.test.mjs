@@ -339,6 +339,7 @@ test("renders a code-specific participant room", async () => {
   assert.match(source, /const hasPlayedSong = .*item\.tone === "song"/);
   assert.match(source, /The last song left the chat/);
   assert.match(source, /Played earlier:/);
+  assert.match(source, /BOOS UNMASKED/);
   assert.match(source, /myOwnSongPlaying/);
   assert.match(source, /MYSTERY CONTINUES/);
   assert.match(source, /Still a mystery/);

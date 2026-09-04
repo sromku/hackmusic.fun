@@ -208,6 +208,8 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
         submitter_id: string; display_name: string; initials: string; color: string; total_guesses: number; correct_guesses: number; my_guess_correct: number | null;
       }>();
   const revealPickers = Boolean(event.reveal_pickers);
+  // Boos are anonymous while the party runs. Once it ends, the room history unmasks them for everyone in the room.
+  const revealBoos = event.status === "ended";
   // Pickers stay secret on the guest page unless the host turned reveals on or the party is over. The host always sees them.
   const canRevealPicker = isHost || revealPickers || event.status === "ended";
   const lastSong: LastSongReveal | null = lastSongRow ? {
@@ -315,8 +317,8 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
     reactions: reactionResult.results.map((reaction) => reaction.kind === "down" ? {
       id: reaction.id,
       mine: reaction.participant_id === viewerId,
-      avatar: "?",
-      name: "Someone",
+      avatar: revealBoos ? reaction.initials : "?",
+      name: revealBoos ? (reaction.participant_id === viewerId ? "You" : reaction.display_name) : "Someone",
       message: "booed this song",
       icon: "▼",
       tone: "down",
@@ -347,9 +349,9 @@ export async function readParty(codeInput: string, viewerId: string, hostKey = "
       id: item.id,
       mine: item.participant_id === viewerId,
       tone: "down",
-      avatar: "?",
-      name: "Someone",
-      message: "booed",
+      avatar: revealBoos ? item.initials ?? "!" : "?",
+      name: revealBoos ? (item.participant_id === viewerId ? "You" : item.display_name ?? "Someone") : "Someone",
+      message: revealBoos ? "booed (unmasked)" : "booed",
       icon: "👎",
       trackTitle: item.title,
       createdAt: item.created_at,
