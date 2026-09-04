@@ -1932,4 +1932,5 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .host-sound-log li span { font-size: 9px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
 .host-sound-log li small { font-size: 10px; font-weight: 700; word-break: break-word; }
 .host-sound-log p { margin: 8px 0 0; font-size: 10px; font-weight: 750; }
+.host-event-log li { grid-template-columns: 70px 160px 1fr; }
 @media (max-width: 560px) { .host-sound-log li { grid-template-columns: 62px 1fr; } .host-sound-log li span { grid-column: 2; } .host-sound-log li small { grid-column: 1 / -1; } }

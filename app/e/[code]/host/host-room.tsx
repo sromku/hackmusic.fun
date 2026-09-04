@@ -14,6 +14,7 @@ import { useReactionSounds, type MusicVolumeControl } from "./use-reaction-sound
 import HostEffects, { HostEffectsBoundary, burstEmojisFor, makeBursts, type HostAlert, type HostBurst } from "./host-effects";
 import { boosNeededToSkip, MAX_THEME_LENGTH } from "../../../../lib/party-fun";
 import { shareRecapCard } from "../../../../lib/recap-card";
+import { useHostEventLog } from "./use-host-event-log";
 import { useReadinessCheck } from "./use-readiness-check";
 import { useScreenWakeLock } from "./use-screen-wake-lock";
 import { useYouTubePlayer } from "./use-youtube-player";
@@ -75,6 +76,7 @@ export default function HostRoom({ code }: { code: string }) {
   const previousLeaderRef = useRef<string | null>(null);
   const knownOutcomesRef = useRef<Set<string> | null>(null);
   const alertTimerRef = useRef<number | null>(null);
+  const { log: logHostEvent, read: readHostEvents } = useHostEventLog();
   const soundActivityCursorRef = useRef("");
   const cancelEndRef = useRef<HTMLButtonElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
@@ -108,10 +110,11 @@ export default function HostRoom({ code }: { code: string }) {
   const spotifyRoom = party?.musicSource === "spotify";
   const youtubeRoom = party?.musicSource === "youtube";
 
-  const advanceTrack = useCallback(async (outcome: "advance" | "skip") => {
-    if (advancingTrackRef.current) return;
+  const advanceTrack = useCallback(async (outcome: "advance" | "skip", reason: string) => {
+    if (advancingTrackRef.current) { logHostEvent("advance ignored", `${reason} (another advance already in flight)`); return; }
     advancingTrackRef.current = true;
     lastStartedTrackRef.current = "";
+    logHostEvent(outcome === "skip" ? "auto-skip requested" : "advance requested", `${reason} · current ${currentTrackIdRef.current || "none"}`);
     try {
       const response = await fetch("/api/party", {
         method: "POST",
@@ -125,21 +128,21 @@ export default function HostRoom({ code }: { code: string }) {
       advancingTrackRef.current = false;
       throw reason;
     }
-  }, [code, hostKey, participantId]);
+  }, [code, hostKey, logHostEvent, participantId]);
   const advanceTrackRef = useRef(advanceTrack);
   useEffect(() => { advanceTrackRef.current = advanceTrack; }, [advanceTrack]);
 
   const youtube = useYouTubePlayer({
     enabled: hostReady && youtubeRoom,
     onEnded: (videoId) => {
-      if (videoId !== extractYouTubeVideoId(currentTrackIdRef.current)) return;
+      if (videoId !== extractYouTubeVideoId(currentTrackIdRef.current)) { logHostEvent("youtube ended (ignored)", `video ${videoId} is not the current track`); return; }
       setYoutubeMessage("🎬 Video finished. Loading the next secret song…");
-      void advanceTrackRef.current("advance").catch((reason) => setYoutubeMessage(reason instanceof Error ? reason.message : "Could not play the next song."));
+      void advanceTrackRef.current("advance", `YouTube reported video ${videoId} ended`).catch((reason) => setYoutubeMessage(reason instanceof Error ? reason.message : "Could not play the next song."));
     },
     onError: (videoId, errorCode) => {
-      if (videoId !== extractYouTubeVideoId(currentTrackIdRef.current)) return;
+      if (videoId !== extractYouTubeVideoId(currentTrackIdRef.current)) { logHostEvent("youtube error (ignored)", `code ${errorCode} for ${videoId}, not the current track`); return; }
       setYoutubeMessage(`⚠️ ${youtubeErrorMessage(errorCode)} Skipping it for the room.`);
-      void advanceTrackRef.current("skip").catch((reason) => setYoutubeMessage(reason instanceof Error ? reason.message : "Could not skip that video. Use the skip button."));
+      void advanceTrackRef.current("skip", `YouTube error ${errorCode} on video ${videoId}: ${youtubeErrorMessage(errorCode)}`).catch((reason) => setYoutubeMessage(reason instanceof Error ? reason.message : "Could not skip that video. Use the skip button."));
     },
     onProgress: (progress) => {
       if (activeSourceRef.current !== "youtube") return;
@@ -181,6 +184,7 @@ export default function HostRoom({ code }: { code: string }) {
   }, []);
 
   const pullThePlug = useCallback((title: string) => {
+    logHostEvent("booed off (server)", title);
     setBlackout(true);
     playEffect("scratch", `plug pulled: ${title}`);
     window.setTimeout(() => playEffect("slam", `plug pulled: ${title}`), 350);
@@ -188,7 +192,7 @@ export default function HostRoom({ code }: { code: string }) {
     setShaking(true);
     window.setTimeout(() => setShaking(false), 900);
     window.setTimeout(() => setBlackout(false), 1_400);
-  }, [playEffect, showAlert]);
+  }, [logHostEvent, playEffect, showAlert]);
   const { supported: wakeLockSupported, active: wakeLockActive, request: requestScreenWakeLock, release: releaseScreenWakeLock } = useScreenWakeLock(hostDeviceName, setMessage);
   const { running: readinessRunning, results: readinessResults, checkedAt: readinessCheckedAt, run: runReadinessCheck } = useReadinessCheck();
   const wakeLockStatus = wakeLockActive
@@ -508,7 +512,7 @@ export default function HostRoom({ code }: { code: string }) {
             const moveToNext = () => {
               if (!active || activeSourceRef.current !== "spotify") return;
               if (state && state.track_window.current_track.uri !== currentTrackIdRef.current) return;
-              void advanceTrackRef.current("advance").catch((reason) => {
+              void advanceTrackRef.current("advance", naturallyFinished ? "Spotify reported the track finished" : "Spotify end timer elapsed").catch((reason) => {
                 if (active) setSpotifyMessage(reason instanceof Error ? reason.message : "Could not play the next song.");
               });
             };
@@ -988,6 +992,7 @@ export default function HostRoom({ code }: { code: string }) {
 
   async function control(action: "start" | "skip" | "advance" | "end") {
     setBusy(true);
+    logHostEvent(`host pressed ${action}`, `current ${currentTrackIdRef.current || "none"}`);
     try {
       const response = await fetch("/api/party", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, code, participantId, pin: hostKey }) });
       const data = await response.json();
@@ -1135,7 +1140,7 @@ export default function HostRoom({ code }: { code: string }) {
     <HostEffectsBoundary><HostEffects bursts={bursts} alert={hostAlert} shaking={shaking} blackout={blackout} /></HostEffectsBoundary>
     {message && <div className="toast host-toast" role="status">{message}</div>}
     {party.status !== "ended" && renameOpen && <div className="modal-backdrop host-rename-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && !renameBusy && setRenameOpen(false)}><section className="host-rename-card" role="dialog" aria-modal="true" aria-labelledby="host-rename-title" aria-describedby="host-rename-description"><div className="host-rename-handle" aria-hidden="true" /><div className="modal-topline"><div><p className="eyebrow">✏️ SAME PARTY, NEW LABEL</p><h2 id="host-rename-title">Rename the chaos.</h2></div><button className="close-button" type="button" onClick={() => setRenameOpen(false)} disabled={renameBusy} aria-label="Close event rename">×</button></div><p id="host-rename-description">Only the name changes. Room code, passcode, songs, scores, history, and questionable decisions remain exactly where you left them.</p><form className="host-rename-form" onSubmit={renameEvent}><label htmlFor="host-event-name">EVENT NAME</label><input ref={renameInputRef} id="host-event-name" value={renameTitle} onChange={(event) => setRenameTitle(event.target.value)} minLength={3} maxLength={60} required /><small>{renameTitle.trim().length}/60 characters · dramatic rebranding is optional</small><div><button className="host-rename-cancel" type="button" onClick={() => setRenameOpen(false)} disabled={renameBusy}>Never mind</button><button className="host-rename-save" type="submit" disabled={renameBusy || renameTitle.trim() === party.title}>{renameBusy ? "Renaming the paperwork…" : "✨ Save new name"}</button></div></form></section></div>}
-    {readinessOpen && <div className="modal-backdrop host-readiness-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setReadinessOpen(false)}><section className="host-readiness-card" role="dialog" aria-modal="true" aria-labelledby="host-readiness-title"><div className="host-readiness-handle" aria-hidden="true" /><div className="modal-topline"><div><p className="eyebrow">🧪 PRE-FLIGHT · {hostDeviceName.toUpperCase()}</p><h2 id="host-readiness-title">{readinessRunning ? "Checking this device…" : readinessResults?.some((result) => result.status === "fail") ? "Fix these before guests arrive." : readinessResults?.some((result) => result.status === "warn") ? "Almost ready. Read the notes." : "This device is ready to host."}</h2></div><button ref={closeReadinessRef} className="close-button" type="button" onClick={() => setReadinessOpen(false)} aria-label="Close readiness check">×</button></div><p className="host-readiness-intro">One tap armed the sounds, requested the wake lock, and probed playback, the player, and the room connection. Results are for this browser only.</p><ol className="host-readiness-results" aria-live="polite">{(readinessResults ?? []).map((result) => <li className={`readiness-${result.status}`} key={result.id}><span aria-hidden="true">{result.status === "pass" ? "✅" : result.status === "warn" ? "⚠️" : result.status === "fail" ? "❌" : "ℹ️"}</span><div><strong>{result.label}</strong><p>{result.detail}</p></div></li>)}{readinessRunning && <li className="readiness-info"><span aria-hidden="true">⏳</span><div><strong>Running checks…</strong><p>Listening for the cheer and boo, then probing playback about two seconds later.</p></div></li>}</ol>{inspectReactionAudio().recentSounds.length > 0 && <details className="host-sound-log"><summary>🔎 Recent sounds on this device ({inspectReactionAudio().recentSounds.length})</summary><ol>{inspectReactionAudio().recentSounds.map((entry, index) => <li key={`${entry.at}-${index}`}><time dateTime={entry.at}>{new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" }).format(new Date(entry.at))}</time><strong>{entry.sound === "up" ? "🙌 cheer" : entry.sound === "down" ? "👻 boo" : `🎛️ ${entry.sound}`}</strong><span>{entry.path}</span><small>{entry.reason}</small></li>)}</ol><p>If a sound played that nobody triggered, the reason column tells you which activity item or effect caused it.</p></details>}<div className="host-readiness-reminders"><strong>📋 Before the party, on this device</strong><ul><li>Auto-Lock → Never, Low Power Mode off, charger connected.</li><li>Volume up, mute switch off, Do Not Disturb on so notifications cannot interrupt audio.</li><li>Keep this tab in the foreground for the whole event. No Split View, no app switching.</li><li>{partyMusicSource === "youtube" ? "When the first video arrives, tap Start speaker, then tap the video once if it does not begin." : "Keep the Spotify connection on this device; it cannot move to another one."}</li></ul></div><div className="host-readiness-actions"><button type="button" onClick={startReadinessCheck} disabled={readinessRunning}>{readinessRunning ? "Checking…" : "🔁 Run again"}</button><button className="host-readiness-done" type="button" onClick={() => setReadinessOpen(false)}>Got it</button></div>{readinessCheckedAt && !readinessRunning && <small>Checked at {new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" }).format(new Date(readinessCheckedAt))}</small>}</section></div>}
+    {readinessOpen && <div className="modal-backdrop host-readiness-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setReadinessOpen(false)}><section className="host-readiness-card" role="dialog" aria-modal="true" aria-labelledby="host-readiness-title"><div className="host-readiness-handle" aria-hidden="true" /><div className="modal-topline"><div><p className="eyebrow">🧪 PRE-FLIGHT · {hostDeviceName.toUpperCase()}</p><h2 id="host-readiness-title">{readinessRunning ? "Checking this device…" : readinessResults?.some((result) => result.status === "fail") ? "Fix these before guests arrive." : readinessResults?.some((result) => result.status === "warn") ? "Almost ready. Read the notes." : "This device is ready to host."}</h2></div><button ref={closeReadinessRef} className="close-button" type="button" onClick={() => setReadinessOpen(false)} aria-label="Close readiness check">×</button></div><p className="host-readiness-intro">One tap armed the sounds, requested the wake lock, and probed playback, the player, and the room connection. Results are for this browser only.</p><ol className="host-readiness-results" aria-live="polite">{(readinessResults ?? []).map((result) => <li className={`readiness-${result.status}`} key={result.id}><span aria-hidden="true">{result.status === "pass" ? "✅" : result.status === "warn" ? "⚠️" : result.status === "fail" ? "❌" : "ℹ️"}</span><div><strong>{result.label}</strong><p>{result.detail}</p></div></li>)}{readinessRunning && <li className="readiness-info"><span aria-hidden="true">⏳</span><div><strong>Running checks…</strong><p>Listening for the cheer and boo, then probing playback about two seconds later.</p></div></li>}</ol>{readHostEvents().length > 0 && <details className="host-sound-log host-event-log"><summary>🧾 Recent playback events ({readHostEvents().length})</summary><ol>{readHostEvents().map((entry, index) => <li key={`${entry.at}-${index}`}><time dateTime={entry.at}>{new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" }).format(new Date(entry.at))}</time><strong>{entry.event}</strong><small>{entry.detail}</small></li>)}</ol><p>Every song change on this device is listed with what asked for it: the YouTube player, Spotify, a host button, or the crowd.</p></details>}{inspectReactionAudio().recentSounds.length > 0 && <details className="host-sound-log"><summary>🔎 Recent sounds on this device ({inspectReactionAudio().recentSounds.length})</summary><ol>{inspectReactionAudio().recentSounds.map((entry, index) => <li key={`${entry.at}-${index}`}><time dateTime={entry.at}>{new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" }).format(new Date(entry.at))}</time><strong>{entry.sound === "up" ? "🙌 cheer" : entry.sound === "down" ? "👻 boo" : `🎛️ ${entry.sound}`}</strong><span>{entry.path}</span><small>{entry.reason}</small></li>)}</ol><p>If a sound played that nobody triggered, the reason column tells you which activity item or effect caused it.</p></details>}<div className="host-readiness-reminders"><strong>📋 Before the party, on this device</strong><ul><li>Auto-Lock → Never, Low Power Mode off, charger connected.</li><li>Volume up, mute switch off, Do Not Disturb on so notifications cannot interrupt audio.</li><li>Keep this tab in the foreground for the whole event. No Split View, no app switching.</li><li>{partyMusicSource === "youtube" ? "When the first video arrives, tap Start speaker, then tap the video once if it does not begin." : "Keep the Spotify connection on this device; it cannot move to another one."}</li></ul></div><div className="host-readiness-actions"><button type="button" onClick={startReadinessCheck} disabled={readinessRunning}>{readinessRunning ? "Checking…" : "🔁 Run again"}</button><button className="host-readiness-done" type="button" onClick={() => setReadinessOpen(false)}>Got it</button></div>{readinessCheckedAt && !readinessRunning && <small>Checked at {new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" }).format(new Date(readinessCheckedAt))}</small>}</section></div>}
     {party.status !== "ended" && handoffOpen && <div className="modal-backdrop host-transfer-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setHandoffOpen(false)}><section className="host-transfer-card" role="dialog" aria-modal="true" aria-labelledby="host-transfer-title"><div className="host-transfer-handle" aria-hidden="true" /><div className="modal-topline"><div><p className="eyebrow">🎚️ HIGHLY CONTROLLED MUTINY</p><h2 id="host-transfer-title">Pass the aux.</h2></div><button ref={closeHandoffRef} className="close-button" type="button" onClick={() => setHandoffOpen(false)} aria-label="Close host handoff">×</button></div>{handoffInvite ? <div className="host-transfer-ready"><div className="host-transfer-ticket"><span>ONE-USE HOST LINK FOR</span><strong>{handoffInvite.targetName}</strong><small>Expires at {new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(handoffInvite.expiresAt))}</small></div><p>Send this only to the chosen human. When they accept, this browser loses host control and disconnects from DJ duty.</p><code>{handoffInvite.url}</code><div className="host-transfer-actions"><button type="button" onClick={() => void copyHandoff()}>📋 Copy handoff</button><button type="button" onClick={() => void shareHandoff()}>🚀 Share privately</button></div><button className="host-transfer-cancel" type="button" disabled={handoffBusy} onClick={() => void cancelHandoff()}>{handoffBusy ? "Cancelling…" : "🧯 Cancel this tiny coup"}</button></div> : <><p className="host-transfer-intro">Choose one joined human. They get a targeted link that works once, for 10 minutes. No permanent master password wandering around the internet.</p><div className="host-transfer-warning"><strong>🔊 The speaker stays with the device, not the crown.</strong><span>The new host must press Start speaker on their device (and connect Spotify there for Spotify songs). When they accept, this host tab retires automatically.</span></div><div className="host-transfer-people" role="group" aria-label="Humans eligible to become host">{party.people.filter((person) => person.name !== "You").map((person) => <button type="button" disabled={handoffBusy} onClick={() => void prepareHandoff(person.id)} key={person.id}><span className={`avatar ${person.color}`}>{person.initials}</span><span><strong>{person.name}</strong><small>{handoffBusy ? "Preparing the paperwork…" : "Make this human the next host"}</small></span><b>→</b></button>)}</div>{party.people.length <= 1 && <div className="host-transfer-empty"><strong>🦗 No eligible humans yet.</strong><span>Invite someone into the room first. Transferring control to yourself is just refreshing with extra paperwork.</span></div>}<small className="host-transfer-footnote">🔐 The raw handoff secret lives only in the link. HackMusic stores a one-way hash until it expires.</small></>}</section></div>}
     {party.status !== "ended" && endConfirmOpen && <div className="modal-backdrop end-confirm-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setEndConfirmOpen(false)}><section className="end-confirm-card" role="dialog" aria-modal="true" aria-labelledby="end-confirm-title" aria-describedby="end-confirm-description"><p className="eyebrow">🚨 POINT OF NO RETURN</p><h2 id="end-confirm-title">End the party? 🥲</h2><p id="end-confirm-description">This freezes every score and closes the room for new songs and votes. There is no undo.</p><div className="end-confirm-actions"><button ref={cancelEndRef} className="keep-partying" type="button" onClick={() => setEndConfirmOpen(false)}>🎉 Nope, keep partying</button><button className="really-end-party" type="button" disabled={busy} onClick={() => { setEndConfirmOpen(false); void control("end"); }}>{busy ? "⏳ Ending…" : "🏁 Yes, end it forever"}</button></div><small>Press Escape or tap outside to cancel.</small></section></div>}
   </main>;

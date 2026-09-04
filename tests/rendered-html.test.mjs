@@ -492,6 +492,8 @@ test("renders a code-specific host control surface", async () => {
   assert.match(source, /📯 Airhorn/);
   assert.match(source, /action: "theme"/);
   assert.match(source, /action: "revealPickers"/);
+  assert.match(source, /Recent playback events/);
+  assert.match(source, /YouTube reported video \$\{videoId\} ended/);
   assert.match(source, /Pickers secret until the end/);
   assert.match(source, /ONE MORE BOO/);
   assert.match(source, /PLUG PULLED/);
