@@ -1736,6 +1736,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid 
 .shield-button { margin-top: 12px; min-height: 44px; border: 2px solid var(--ink); background: var(--blue); box-shadow: 4px 4px 0 var(--ink); padding: 0 14px; cursor: pointer; font-size: 12px; font-weight: 950; transition: transform .2s cubic-bezier(.2, .8, .25, 1.15), box-shadow .2s ease; }
 .shield-button:not(:disabled):hover { box-shadow: 6px 6px 0 var(--ink); transform: translate(-2px, -2px); }
 .shield-button:disabled { opacity: .6; cursor: wait; }
+.reaction-choice-note.own-song { background: var(--blue); }
 .boost-toggle { width: 100%; min-height: 44px; border: 0; border-bottom: 2px solid var(--ink); background: var(--paper); cursor: pointer; font-size: 12px; font-weight: 900; transition: background .2s ease; }
 .boost-toggle.armed { background: var(--sun); animation: boost-pulse 1.4s ease-in-out infinite; }
 @keyframes boost-pulse { 0%, 100% { box-shadow: inset 0 0 0 0 rgba(21, 21, 21, 0); } 50% { box-shadow: inset 0 0 0 4px rgba(21, 21, 21, .12); } }
