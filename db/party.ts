@@ -8,6 +8,7 @@ import { PublicError } from "../lib/public-error";
 import { hashRoomPasscode, verifyRoomPasscode } from "../lib/room-passcode";
 import { resolveSpotifyTrack } from "../lib/spotify-track";
 import { parseTrackReference, trackSource } from "../lib/track-link";
+import { PASSCODE_AS_NAME_MESSAGE, ROOM_CODE_AS_NAME_MESSAGE, partyCredentialToken, partyNameCredentialError } from "../lib/party-name";
 import { advanceCurrentTrack, estimateSkipPercent } from "./party-queue";
 import {
   collapseLegacyReactionActivity,
@@ -766,6 +767,11 @@ export async function setParticipantName(code: string, participantId: string, di
   if (!event) throw new PublicError("Room not found. Check the six-character code and try again.", 404);
   const name = normalizeDisplayName(displayName);
   if (name.length < 2 || name.length > 24) throw new PublicError("Use a party name between 2 and 24 characters.");
+  if (partyNameCredentialError(name, event.code)) throw new PublicError(ROOM_CODE_AS_NAME_MESSAGE);
+  const nameToken = partyCredentialToken(name);
+  if (event.join_passcode_hash && event.join_passcode_salt && nameToken && await verifyRoomPasscode(nameToken, event.join_passcode_hash, event.join_passcode_salt)) {
+    throw new PublicError(PASSCODE_AS_NAME_MESSAGE);
+  }
   const participant = await getD1().prepare("SELECT initials FROM participants WHERE id = ? AND event_id = ?")
     .bind(participantId, event.id).first<{ initials: string }>();
   if (!participant) throw new PublicError("This browser is not joined to the room yet. Reopen the invite and join again.", 401);
@@ -788,6 +794,8 @@ export async function joinParty(code: string, participantId: string, displayName
   if (event.join_passcode_hash && (!event.join_passcode_salt || !await verifyRoomPasscode(passcodeInput, event.join_passcode_hash, event.join_passcode_salt))) throw new PublicError("That room code and passcode do not match. Ask the host for the latest invite.", 401);
   const name = normalizeDisplayName(displayName);
   if (name.length < 2 || name.length > 24) throw new PublicError("Use a party name between 2 and 24 characters.");
+  const credentialError = partyNameCredentialError(name, event.code, passcodeInput);
+  if (credentialError) throw new PublicError(credentialError);
   if (!/^p-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(participantId)) throw new PublicError("We could not prepare this browser to join. Refresh the page and try again.");
   const profile = profileForName(name);
   const publicId = `person-${crypto.randomUUID()}`;

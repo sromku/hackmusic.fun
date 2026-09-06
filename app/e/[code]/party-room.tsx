@@ -8,6 +8,7 @@ import { artworkVariant, durationSeconds, formatActivityTime, formatMusicDuratio
 import { extractYouTubeVideoId, youtubeThumbnailUrl } from "../../../lib/youtube-track";
 import { FLAIR_EMOJIS, boosNeededToSkip } from "../../../lib/party-fun";
 import { MAX_PENDING_TRACKS_PER_PERSON, REACTION_GRACE_MS } from "../../../lib/party-rules";
+import { partyNameCredentialError } from "../../../lib/party-name";
 import { isDevelopmentHost } from "../../../lib/dev-only";
 import { hostStorageKey, participantStorageKey, personaDisplayName, personaFromSearch } from "../../../lib/party-storage";
 import { shareRecapCard } from "../../../lib/recap-card";
@@ -28,6 +29,7 @@ export default function PartyRoom({ code }: { code: string }) {
   const [party, setParty] = useState<ParticipantParty | null>(null);
   const [participantId, setParticipantId] = useState("");
   const [joinName, setJoinName] = useState("");
+  const [joinNameError, setJoinNameError] = useState("");
   const [joinPasscode, setJoinPasscode] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [showEveryone, setShowEveryone] = useState(false);
@@ -280,7 +282,19 @@ export default function PartyRoom({ code }: { code: string }) {
 
   async function join(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (joinName.trim().length < 2) { setNotice("👋 Your name needs at least two letters."); return; }
+    if (joinName.trim().length < 2) {
+      const message = "👋 Your name needs at least two letters.";
+      setJoinNameError(message);
+      setNotice(message);
+      return;
+    }
+    const credentialError = partyNameCredentialError(joinName, code, joinPasscode);
+    if (credentialError) {
+      setJoinNameError(credentialError);
+      setNotice(credentialError);
+      return;
+    }
+    setJoinNameError("");
     setBusy(true);
     const id = `p-${crypto.randomUUID()}`;
     try {
@@ -560,7 +574,7 @@ export default function PartyRoom({ code }: { code: string }) {
 
       {nameOpen && party && <div className="modal-backdrop name-backdrop" role="presentation" onMouseDown={(event) => event.currentTarget === event.target && setNameOpen(false)}><form className="name-picker-card" role="dialog" aria-modal="true" aria-labelledby="name-picker-title" onSubmit={(event) => void changeName(event)}><div className="modal-topline"><div><p className="eyebrow">🎤 WITNESS PROTECTION, BUT FESTIVE</p><h2 id="name-picker-title">Rename your human</h2></div><button className="close-button" type="button" onClick={() => setNameOpen(false)} aria-label="Close name editor">×</button></div><p className="name-picker-intro">New nickname, same suspicious music taste. Everyone in this room will see the update.</p><label htmlFor="party-name-edit">YOUR NEW PARTY NAME</label><input id="party-name-edit" value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} minLength={2} maxLength={24} autoComplete="nickname" required /><div className="name-picker-count"><span>Keep it recognizable-ish.</span><b>{nameDraft.length}/24</b></div><button className="name-save-button" type="submit" disabled={busy}>{busy ? "🎛️ Remixing identity…" : "✨ Save my new legend →"}</button><p className="avatar-privacy-note">👻 Your boos remain anonymous. Even from your new identity.</p></form></div>}
 
-      {!participantId && !ended && <div className="modal-backdrop join-backdrop"><form className="join-card" onSubmit={join}><span className="join-mark">HM</span>{movedAway && <p className="join-moved-note">📱 Your seat moved to your other device. This browser is a spectator now. Joining again here creates a second, separate human.</p>}<p className="eyebrow">🎟️ ROOM {room.code}</p><h2>{lobby ? "The pre-party is open 🌙" : "Who just walked in? 👀"}</h2><p>You’re joining <strong>{room.title}</strong>. {lobby ? "Tell the room what to call you, then start hiding songs in the queue." : "Tell the room what to call you, then collect your 30 points ⭐"}</p><label htmlFor="join-name">YOUR NAME — SHOWN TO EVERYONE</label><input id="join-name" value={joinName} onChange={(event) => setJoinName(event.target.value)} maxLength={24} autoComplete="nickname" placeholder="Type your name or nickname (e.g. Maya)" required /><small className="join-name-hint">👋 This is how other humans will see you. It is not the room code.</small><small className="join-source-hint">{room.musicSource === "youtube" ? "▶️ This room plays YouTube videos. Have your video links ready." : "🟢 This room plays Spotify tracks. Have your song links ready."}</small>{room.requiresPasscode && <><label htmlFor="join-passcode">ROOM PASSCODE — ASK THE HOST</label><input id="join-passcode" value={joinPasscode} onChange={(event) => setJoinPasscode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} minLength={4} maxLength={12} autoComplete="one-time-code" placeholder="Enter the host’s passcode" required /></>}<button type="submit" disabled={busy}>{busy ? "🔐 Checking the guest list…" : lobby ? "🌙 Enter the lobby →" : "🥳 Enter the party →"}</button><small>🔐 Room code + passcode keeps random party crashers outside.</small></form></div>}
+      {!participantId && !ended && <div className="modal-backdrop join-backdrop"><form className="join-card" onSubmit={join}><span className="join-mark">HM</span>{movedAway && <p className="join-moved-note">📱 Your seat moved to your other device. This browser is a spectator now. Joining again here creates a second, separate human.</p>}<p className="eyebrow">🎟️ ROOM {room.code}</p><h2>{lobby ? "The pre-party is open 🌙" : "Who just walked in? 👀"}</h2><p>You’re joining <strong>{room.title}</strong>. {lobby ? "Tell the room what to call you, then start hiding songs in the queue." : "Tell the room what to call you, then collect your 30 points ⭐"}</p><label htmlFor="join-name">YOUR NAME — SHOWN TO EVERYONE</label><input id="join-name" value={joinName} onChange={(event) => { setJoinName(event.target.value); setJoinNameError(""); }} maxLength={24} autoComplete="nickname" placeholder="Type your name or nickname (e.g. Maya)" aria-invalid={Boolean(joinNameError)} aria-describedby={joinNameError ? "join-name-error" : "join-name-hint"} required />{joinNameError ? <small id="join-name-error" className="join-name-error" role="alert">{joinNameError}</small> : <small id="join-name-hint" className="join-name-hint">👋 This is how other humans will see you. It is not the room code.</small>}<small className="join-source-hint">{room.musicSource === "youtube" ? "▶️ This room plays YouTube videos. Have your video links ready." : "🟢 This room plays Spotify tracks. Have your song links ready."}</small>{room.requiresPasscode && <><label htmlFor="join-passcode">ROOM PASSCODE — ASK THE HOST</label><input id="join-passcode" value={joinPasscode} onChange={(event) => setJoinPasscode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} minLength={4} maxLength={12} autoComplete="one-time-code" placeholder="Enter the host’s passcode" required /></>}<button type="submit" disabled={busy}>{busy ? "🔐 Checking the guest list…" : lobby ? "🌙 Enter the lobby →" : "🥳 Enter the party →"}</button><small>🔐 Room code + passcode keeps random party crashers outside.</small></form></div>}
       <div className="flyaway-layer" aria-hidden="true">{flyaways.map((item) => <span style={{ left: `${item.x}%` }} key={item.id}>{item.emoji}</span>)}</div>
       {notice && <div className="toast" role="status">{notice}</div>}
     </main>

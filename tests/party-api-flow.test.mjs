@@ -52,6 +52,13 @@ test("party API enforces passcodes, membership, score visibility, and one reacti
   assert.equal(rejected.response.status, 401);
   assert.match(rejected.data.error, /do not match/i);
 
+  const roomCodeName = await joinRoom(db, room, `**${room.code.toLowerCase()}**`);
+  assert.equal(roomCodeName.response.status, 400);
+  assert.match(roomCodeName.data.error, /room code—not a human name/i);
+  const passcodeName = await joinRoom(db, room, "**vibe42**");
+  assert.equal(passcodeName.response.status, 400);
+  assert.match(passcodeName.data.error, /secret knock, not your name/i);
+
   const joined = await joinRoom(db, room, "Guest Human");
   assert.equal(joined.response.status, 200, JSON.stringify(joined.data));
   assert.equal(joined.data.party.viewer.name, "You");
@@ -67,6 +74,12 @@ test("party API enforces passcodes, membership, score visibility, and one reacti
   const storedHuman = db.first("SELECT display_name, initials FROM participants WHERE id = ?", joined.participantId);
   assert.equal(storedHuman.display_name, "Disco Alias");
   assert.equal(storedHuman.initials, "🦊");
+  const renamedToCode = await action(db, { action: "profileName", code: room.code, participantId: joined.participantId, name: room.code });
+  assert.equal(renamedToCode.response.status, 400);
+  assert.match(renamedToCode.data.error, /room code—not a human name/i);
+  const renamedToPasscode = await action(db, { action: "profileName", code: room.code, participantId: joined.participantId, name: "VIBE42" });
+  assert.equal(renamedToPasscode.response.status, 400);
+  assert.match(renamedToPasscode.data.error, /secret knock, not your name/i);
   const hostViewResponse = await requestWorker(`/api/party?code=${room.code}`, { headers: { "x-hackmusic-participant": room.participantId, "cf-connecting-ip": "203.0.113.12" } }, { DB: db });
   const hostView = await hostViewResponse.json();
   assert.equal(hostView.party.people.some((person) => person.name === "Disco Alias"), true);

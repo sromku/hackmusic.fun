@@ -391,6 +391,7 @@ test("renders the Hall of Fame shell for an ended room", async () => {
   assert.match(cardSource, /THE PARTY ARC/);
   assert.match(cardSource, /💡 INSIGHTS/);
   const participantSource = await readFile(new URL("app/e/[code]/party-room.tsx", projectRoot), "utf8");
+  assert.match(participantSource, /partyNameCredentialError\(joinName, code, joinPasscode\)/);
   assert.match(participantSource, /Open the Hall of Fame/);
   const hostSource = await readFile(new URL("app/e/[code]/host/host-room.tsx", projectRoot), "utf8");
   assert.match(hostSource, /Open the Hall of Fame/);

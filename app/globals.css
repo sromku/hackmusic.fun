@@ -720,6 +720,8 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 72px); line-height: .9; letter-spaci
 .join-card label, .join-card small { display: block; font-size: 10px; font-weight: 900; letter-spacing: .09em; }
 .join-card input { width: 100%; min-height: 52px; margin: 8px 0 12px; border: 2px solid var(--ink); border-radius: 0; background: var(--white); padding: 0 13px; font-size: 16px; }
 .join-card .join-name-hint { margin: -3px 0 18px; border-left: 3px solid var(--ink); padding: 7px 9px; background: color-mix(in srgb, var(--white) 45%, transparent); font-size: 10px; line-height: 1.35; letter-spacing: 0; text-align: left; }
+.join-card .join-name-error { margin: -3px 0 18px; border: 2px solid var(--ink); padding: 9px 10px; background: var(--coral); box-shadow: 3px 3px 0 var(--ink); font-size: 12px; line-height: 1.35; letter-spacing: 0; text-align: left; }
+.join-card input[aria-invalid="true"] { background: color-mix(in srgb, var(--coral) 12%, var(--white)); box-shadow: 4px 4px 0 var(--coral); }
 .join-card button { width: 100%; min-height: 52px; border: 2px solid var(--ink); background: var(--blue); box-shadow: 4px 4px 0 var(--ink); cursor: pointer; font-weight: 900; }
 .join-card small { margin-top: 18px; letter-spacing: 0; text-align: center; }
 
