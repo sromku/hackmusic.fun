@@ -816,6 +816,33 @@ export async function hostControl(code: string, hostKey: string, action: "start"
   await advanceCurrentTrack(event, action === "advance" ? "played" : "skipped", action === "skip" ? "host" : null);
 }
 
+/**
+ * Put videos that were automatically advanced by a host-side player failure back
+ * into the queue. This deliberately preserves played, boo-skipped, and
+ * participant-removed submissions, along with all historical records.
+ */
+export async function recoverYouTubeQueue(code: string, hostKey: string) {
+  const event = await loadEvent(code);
+  if (!event || event.host_pin !== hostKey) throw new PublicError("Host controls belong to the browser that created this room.", 403);
+  if (event.music_source !== "youtube") throw new PublicError("Queue recovery is only needed for YouTube rooms.");
+  if (event.status === "ended") throw new PublicError("This party has already ended. Its final scores stay frozen.");
+
+  const d1 = getD1();
+  const result = await d1.prepare(`SELECT COUNT(*) AS count FROM submissions
+    WHERE event_id = ? AND (status = 'playing' OR (status = 'skipped' AND skip_reason = 'host'))`)
+    .bind(event.id).first<{ count: number }>();
+  const restored = result?.count ?? 0;
+  if (!restored) throw new PublicError("There are no failed videos to restore. The queue is already ready.");
+
+  await d1.batch([
+    d1.prepare(`UPDATE submissions
+      SET status = 'pending', skip_reason = NULL, skip_percent = NULL
+      WHERE event_id = ? AND (status = 'playing' OR (status = 'skipped' AND skip_reason = 'host'))`).bind(event.id),
+    d1.prepare("UPDATE events SET status = 'lobby', current_submission_id = NULL WHERE id = ?").bind(event.id),
+  ]);
+  return restored;
+}
+
 export async function recordBooSkipProgress(code: string, hostKey: string, providerTrackId: string, percentInput: number) {
   const event = await loadEvent(code);
   if (!event || event.host_pin !== hostKey) throw new PublicError("Host controls belong to the browser that created this room.", 403);

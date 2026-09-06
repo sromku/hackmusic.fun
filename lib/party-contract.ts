@@ -304,6 +304,7 @@ export type PartyAction =
   | "skip"
   | "advance"
   | "end"
+  | "recoverQueue"
   | "rename"
   | "queueMode"
   | "passcode"

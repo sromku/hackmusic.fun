@@ -182,6 +182,45 @@ test("YouTube videos share the queue with Spotify tracks and record boo-skip pro
   assert.equal(progress.data.party.songHistory[0].skipPercent, 61);
 });
 
+test("a host can restore videos skipped by a YouTube player failure without deleting party data", async () => {
+  const created = await action(db, { action: "create", title: "Recoverable Video Party", name: "Host Human", passcode: "VIBE42", musicSource: "youtube" }, { "cf-connecting-ip": "203.0.113.94" });
+  assert.equal(created.response.status, 201, JSON.stringify(created.data));
+  const room = created.data.room;
+  const playing = seedTrack(db, room, room.participantId, { uri: "youtube:video:dQw4w9WgXcQ", title: "Stuck Video" });
+  const failed = seedTrack(db, room, room.participantId, { status: "skipped", uri: "youtube:video:9bZkp7q19f0", title: "Configuration Skip" });
+  const booed = seedTrack(db, room, room.participantId, { status: "skipped", uri: "youtube:video:kJQP7kiw5Fk", title: "Crowd Skip" });
+  const waiting = seedTrack(db, room, room.participantId, { status: "pending", uri: "youtube:video:3JZ_D3ELwOQ", title: "Still Waiting" });
+  const removed = seedTrack(db, room, room.participantId, { status: "removed", uri: "youtube:video:fJ9rUzIMcZQ", title: "Intentionally Removed" });
+  db.prepare("UPDATE submissions SET skip_reason = 'host' WHERE id = ?").bind(failed).run();
+  db.prepare("UPDATE submissions SET skip_reason = 'boos', skip_percent = 20 WHERE id = ?").bind(booed).run();
+
+  const rejected = await action(db, { action: "recoverQueue", code: room.code, participantId: room.participantId, pin: "not-the-host-key" });
+  assert.equal(rejected.response.status, 403);
+
+  const recovered = await action(db, { action: "recoverQueue", code: room.code, participantId: room.participantId, pin: room.hostKey });
+  assert.equal(recovered.response.status, 200, JSON.stringify(recovered.data));
+  assert.equal(recovered.data.restored, 2);
+  assert.equal(recovered.data.party.status, "lobby");
+  assert.equal(db.first("SELECT current_submission_id FROM events WHERE code = ?", room.code).current_submission_id, null);
+  assert.equal(db.first("SELECT status FROM submissions WHERE id = ?", playing).status, "pending");
+  const restoredFailed = db.first("SELECT status, skip_reason, skip_percent FROM submissions WHERE id = ?", failed);
+  assert.equal(restoredFailed.status, "pending");
+  assert.equal(restoredFailed.skip_reason, null);
+  assert.equal(restoredFailed.skip_percent, null);
+  const preservedBoo = db.first("SELECT status, skip_reason, skip_percent FROM submissions WHERE id = ?", booed);
+  assert.equal(preservedBoo.status, "skipped");
+  assert.equal(preservedBoo.skip_reason, "boos");
+  assert.equal(preservedBoo.skip_percent, 20);
+  assert.equal(db.first("SELECT status FROM submissions WHERE id = ?", waiting).status, "pending");
+  assert.equal(db.first("SELECT status FROM submissions WHERE id = ?", removed).status, "removed");
+  assert.equal(db.first("SELECT COUNT(*) AS count FROM submissions WHERE event_id = (SELECT id FROM events WHERE code = ?)", room.code).count, 5);
+
+  const restarted = await action(db, { action: "start", code: room.code, participantId: room.participantId, pin: room.hostKey });
+  assert.equal(restarted.response.status, 200, JSON.stringify(restarted.data));
+  assert.equal(restarted.data.party.status, "live");
+  assert.ok(restarted.data.party.currentTrack);
+});
+
 test("a room is locked to one music source chosen at creation", async () => {
   const invalid = await action(db, { action: "create", title: "Nowhere Party", name: "Host Human", passcode: "VIBE42", musicSource: "soundcloud" }, { "cf-connecting-ip": "203.0.113.91" });
   assert.equal(invalid.response.status, 400);

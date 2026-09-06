@@ -586,6 +586,7 @@ test("renders a code-specific host control surface", async () => {
   assert.doesNotMatch(reactionSoundSource, /context\.state === "suspended"/);
   const youtubeSdkSource = await readFile(new URL("app/e/[code]/host/youtube-sdk.ts", projectRoot), "utf8");
   assert.match(youtubeSdkSource, /https:\/\/www\.youtube\.com\/iframe_api/);
+  assert.match(youtubeSdkSource, /code === 153/);
   const youtubePlayerSource = await readFile(new URL("app/e/[code]/host/use-youtube-player.ts", projectRoot), "utf8");
   assert.match(youtubePlayerSource, /loadVideoById/);
   assert.match(youtubePlayerSource, /playsinline: 1/);
@@ -655,7 +656,7 @@ test("adds API and private-route security headers", async () => {
   const response = await render("/e/ABC123");
   assert.equal(response.headers.get("x-frame-options"), "SAMEORIGIN");
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
-  assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+  assert.equal(response.headers.get("referrer-policy"), "strict-origin-when-cross-origin");
   assert.match(response.headers.get("content-security-policy") ?? "", /frame-ancestors 'self'/);
   const labResponse = await render("/lab/ABC123");
   assert.equal(labResponse.status, 200);

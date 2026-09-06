@@ -53,5 +53,6 @@ export function youtubeErrorMessage(code: number) {
   if (code === 5) return "This browser could not play that YouTube video.";
   if (code === 100) return "That YouTube video was removed or is private.";
   if (code === 101 || code === 150) return "That video's owner does not allow it to play outside YouTube.";
+  if (code === 153) return "YouTube could not verify HackMusic as the player. Refresh this host page and try again.";
   return "YouTube could not play that video.";
 }

@@ -13,6 +13,7 @@ import {
   readParty,
   recordFlair,
   readRoomSummary,
+  recoverYouTubeQueue,
   prepareHostTransfer,
   renameParty,
   recordBooSkipProgress,
@@ -50,6 +51,7 @@ export function partyActionFallback(action?: PartyAction) {
   if (action === "guess") return "Your guess did not go through. Try again.";
   if (action === "theme") return "The theme did not save. Try again.";
   if (action === "revealPickers") return "The reveal setting did not save. Try again.";
+  if (action === "recoverQueue") return "We could not restore the failed videos. The queue was left unchanged.";
   if (action === "prepareDeviceMove") return "We could not prepare the move. Your seat stays on this device.";
   if (action === "claimDeviceMove") return "That move could not finish. Open the QR code again on your other device.";
   return "That host action did not finish. Refresh the host page and try again.";
@@ -153,6 +155,12 @@ export async function executePartyAction(request: Request, input: PartyRequest):
       await protectPartyAction(request, input.action, code);
       await hostControl(code, input.pin, input.action);
       break;
+    case "recoverQueue": {
+      if (!input.pin) invalidAction();
+      await protectPartyAction(request, input.action, code);
+      const restored = await recoverYouTubeQueue(code, input.pin);
+      return { body: { party: await readParty(code, participantId, input.pin), restored } };
+    }
     case "queueMode":
       if (!input.queueMode || !input.pin) invalidAction();
       await protectPartyAction(request, input.action, code);

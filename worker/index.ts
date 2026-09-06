@@ -25,7 +25,9 @@ function securedResponse(response: Response, pathname: string, developmentHost =
   // Framing is only allowed, and only same-origin, on development hosts so /lab can embed the host and guest pages.
   headers.set("content-security-policy", `frame-ancestors ${developmentHost ? "'self'" : "'none'"}; base-uri 'self'; object-src 'none'`);
   headers.set("permissions-policy", "camera=(), microphone=(), geolocation=()");
-  headers.set("referrer-policy", "no-referrer");
+  // YouTube's embedded player requires the site's origin as API-client identity.
+  // Cross-origin requests receive only the origin, never the room path or query.
+  headers.set("referrer-policy", "strict-origin-when-cross-origin");
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-frame-options", developmentHost ? "SAMEORIGIN" : "DENY");
   if (pathname.startsWith("/api/") || pathname.startsWith("/e/") || pathname === "/host" || pathname.startsWith("/lab/") || pathname.startsWith("/backstage-")) {
