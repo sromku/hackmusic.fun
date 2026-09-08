@@ -66,7 +66,7 @@ test("the local recovery tool decrypts and verifies a downloaded backup", async 
 
 test("exports all durable D1 tables only for the allowlisted ChatGPT owner", async () => {
   const db = createTestD1();
-  const bindings = { DB: db, ADMIN_ALLOWED_EMAILS: "sromku@gmail.com" };
+  const bindings = { DB: db, ADMIN_ALLOWED_EMAILS: "owner@example.com" };
   const created = await requestWorker("/api/party", {
     method: "POST",
     headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.60" },
@@ -91,7 +91,7 @@ test("exports all durable D1 tables only for the allowlisted ChatGPT owner", asy
     method: "POST",
     headers: {
       "oai-authenticated-user-id": "owner",
-      "oai-authenticated-user-email": "sromku@gmail.com",
+      "oai-authenticated-user-email": "owner@example.com",
       origin: "https://evil.example",
       "sec-fetch-site": "cross-site",
     },
@@ -100,13 +100,13 @@ test("exports all durable D1 tables only for the allowlisted ChatGPT owner", asy
   assert.match((await crossOrigin.json()).error, /must start from HackMusic/i);
 
   const oldGet = await requestWorker("/api/backstage-retired-slug/backup", {
-    headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "sromku@gmail.com" },
+    headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "owner@example.com" },
   }, bindings);
   assert.equal(oldGet.status, 405);
 
   const response = await requestWorker("/api/backstage-retired-slug/backup", {
     method: "POST",
-    headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "sromku@gmail.com" },
+    headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "owner@example.com" },
   }, bindings);
   assert.equal(response.status, 200, await response.clone().text());
   assert.match(response.headers.get("cache-control") ?? "", /no-store/);
@@ -126,13 +126,13 @@ test("exports all durable D1 tables only for the allowlisted ChatGPT owner", asy
   for (let attempt = 2; attempt <= 3; attempt += 1) {
     const allowed = await requestWorker("/api/backstage-retired-slug/backup", {
       method: "POST",
-      headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "sromku@gmail.com" },
+      headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "owner@example.com" },
     }, bindings);
     assert.equal(allowed.status, 200, `attempt ${attempt} should be allowed`);
   }
   const limited = await requestWorker("/api/backstage-retired-slug/backup", {
     method: "POST",
-    headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "sromku@gmail.com" },
+    headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "owner@example.com" },
   }, bindings);
   assert.equal(limited.status, 429);
   assert.match(limited.headers.get("retry-after") ?? "", /^\d+$/);

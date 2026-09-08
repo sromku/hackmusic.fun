@@ -59,3 +59,16 @@ firebase-debug.log*
 # Local editor settings
 /.idea/
 /.vscode/
+
+# Local secrets and tooling state
+.dev.vars*
+/.claude/
+/.codex/
+/tools/admin/
+
+# Database exports and decrypted backups
+*.hackmusic-backup
+*.decrypted.json
+*.sqlite
+*.sqlite3
+*.db

@@ -1,104 +1,128 @@
-# HackMusic
+# 🎉 HackMusic
 
-HackMusic turns one speaker and a room full of opinions into a private music party game. Guests secretly queue Spotify tracks or YouTube videos, the host device plays them (YouTube needs no account; Spotify tracks need a connected Spotify Premium account), and each person gets one cheer or anonymous boo per song. Three boos skip the track; scores are revealed when the party ends.
+**Let the room pick the vibe.**
 
-The production site is [hackmusic.fun](https://hackmusic.fun).
+One speaker. A crowd with opinions. Guests secretly queue songs, everyone cheers or boos, and three boos pull the plug. Scores stay hidden until the party ends. No app, no accounts for guests, no playlist dictators.
 
-## Local development
+🌐 Live at **[hackmusic.fun](https://hackmusic.fun)**
 
-Requirements: Node.js `>=22.13.0`.
+---
+
+## 🎮 How a party works
+
+1. **Host creates a room.** Pick Spotify or YouTube, set a passcode, share the six-character code.
+2. **Guests join from their phones.** Paste a song link. Nobody sees what is coming next.
+3. **The speaker plays.** Every song is a mystery until it drops.
+4. **React out loud.** One reaction per song per person. Cheers are public. Boos are anonymous.
+5. **The crowd can skip.** Three boos and the next secret song starts.
+6. **End the party.** Scores are revealed, boos are unmasked, awards are handed out.
+
+### The scoreboard
+
+| Move | Points |
+| --- | --- |
+| Everyone starts with | 30 |
+| Your song gets a cheer | +3 |
+| Your song gets a boo | −3 |
+| Guess the mystery DJ correctly | +2 |
+| Your song gets a **boosted** cheer | +6 |
+
+### Power-ups and extras
+
+- 🛡️ **Shield.** One per party. Your song needs four boos to skip instead of three.
+- 🚀 **Boost.** One per party. Your next cheer is worth double.
+- 🕵️ **Guess the DJ.** Who queued this? Guess right while it plays for bonus points.
+- 🔥 **Flair.** Throw emoji at the host screen while the song plays.
+- 🎨 **Theme.** The host names the night and everyone plays along.
+- 🏆 **Awards.** Crowd Pleaser, Most Booed, Fastest Skip, Marathon Pick, Silent Judge, Sharpest Guesser.
+- 🖼️ **Hall of Fame.** An end-of-party recap page and shareable story image.
+
+### Two flavors of room
+
+| | Spotify room | YouTube room |
+| --- | --- | --- |
+| Host needs | Spotify Premium | Nothing |
+| Guests need | Nothing | Nothing |
+| Plays | Full tracks through the host device | Videos on the host screen |
+| Guests paste | Spotify track links | YouTube video links, Shorts, youtu.be |
+
+The source is locked when the room is created. Links from the other service are politely declined. Spotify hosts bring their own Spotify app Client ID and sign in with PKCE, so no Spotify secret exists anywhere in this project.
+
+## 🖥️ The screens
+
+- **Home.** Create a room, join with a code, or reopen rooms this browser has hosted.
+- **Host screen.** Playback, queue, queue strategy (submitted order, random, or a fair-ish shuffle), reaction sounds, theme, skip, and end party.
+- **Guest phone.** Submit songs, cheer, boo, guess, throw flair, and watch the noise feed.
+- **Pre-party lobby.** Collect songs before the event. Only the host starts the music.
+- **Recap.** Final scores, unmasked boos, awards, and the story image.
+- **Lab.** A development-only page that shows the host plus up to eight fake guests in one browser, for testing without a pile of phones.
+
+## 🛠️ Run it locally
+
+Requires Node.js 22.13 or newer.
 
 ```bash
 npm install
+cp .env.example .env.local   # fill in the values
 npm run dev
 ```
 
-Useful checks:
+| Variable | Purpose |
+| --- | --- |
+| `SPOTIFY_COOKIE_SECRET` | 32+ random characters used to encrypt the host's Spotify session cookie |
+| `ADMIN_ALLOWED_EMAILS` | Comma-separated emails allowed into the owner dashboard |
+
+Checks:
 
 ```bash
 npm run lint
-npm test
+npm test        # builds the real worker, then runs the flow tests
 npm run build
 ```
 
-`npm test` builds the real worker before running tests. This catches routing and bundling failures as well as domain behavior.
+## 🧱 Stack
 
-## Architecture
+- **React 19** and **Next.js** app router, built with [vinext](https://github.com/cloudflare/vinext) and Vite
+- **Cloudflare Workers** runtime with **D1** (SQLite) through **Drizzle ORM**
+- **Tailwind CSS 4**
+- Spotify Web Playback SDK with PKCE, and the YouTube IFrame player
+- Hosted on OpenAI Sites; deploys use short-lived credentials, nothing is stored in the repo
 
-The code follows a thin-route, explicit-domain-boundary shape:
+## 🗺️ Project map
 
-- `app/` contains pages, client components, and HTTP route shells.
-- `app/api/party/route.ts` owns HTTP parsing and response/error translation only.
-- `app/api/party/party-actions.ts` validates and dispatches party commands.
-- `db/party.ts` owns party use cases and persistence orchestration.
-- `db/party-model.ts` owns database row models and shared normalization/load helpers.
-- `db/party-queue.ts` owns ordered, random, and fair-ish queue selection.
-- `lib/party-contract.ts` is the shared API/UI contract source of truth.
-- `lib/party-format.ts` contains pure display and duration helpers.
-- `lib/track-link.ts` detects the music source of a pasted link and dispatches to `lib/spotify-track.ts` or `lib/youtube-track.ts`.
-- `app/e/[code]/host/use-reaction-sounds.ts` owns reaction audio mixing and music volume ducking for whichever player is active.
-- `app/e/[code]/host/use-youtube-player.ts` owns the YouTube IFrame player lifecycle on the host page.
-- `app/e/[code]/host/use-screen-wake-lock.ts` owns screen wake-lock lifecycle behavior.
-- `app/e/[code]/host/spotify-sdk.ts` and `app/e/[code]/host/youtube-sdk.ts` isolate the third-party SDK surfaces.
-
-Keep platform concerns at the edges. UI components should consume shared contracts rather than re-declaring response shapes, API routes should delegate domain work, and queue policy should not leak into rendering code.
-
-## Important product invariants
-
-These rules are enforced on the server, not merely hidden in the UI:
-
-- A host key is required for host-only controls.
-- A room passcode is required to join.
-- A room accepts at most 100 participants.
-- A participant can move their seat to another device through a one-use, hashed QR link; the credential rotates, the old device is locked out, and the host key moves along when the mover holds it.
-- A participant may keep at most 100 pending songs.
-- A room plays one music source, Spotify or YouTube, chosen at creation; links from the other service are rejected.
-- A track may appear only once in an event.
-- A participant gets one immutable reaction per played song.
-- A participant cannot react to their own song.
-- Song pickers stay hidden from participants until the party ends, unless the host turns on per-song reveals (off by default).
-- Boo identities stay hidden from participants while the party runs; the final party page unmasks them in the room history. The admin dashboard never shows them.
-- Scores stay hidden until the event is ended.
-- Three distinct boos skip the current song.
-
-## Testing approach
-
-`tests/party-api-flow.test.mjs` sends requests through the built worker and uses an in-memory SQLite-backed D1 adapter. It verifies complete flows and state transitions: protected joins, score visibility, reaction locking, owner-vote rejection, boo anonymity, three-boo advancement, skip statistics, room ending, malformed/cross-origin writes, and participant capacity.
-
-`tests/rendered-html.test.mjs` covers public/private route metadata, legal pages, Spotify PKCE, admin protection, essential UI affordances, and pure formatting/security helpers. Source assertions are intentionally limited to architecture or platform integration seams that cannot be exercised in Node.
-
-When adding a feature, prefer one meaningful flow or edge-case test over implementation-specific line matching.
-
-## Testing a party from one browser
-
-Every tab in one browser profile normally shares the same guest identity. For multi-guest testing without a pile of phones, open `/lab/CODE` (development hosts only: localhost, private LAN addresses, and `.local` names; production returns 404 and ignores personas) for a room you created in that browser. It shows the host page plus up to eight guest frames, each joined as its own persona (`/e/CODE?persona=guest-2`), with the passcode pre-filled. Personas only change where the browser stores each guest's id; the server applies the passcode, membership, and one-vote rules exactly as it does for real phones. Click inside the host frame once so the browser allows audio and video there.
-
-## Data and secrets
-
-Cloudflare D1 is exposed to the worker as the `DB` binding declared in `.openai/hosting.json`. Spotify and admin secrets belong in hosted secrets or ignored local environment files. Never commit client secrets, session encryption keys, host keys, passcodes, production database exports, or `.env*` files other than `.env.example`.
-
-The read-only owner dashboard lives at its intentionally unlinked backstage route. It requires ChatGPT sign-in and an email present in `ADMIN_ALLOWED_EMAILS`. The room browser never returns host keys or boo identities. Its explicit backup action does include recovery-critical host keys and hashed passcodes, then encrypts the snapshot in the owner’s browser before download.
-
-## Manual encrypted backups
-
-The owner dashboard’s **Disaster recovery** panel downloads a complete, versioned database snapshot. It contains durable rooms, participants, submissions, reactions, activity history, and privacy-preserving analytics; temporary room-creation rate-limit rows are intentionally excluded.
-
-The passphrase never leaves the browser. The download uses PBKDF2-SHA-256 and AES-256-GCM, carries a plaintext SHA-256 integrity value, and contains no readable database data outside its ciphertext. Keep the file and passphrase in separate secure places. There is intentionally no password recovery mechanism.
-
-To verify and decrypt an export locally with Node.js 22 or newer:
-
-```bash
-npm run backup:decrypt -- /path/to/hackmusic-backup.hackmusic-backup
+```
+app/            pages, client components, and thin HTTP route shells
+app/api/party/  the party API: parse, validate, dispatch
+db/             party use cases, queue policy, awards, recap, backups
+lib/            shared contracts, link parsing, formatting, security helpers
+drizzle/        SQL migrations
+tests/          end-to-end flows against the built worker and an in-memory D1
+worker/         Cloudflare Worker entry with security headers
 ```
 
-The script prompts without echoing the passphrase, verifies authenticated encryption and the integrity digest, refuses to overwrite an existing output, and writes the recovered JSON with owner-only filesystem permissions. Decryption is a recovery/inspection tool; importing that JSON into another database will be added as a separate, deliberate restore workflow.
+Routes stay thin, domain logic lives in `db/`, and the UI consumes shared contracts from `lib/party-contract.ts`.
 
-## Deployment
+## 🔒 Rules the server enforces
 
-OpenAI Sites deployment uses short-lived credentials supplied by Codex; no deployment token is written to the repository.
+These are not just hidden in the UI.
 
-```bash
-npm run deploy:prepare
-```
+- Host controls need a host key. Joining needs the room passcode.
+- A track appears once per event. One reaction per person per song. No reacting to your own song.
+- Song pickers and boo identities stay hidden until the party ends.
+- Scores are hidden until the host ends the event.
+- Rooms cap at 100 participants and 100 pending songs per person.
+- Cross-origin writes are rejected and room creation is rate-limited.
 
-The release preparation script requires a clean worktree, runs tests and lint, scans Git history with Gitleaks, and creates an ignored archive under `outputs/sites/`.
+The owner dashboard is an unlinked, read-only page that requires ChatGPT sign-in plus an email allowlist. It never returns host keys. Its backup export is encrypted in the owner's browser before download and can be verified with `npm run backup:decrypt`.
+
+Never commit `.env*` files other than `.env.example`, host keys, passcodes, or database exports.
+
+## 🙏 Credits
+
+Reaction sounds come from Pixabay under the Pixabay Content License. See `public/sounds/ATTRIBUTION.md`.
+
+Scrambled by [Roman Kushnarenko](https://sromku.com) with an AI coding agent. AGI unlocked, common sense still in beta.
+
+## 📄 License
+
+[MIT](LICENSE)
