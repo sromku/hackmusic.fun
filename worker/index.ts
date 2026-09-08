@@ -30,7 +30,7 @@ function securedResponse(response: Response, pathname: string, developmentHost =
   headers.set("referrer-policy", "strict-origin-when-cross-origin");
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-frame-options", developmentHost ? "SAMEORIGIN" : "DENY");
-  if (pathname.startsWith("/api/") || pathname.startsWith("/e/") || pathname === "/host" || pathname.startsWith("/lab/") || pathname.startsWith("/backstage-")) {
+  if (pathname.startsWith("/api/") || pathname.startsWith("/e/") || pathname === "/host" || pathname.startsWith("/lab/") || pathname.startsWith("/backstage/")) {
     headers.set("x-robots-tag", "noindex, nofollow, noarchive");
   }
   if (pathname.startsWith("/api/")) headers.set("cache-control", "no-store");

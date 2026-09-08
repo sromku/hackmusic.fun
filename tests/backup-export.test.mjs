@@ -66,7 +66,7 @@ test("the local recovery tool decrypts and verifies a downloaded backup", async 
 
 test("exports all durable D1 tables only for the allowlisted ChatGPT owner", async () => {
   const db = createTestD1();
-  const bindings = { DB: db, ADMIN_ALLOWED_EMAILS: "owner@example.com" };
+  const bindings = { DB: db, ADMIN_ALLOWED_EMAILS: "owner@example.com", ADMIN_SECRET_PATH: "test-secret-backstage-path" };
   const created = await requestWorker("/api/party", {
     method: "POST",
     headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.60" },
@@ -78,16 +78,22 @@ test("exports all durable D1 tables only for the allowlisted ChatGPT owner", asy
   db.prepare("INSERT INTO room_creation_limits (client_key, window_kind, window_start, attempts, expires_at) VALUES (?, ?, ?, ?, ?)")
     .bind("temporary-client-key", "day", 1, 1, 2).run();
 
-  const unauthenticated = await requestWorker("/api/backstage-retired-slug/backup", { method: "POST" }, bindings);
+  const wrongPath = await requestWorker("/api/backstage/wrong-secret-backstage-path/backup", {
+    method: "POST",
+    headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "owner@example.com" },
+  }, bindings);
+  assert.equal(wrongPath.status, 404);
+
+  const unauthenticated = await requestWorker("/api/backstage/test-secret-backstage-path/backup", { method: "POST" }, bindings);
   assert.equal(unauthenticated.status, 401);
 
-  const forbidden = await requestWorker("/api/backstage-retired-slug/backup", {
+  const forbidden = await requestWorker("/api/backstage/test-secret-backstage-path/backup", {
     method: "POST",
     headers: { "oai-authenticated-user-id": "stranger", "oai-authenticated-user-email": "stranger@example.com" },
   }, bindings);
   assert.equal(forbidden.status, 403);
 
-  const crossOrigin = await requestWorker("/api/backstage-retired-slug/backup", {
+  const crossOrigin = await requestWorker("/api/backstage/test-secret-backstage-path/backup", {
     method: "POST",
     headers: {
       "oai-authenticated-user-id": "owner",
@@ -99,12 +105,12 @@ test("exports all durable D1 tables only for the allowlisted ChatGPT owner", asy
   assert.equal(crossOrigin.status, 403);
   assert.match((await crossOrigin.json()).error, /must start from HackMusic/i);
 
-  const oldGet = await requestWorker("/api/backstage-retired-slug/backup", {
+  const oldGet = await requestWorker("/api/backstage/test-secret-backstage-path/backup", {
     headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "owner@example.com" },
   }, bindings);
   assert.equal(oldGet.status, 405);
 
-  const response = await requestWorker("/api/backstage-retired-slug/backup", {
+  const response = await requestWorker("/api/backstage/test-secret-backstage-path/backup", {
     method: "POST",
     headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "owner@example.com" },
   }, bindings);
@@ -124,13 +130,13 @@ test("exports all durable D1 tables only for the allowlisted ChatGPT owner", asy
   assert.doesNotMatch(JSON.stringify(backup), /temporary-client-key/);
 
   for (let attempt = 2; attempt <= 3; attempt += 1) {
-    const allowed = await requestWorker("/api/backstage-retired-slug/backup", {
+    const allowed = await requestWorker("/api/backstage/test-secret-backstage-path/backup", {
       method: "POST",
       headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "owner@example.com" },
     }, bindings);
     assert.equal(allowed.status, 200, `attempt ${attempt} should be allowed`);
   }
-  const limited = await requestWorker("/api/backstage-retired-slug/backup", {
+  const limited = await requestWorker("/api/backstage/test-secret-backstage-path/backup", {
     method: "POST",
     headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "owner@example.com" },
   }, bindings);

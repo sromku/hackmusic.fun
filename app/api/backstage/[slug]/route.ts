@@ -1,7 +1,7 @@
-import { readAdminOverview, readAdminRoom } from "../../../db/admin";
-import { adminAccessForEmail } from "../../admin-auth";
-import { getChatGPTUser } from "../../chatgpt-auth";
-import { publicErrorDetails } from "../../../lib/public-error";
+import { readAdminOverview, readAdminRoom } from "../../../../db/admin";
+import { adminAccessForEmail, isAdminPath } from "../../../admin-auth";
+import { getChatGPTUser } from "../../../chatgpt-auth";
+import { publicErrorDetails } from "../../../../lib/public-error";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,14 @@ function json(data: unknown, status = 200, extraHeaders?: HeadersInit) {
   });
 }
 
-export async function GET(request: Request) {
+type RouteContext = { params: Promise<{ slug: string }> };
+
+function notFoundResponse() {
+  return new Response("Not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
+}
+
+export async function GET(request: Request, { params }: RouteContext) {
+  if (!isAdminPath((await params).slug)) return notFoundResponse();
   const user = await getChatGPTUser();
   if (!user) return json({ error: "Sign in with ChatGPT to continue." }, 401);
   const access = adminAccessForEmail(user.email);

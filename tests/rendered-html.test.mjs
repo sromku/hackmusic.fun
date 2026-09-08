@@ -407,7 +407,7 @@ test("publishes crawler, sitemap, and install metadata without exposing private 
   assert.match(robots, /Disallow: \/e\//);
   assert.match(robots, /Disallow: \/host/);
   assert.match(robots, /Disallow: \/lab\//);
-  assert.doesNotMatch(robots, /admin|backstage-hm/i);
+  assert.doesNotMatch(robots, /admin|backstage/i);
   assert.match(robots, /Sitemap: https:\/\/hackmusic\.fun\/sitemap\.xml/);
 
   const sitemapResponse = await render("/sitemap.xml");
@@ -699,28 +699,60 @@ test("adds API and private-route security headers", async () => {
   assert.match(partyActions, /assertPartyParticipant/);
 });
 
+test("hides the owner dashboard behind a secret path segment from the environment", async () => {
+  const adminPath = await loadTypeScriptModule("lib/admin-path.ts");
+  assert.equal(adminPath.adminPathMatches("anything", ""), false, "unconfigured secret never matches");
+  assert.equal(adminPath.adminPathMatches("short", "short"), false, "too-short secret never matches");
+  assert.equal(adminPath.adminPathMatches("test-secret-backstage-path", "test-secret-backstage-path"), true);
+  assert.equal(adminPath.adminPathMatches("test-secret-backstage-patH", "test-secret-backstage-path"), false);
+  assert.equal(adminPath.adminPathMatches("test-secret-backstage-path", " test-secret-backstage-path "), true, "surrounding whitespace is trimmed");
+
+  const { requestWorker } = await import("./support/worker.mjs");
+  const bindings = { ADMIN_ALLOWED_EMAILS: "owner@example.com", ADMIN_SECRET_PATH: "test-secret-backstage-path" };
+  const owner = { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "owner@example.com" };
+
+  const wrongPage = await render("/backstage/wrong-secret-backstage-path", owner, bindings);
+  assert.equal(wrongPage.status, 404);
+  const unconfiguredPage = await render("/backstage/test-secret-backstage-path", owner, { ADMIN_ALLOWED_EMAILS: "owner@example.com" });
+  assert.equal(unconfiguredPage.status, 404, "no secret configured means no dashboard");
+  const rightPage = await render("/backstage/test-secret-backstage-path", owner, bindings);
+  assert.equal(rightPage.status, 200);
+  const html = await rightPage.text();
+  assert.match(html, /Owner only\. Read only/);
+  assert.match(html, /\/api\/backstage\/test-secret-backstage-path/);
+  assert.match(rightPage.headers.get("x-robots-tag") ?? "", /noindex/);
+
+  const wrongApi = await requestWorker("/api/backstage/wrong-secret-backstage-path", { headers: owner }, bindings);
+  assert.equal(wrongApi.status, 404);
+  const anonymousRightApi = await requestWorker("/api/backstage/test-secret-backstage-path", {}, bindings);
+  assert.equal(anonymousRightApi.status, 401);
+});
+
 test("protects the hosted read-only admin with ChatGPT identity and an owner allowlist", async () => {
-  const routeSource = await readFile(new URL("app/api/backstage-retired-slug/route.ts", projectRoot), "utf8");
+  const routeSource = await readFile(new URL("app/api/backstage/[slug]/route.ts", projectRoot), "utf8");
   assert.match(routeSource, /getChatGPTUser/);
   assert.match(routeSource, /adminAccessForEmail/);
   assert.doesNotMatch(routeSource, /authorization|ADMIN_API_KEY|Bearer/);
   assert.match(routeSource, /no-store, private/);
   assert.match(routeSource, /x-robots-tag/);
+  assert.match(routeSource, /isAdminPath/);
   const authSource = await readFile(new URL("app/admin-auth.ts", projectRoot), "utf8");
   assert.match(authSource, /ADMIN_ALLOWED_EMAILS/);
+  assert.match(authSource, /ADMIN_SECRET_PATH/);
   assert.match(authSource, /adminAllowlistAccess/);
   const allowlist = await loadTypeScriptModule("lib/admin-allowlist.ts");
   assert.deepEqual(allowlist.adminAllowlistAccess(" OWNER@Example.com ", "other@example.com, owner@example.COM"), { configured: true, allowed: true });
   assert.deepEqual(allowlist.adminAllowlistAccess("stranger@example.com", "owner@example.com"), { configured: true, allowed: false });
   assert.deepEqual(allowlist.adminAllowlistAccess("owner@example.com", ""), { configured: false, allowed: false });
-  const pageSource = await readFile(new URL("app/backstage-retired-slug/page.tsx", projectRoot), "utf8");
-  assert.match(pageSource, /requireChatGPTUser\("\/backstage-retired-slug"\)/);
+  const pageSource = await readFile(new URL("app/backstage/[slug]/page.tsx", projectRoot), "utf8");
+  assert.match(pageSource, /if \(!isAdminPath\(slug\)\) notFound\(\);/);
+  assert.match(pageSource, /requireChatGPTUser\(pagePath\)/);
   assert.match(pageSource, /OWNER ACCESS ONLY/);
   assert.match(pageSource, /robots: \{ index: false/);
-  const adminLayoutSource = await readFile(new URL("app/backstage-retired-slug/layout.tsx", projectRoot), "utf8");
+  const adminLayoutSource = await readFile(new URL("app/backstage/[slug]/layout.tsx", projectRoot), "utf8");
   assert.match(adminLayoutSource, /\/admin-favicon\.svg\?v=admin-hm-red-2/);
   assert.match(adminLayoutSource, /<AdminFavicon \/>/);
-  const adminFaviconSource = await readFile(new URL("app/backstage-retired-slug/admin-favicon.tsx", projectRoot), "utf8");
+  const adminFaviconSource = await readFile(new URL("app/backstage/[slug]/admin-favicon.tsx", projectRoot), "utf8");
   assert.match(adminFaviconSource, /link\[rel~="icon"\]/);
   assert.match(adminFaviconSource, /MutationObserver/);
   assert.match(adminFaviconSource, /hackmusicAdminIcon/);
@@ -730,9 +762,10 @@ test("protects the hosted read-only admin with ChatGPT identity and an owner all
   const adminFaviconSvg = await readFile(new URL("public/admin-favicon.svg", projectRoot), "utf8");
   assert.match(adminFaviconSvg, /#FF5B51/);
   assert.match(adminFaviconSvg, /#FFF9ED/);
-  const dashboardSource = await readFile(new URL("app/backstage-retired-slug/admin-dashboard.tsx", projectRoot), "utf8");
+  const dashboardSource = await readFile(new URL("app/backstage/[slug]/admin-dashboard.tsx", projectRoot), "utf8");
   assert.match(dashboardSource, /Owner only\. Read only/);
-  assert.match(dashboardSource, /\/api\/backstage-retired-slug/);
+  assert.match(dashboardSource, /apiBase/);
+  assert.doesNotMatch(dashboardSource, /backstage-/);
   assert.match(dashboardSource, /Room inspection hides host keys/);
   assert.match(dashboardSource, /Website traffic/);
   assert.match(dashboardSource, /Site pulse/);
@@ -745,7 +778,7 @@ test("protects the hosted read-only admin with ChatGPT identity and an owner all
   assert.match(dashboardSource, /Disaster recovery/);
   assert.match(dashboardSource, /Download encrypted backup/);
   assert.match(dashboardSource, /encryptBackupSnapshot/);
-  const backupRouteSource = await readFile(new URL("app/api/backstage-retired-slug/backup/route.ts", projectRoot), "utf8");
+  const backupRouteSource = await readFile(new URL("app/api/backstage/[slug]/backup/route.ts", projectRoot), "utf8");
   assert.match(backupRouteSource, /getChatGPTUser/);
   assert.match(backupRouteSource, /adminAccessForEmail/);
   assert.match(backupRouteSource, /readPortableBackup/);

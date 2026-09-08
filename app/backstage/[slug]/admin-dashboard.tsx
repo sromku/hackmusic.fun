@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { encryptBackupSnapshot } from "../../lib/backup-encryption";
+import { encryptBackupSnapshot } from "../../../lib/backup-encryption";
 
 type AdminOverview = {
   generatedAt: string;
@@ -56,8 +56,8 @@ function date(value: string | null) {
   return Number.isNaN(parsed.getTime()) ? "—" : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(parsed);
 }
 
-async function requestAdmin<T>(search = "") {
-  const response = await fetch(`/api/backstage-retired-slug${search}`, { cache: "no-store" });
+async function requestAdmin<T>(apiBase: string, search = "") {
+  const response = await fetch(`${apiBase}${search}`, { cache: "no-store" });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error ?? "Could not read HackMusic data.");
   return data as T;
@@ -129,7 +129,7 @@ function AnalyticsBreakdown({ title, note, rows }: { title: string; note: string
   </section>;
 }
 
-export default function AdminDashboard({ ownerEmail, signOutPath }: { ownerEmail: string; signOutPath: string }) {
+export default function AdminDashboard({ ownerEmail, signOutPath, apiBase }: { ownerEmail: string; signOutPath: string; apiBase: string }) {
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [selected, setSelected] = useState<AdminRoom | null>(null);
   const [search, setSearch] = useState("");
@@ -143,19 +143,19 @@ export default function AdminDashboard({ ownerEmail, signOutPath }: { ownerEmail
   const loadOverview = useCallback(async () => {
     setLoading(true);
     setMessage("");
-    try { setOverview(await requestAdmin<AdminOverview>()); }
+    try { setOverview(await requestAdmin<AdminOverview>(apiBase)); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Could not load admin data."); }
     finally { setLoading(false); }
-  }, []);
+  }, [apiBase]);
 
   useEffect(() => {
     let active = true;
-    requestAdmin<AdminOverview>()
+    requestAdmin<AdminOverview>(apiBase)
       .then((data) => { if (active) setOverview(data); })
       .catch((error) => { if (active) setMessage(error instanceof Error ? error.message : "Could not load admin data."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [apiBase]);
 
   const rooms = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -165,7 +165,7 @@ export default function AdminDashboard({ ownerEmail, signOutPath }: { ownerEmail
   async function openRoom(code: string) {
     setLoading(true);
     setMessage("");
-    try { setSelected(await requestAdmin<AdminRoom>(`?code=${encodeURIComponent(code)}`)); }
+    try { setSelected(await requestAdmin<AdminRoom>(apiBase, `?code=${encodeURIComponent(code)}`)); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Could not load that room."); }
     finally { setLoading(false); }
   }
@@ -183,7 +183,7 @@ export default function AdminDashboard({ ownerEmail, signOutPath }: { ownerEmail
 
     setBackupBusy(true);
     try {
-      const response = await fetch("/api/backstage-retired-slug/backup", { method: "POST", cache: "no-store" });
+      const response = await fetch(`${apiBase}/backup`, { method: "POST", cache: "no-store" });
       const data = await response.json() as BackupResponse & { error?: string };
       if (!response.ok) throw new Error(data.error ?? "Could not prepare the backup.");
       const envelope = await encryptBackupSnapshot(data.backup, backupPassphrase);

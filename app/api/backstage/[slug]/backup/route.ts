@@ -1,8 +1,8 @@
-import { readPortableBackup } from "../../../../db/backup";
-import { publicErrorDetails } from "../../../../lib/public-error";
-import { assertSameOriginMutation, consumeRequestLimit, RequestSecurityError } from "../../../../lib/request-security";
-import { adminAccessForEmail } from "../../../admin-auth";
-import { getChatGPTUser } from "../../../chatgpt-auth";
+import { readPortableBackup } from "../../../../../db/backup";
+import { publicErrorDetails } from "../../../../../lib/public-error";
+import { assertSameOriginMutation, consumeRequestLimit, RequestSecurityError } from "../../../../../lib/request-security";
+import { adminAccessForEmail, isAdminPath } from "../../../../admin-auth";
+import { getChatGPTUser } from "../../../../chatgpt-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +19,10 @@ function json(data: unknown, status = 200, extraHeaders?: HeadersInit) {
   });
 }
 
-export async function POST(request: Request) {
+type RouteContext = { params: Promise<{ slug: string }> };
+
+export async function POST(request: Request, { params }: RouteContext) {
+  if (!isAdminPath((await params).slug)) return new Response("Not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
   const user = await getChatGPTUser();
   if (!user) return json({ error: "Sign in with ChatGPT to export a backup." }, 401);
   const access = adminAccessForEmail(user.email);

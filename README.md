@@ -71,6 +71,7 @@ npm run dev
 | --- | --- |
 | `SPOTIFY_COOKIE_SECRET` | 32+ random characters used to encrypt the host's Spotify session cookie |
 | `ADMIN_ALLOWED_EMAILS` | Comma-separated emails allowed into the owner dashboard |
+| `ADMIN_SECRET_PATH` | Random slug (16+ chars) that becomes the owner dashboard URL, `/backstage/<slug>`. Unset means no dashboard. |
 
 Checks:
 
@@ -113,7 +114,7 @@ These are not just hidden in the UI.
 - Rooms cap at 100 participants and 100 pending songs per person.
 - Cross-origin writes are rejected and room creation is rate-limited.
 
-The owner dashboard is an unlinked, read-only page that requires ChatGPT sign-in plus an email allowlist. It never returns host keys. Its backup export is encrypted in the owner's browser before download and can be verified with `npm run backup:decrypt`.
+The owner dashboard lives at a secret path that exists only in the hosting environment, and it requires ChatGPT sign-in plus an email allowlist. Any other path under `/backstage/` is a plain 404. It never returns host keys. Its backup export is encrypted in the owner's browser before download and can be verified with `npm run backup:decrypt`.
 
 Never commit `.env*` files other than `.env.example`, host keys, passcodes, or database exports.
 
