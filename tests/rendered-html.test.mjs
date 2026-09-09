@@ -189,6 +189,8 @@ test("renders the create and join landing page", async () => {
   assert.match(html, /YouTube room/);
   assert.match(html, /Scrambled by/);
   assert.match(html, /https:\/\/sromku\.com/);
+  assert.match(html, /href="https:\/\/github\.com\/sromku\/hackmusic\.fun"/);
+  assert.match(html, /Open source ↗/);
   assert.match(html, /AGI unlocked\. Common sense still in beta/);
   assert.doesNotMatch(html, /SOTA unlocked/);
   assert.match(html, /href="\/privacy"/);
